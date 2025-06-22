@@ -77,7 +77,7 @@ string | array[string]
 
 **example**
 
-celerity-2025-08-01
+celerity-2026-02-01
 
 *Representing a hypothetical transform for a celerity application.*
 
@@ -114,7 +114,7 @@ JSON With Commas and Comments
   // The initial version of the blueprint spec.
   "version": "2025-05-12",
   // The transform to be applied to the blueprint.
-  "transform": "celerity-2025-08-01",
+  "transform": "celerity-2026-02-01",
   "variables": {
     "databaseHost": {
       "type": "string",
@@ -183,7 +183,7 @@ variables:
 ### values
 
 Values provide a way to define static and computed values that can be used in various sections of a blueprint such as resources, data sources and exports.
-Values are mostly useful for storing computed values that can be reused in multiple places
+Values are mostly useful for storing computed and complex static values that can be reused in multiple places
 or exported to be used in other blueprints or external systems.
 
 For example, a value could be used to store the names of a list of dynamically generated s3 bucket names to be exported from the blueprint as follows:
@@ -267,6 +267,36 @@ values:
         resources.s3Bucket2.spec.name,
         resources.s3Bucket3.spec.name
       )}
+```
+
+YAML Static Object
+
+```yaml
+values:
+  logsPolicyDoc:
+    type: object
+    value:
+      policyName: "LambdaExecutionPolicy"
+      policyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Action:
+              - "logs:CreateLogGroup"
+              - "logs:CreateLogStream"
+              - "logs:PutLogEvents"
+            Resource: "*"
+```
+
+YAML Static Array
+
+```yaml
+values:
+  allowedOrigins:
+    type: array
+    value:
+      - "https://example.com"
+      - "https://another-example.com"
 ```
 
 ### datasources
@@ -399,6 +429,24 @@ datasources:
       vpc:
         type: string
         aliasFor: vpcId
+```
+
+YAML exporting all fields
+
+```yaml
+datasources:
+  network:
+    type: aws/vpc
+    metadata:
+      displayName: Network source
+    filter:
+      - field: tags
+        operator: has key
+        search: ${variables.environment}
+      - field: region
+        operator: in
+        search: ${variables.awsRegions}
+    exports: "*"
 ```
 
 <br/>
@@ -619,6 +667,8 @@ JSON with Commas and Comments
 }
 ```
 
+YAML
+
 ```yaml
 exports:
   saveOrdersFunctionArn:
@@ -808,13 +858,9 @@ ___
 
 The computed or static value that can be accessed from other values, resources, data sources, exports and metadata in a blueprint.
 
-:::caution
-This contents of the value field must be in the form of a string. Objects and arrays must be derived from dynamic sources in a `${..}` substitution. Integers, floats and booleans are parsed from the string value, if the value type can not be parsed, an error should be thrown/returned.
-:::
-
 **field type**
 
-string
+string | integer | float | boolean | object | array
 
 **examples**
 
@@ -831,6 +877,26 @@ ${list(
 `"${variables.databaseHost}"`
 
 `${normalize(values.s3BucketNames)}`
+
+```json
+{
+  "policyName": "LambdaExecutionPolicy",
+  "policyDocument": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Action": [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ],
+        "Resource": "*"
+      }
+    ]
+  }
+}
+```
 
 ___
 
@@ -917,11 +983,11 @@ The names of the fields exported from the data source should be the keys in the 
 unless the `aliasFor` property is used, in which case the value of `aliasFor` should be a valid field name
 in the data source object.
 
-Object paths using dot notation can be used for exported field names (mapping keys) for nested fields in external resources (e.g. `metadata.name`)
+The `*` wildcard can be used to export all fields from the data source to be used by other elements in the blueprint.
 
 **field type** 
 
-mapping[name(string), [dataSourceExportDefinition](#datasourceexportdefinition)]
+mapping[name(string), [dataSourceExportDefinition](#datasourceexportdefinition)] | string
 
 ___
 
@@ -1027,8 +1093,8 @@ string
 
 **allowed values**
 
-= | != | in | not in | has key | not has key | contains | not contains | starts with | not starts with | 
-ends with | not ends with
+`=` | `!=` | in | not in | has key | not has key | contains | not contains | starts with | not starts with | 
+ends with | not ends with | `>` | `<` | `>=` | `<=`
 
 For more precise information on how the operators should behave with certain inputs, see the [Operator Behaviours](#operator-behaviours) section.
 
@@ -1040,7 +1106,7 @@ A value or list of values that should be compared to the value of the configured
 
 **field type** 
 
-`string | integer | float | boolean | array[ ( string | integer | float | boolean ) ]`
+string | integer | float | boolean | array[ ( string | integer | float | boolean ) ]
 
 <br/>
 <br/>
@@ -1051,7 +1117,12 @@ A definition of an exported field from a data source that is exposed to resource
 a blueprint.
 
 :::tip
-As only primitive values and primitive arrays are supported, data source developers should model complex data structures using field names such as `loggingConfig.applicationLogLevel` to represent nested fields in the data source object or populate exported data source fields with JSON-encoded strings that can be parsed in blueprint using the [`jsondecode`](/docs/blueprint/core-functions#jsondecode) function in a `${..}` substitution.
+As only primitive values and primitive arrays are supported, data source developers should model complex data structures using field names such as `loggingConfig.applicationLogLevel` to represent nested fields in the data source object or populate exported data source fields with JSON-encoded strings that can be parsed in blueprints using the [`jsondecode`](/docs/blueprint/core-functions#jsondecode) function in a `${..}` substitution.
+
+When using names with dot notation to represent nested fields, you will need to reference the field like so:
+`${datasources.myFunction["loggingConfig.applicationLogLevel"]}`
+
+This is due to `.` being a reserved character to access data from multiple blueprint element types such as resources, data sources and values.
 :::
 
 <p style={{fontSize: '1em'}}><strong>FIELDS</strong></p>
@@ -1740,6 +1811,37 @@ In these cases the filter operation should fail and the implementation should re
 <br/>
 <br/>
 
+<p style={{fontSize: "var(--ifm-h4-font-size)"}}><strong>Comparative Operators ( `>` | `>=` | `<` | `>=` )</strong></p>
+
+The `>` (greater than), `>=` (greater than or equal), `<` (less than) and `<=` (less than or equal) operators can be applied to compare strings (based on lexicographical order), integers and floats.
+
+comparable = string | integer | float
+
+<br/>
+
+_field(comparable) **`>`** search(comparable)_
+
+When the field in the external resource is a comparable primitive and the search value is of the same primitive type then the field value must be greater than the search value.
+
+_field(comparable) **`>=`** search(comparable)_
+
+When the field in the external resource is a comparable primitive and the search value is of the same primitive type then the field value must be greater than or equal to the search value.
+
+_field(comparable) **`<`** search(comparable)_
+
+When the field in the external resource is a comparable primitive and the search value is of the same primitive type then the field value must be less than the search value.
+
+_field(comparable) **`<=`** search(comparable)_
+
+When the field in the external resource is a comparable primitive and the search value is of the same primitive type then the field value must be less than or equal to the search value.
+
+<br/>
+
+Any other combinations of search value and field type outside of those listed above should be invalid.
+In these cases the filter operation should fail and the implementation should report an informative error to the user.
+<br/>
+<br/>
+
 <p style={{fontSize: "var(--ifm-h4-font-size)"}}><strong>In Operators ( in | not in )</strong></p>
 
 The same rules apply to the `in` and `not in` operators, `not in` will be the negation of the behaviour for the comparisons described below.
@@ -1934,7 +2036,7 @@ The following is an example of a value reference:
 ${values.s3BucketNames}
 ```
 
-An example of accessing an nested field in value would be:
+An example of accessing a nested field in value would be:
 
 ```
 ${values.s3BucketConfig.buckets[0].name}
@@ -2297,7 +2399,6 @@ values:
     type: ${variables.bucketType}
 ```
 :::
-
 
 References can be used in the **value** field which stores the contents of the value.
 
