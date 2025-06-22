@@ -4,7 +4,7 @@ sidebar_position: 5
 
 # Compute Configuration
 
-**v2025-08-01 (draft)**
+**v2026-02-01 (draft)**
 
 Celerity applications can be composed of multiple compute resources that represent different interfaces for an application. These compute resources share common configuration specific to a deployment target that can be defined in the [app deploy configuration file](/cli/docs/app-deploy-configuration).
 

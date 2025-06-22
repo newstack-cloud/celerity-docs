@@ -4,9 +4,9 @@ sidebar_position: 9
 
 # `celerity/bucket`
 
-**v2025-08-01 (draft)**
+**v2026-02-01 (draft)**
 
-**blueprint transform:** `celerity-2025-08-01`
+**blueprint transform:** `celerity-2026-02-01`
 
 The `celerity/bucket` resource type defines an object storage bucket that can be used to store files and other data for a Celerity application.
 
@@ -731,7 +731,7 @@ When a bucket is linked to a workflow, a workflow execution will be triggered wh
 
 ```yaml
 version: 2025-05-12
-transform: celerity-2025-08-01
+transform: celerity-2026-02-01
 resources:
   myAppBucket:
     type: "celerity/bucket"
@@ -745,7 +745,7 @@ resources:
 
 ```yaml
 version: 2025-05-12
-transform: celerity-2025-08-01
+transform: celerity-2026-02-01
 variables:
     encryptionKeyId:
         type: string

@@ -4,9 +4,9 @@ sidebar_position: 3
 
 # `celerity/consumer`
 
-**v2025-08-01 (draft)**
+**v2026-02-01 (draft)**
 
-**blueprint transform:** `celerity-2025-08-01`
+**blueprint transform:** `celerity-2026-02-01`
 
 The `celerity/consumer` resource type is used to define a subscriber to messages on a `celerity/topic`, an externally defined queue or message broker.
 
@@ -206,7 +206,7 @@ Where an application is made up of a composition of consumers, an API, schedules
 
 ```yaml
 version: 2025-05-12
-transform: celerity-2025-08-01
+transform: celerity-2026-02-01
 variables:
     ordersQueue:
         type: string

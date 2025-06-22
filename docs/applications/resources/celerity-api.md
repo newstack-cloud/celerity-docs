@@ -4,9 +4,9 @@ sidebar_position: 1
 
 # `celerity/api`
 
-**v2025-08-01 (draft)**
+**v2026-02-01 (draft)**
 
-**blueprint transform:** `celerity-2025-08-01`
+**blueprint transform:** `celerity-2026-02-01`
 
 The `celerity/api` resource type is used to define an HTTP API or a WebSocket API.
 
@@ -719,7 +719,7 @@ An API can link to a `celerity/config` resource to access secrets and configurat
 
 ```yaml
 version: 2025-05-12
-transform: celerity-2025-08-01
+transform: celerity-2026-02-01
 resources:
     ordersApi:
         type: "celerity/api"
@@ -769,7 +769,7 @@ resources:
 
 ```yaml
 version: 2025-05-12
-transform: celerity-2025-08-01
+transform: celerity-2026-02-01
 resources:
     orderStreamApi:
         type: "celerity/api"
@@ -809,7 +809,7 @@ resources:
 
 ```yaml
 version: 2025-05-12
-transform: celerity-2025-08-01
+transform: celerity-2026-02-01
 resources:
     ordersApi:
         type: "celerity/api"

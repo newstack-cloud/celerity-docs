@@ -4,9 +4,9 @@ sidebar_position: 6
 
 # `celerity/handlerConfig`
 
-**v2025-08-01 (draft)**
+**v2026-02-01 (draft)**
 
-**blueprint transform:** `celerity-2025-08-01`
+**blueprint transform:** `celerity-2026-02-01`
 
 The `celerity/handlerConfig` resource type is used to define shared configuration for a set of handlers.
 
@@ -140,7 +140,7 @@ along with resource types that would make up a complete application blueprint.
 
 ```yaml
 version: 2025-05-12
-transform: celerity-2025-08-01
+transform: celerity-2026-02-01
 variables:
     dbHost:
         type: string
