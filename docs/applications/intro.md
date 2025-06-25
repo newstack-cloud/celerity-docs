@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # Introduction
 
-Celerity applications are made up of a set of resource types that can be defined in a [blueprint](/docs/blueprint/intro) along with handler source code. A blueprint defines the components of the application and its infrastructure dependencies.
+Celerity applications are made up of a set of resource types that can be defined in a [blueprint](https://bluelink.dev/docs/blueprint/intro) along with handler source code. A blueprint defines the components of the application and its infrastructure dependencies.
 
 Compute resources make up the compute components of your application that can run on FaaS[^1] platforms, containerised environments, or other compute platforms without any changes to your application source code[^2].
 

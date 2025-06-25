@@ -151,18 +151,6 @@ This means that when `--check-deploy-config` is set, the CLI will validate the c
 
 ## `destroy`
 
-## `login`
-
-This command logs into a plugin registry to allow the installation of plugins from specific protected registries by host.
-
-An example of logging into a plugin registry:
-```bash
-celerity login registry.customhost.com
-```
-
-The auth configuration for plugin registries is expected to be present in the `$HOME/.celerity/auth.json` file.
-See the [Plugin Registry Authentication Protocol](/plugin-framework/docs/registry-protocols-formats/auth-protocol) for more information on how to authenticate with a plugin registry.
-
 ## `app`
 
 This is the command category for managing Celerity applications.

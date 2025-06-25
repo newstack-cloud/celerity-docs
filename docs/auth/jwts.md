@@ -4,7 +4,7 @@ sidebar_position: 3
 
 # JWTs
 
-JWTs (JSON Web Tokens) can be used to authenticate with Celerity components that provide HTTP APIs such as the [Deploy Engine](/deploy-engine/docs/intro) and the [Workflow Runtime](/workflow-runtime/docs/intro).
+JWTs (JSON Web Tokens) can be used to authenticate with Celerity components that provide HTTP APIs such as the [Workflow Runtime](/workflow-runtime/docs/intro).
 
 JWTs must be issued by an OAuth2 or OIDC provider that is configured for the Celerity component you are authenticating with. Public keys must be exposed by the provider via a JWKS (JSON Web Key Set) endpoint.
 The provider is expected to have a discovery endpoint that exposes the JWKS URI and other metadata required to validate the JWT. Celerity components expect an OIDC or OAuth2 provider discovery endpoint to be of the form `{issuer}/.well-known/openid-configuration` or `{issuer}/.well-known/oauth-authorization-server`.

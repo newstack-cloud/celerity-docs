@@ -20,7 +20,7 @@ curl --proto "-https" --tlsv1.2 -sSf https://manager-sh.celerityframework.io | s
 
 Using a different system or want to install another way? Check out other ways to install Celerity for your platform [here](./installing-celerity).
 
-This will run a shell script to install the [`celerity-manager`](https://github.com/newstack-cloud/celerity/tree/main/tools/manager) tool that will then install the [Celerity CLI](../../cli/docs/intro), [Deploy Engine](../../deploy-engine/docs/intro), a set of core Deploy Engine plugins and the [Blueprint Language Server](https://github.com/newstack-cloud/celerity/tree/main/tools/blueprint-ls) on your system.
+This will run a shell script to install the [`celerity-manager`](https://github.com/newstack-cloud/celerity/tree/main/tools/manager) tool that will then install the [Celerity CLI](../../cli/docs/intro), [Bluelink Deploy Engine](https://bluelink.dev/deploy-engine/docs/intro), a set of core Deploy Engine plugins and the [Blueprint Language Server](https://github.com/newstack-cloud/bluelink/tree/main/tools/blueprint-ls) on your system.
 As Celerity consists of multiple software components, the `celerity-manager` tool makes it easier to install them and manage updates.
 
 ## Generate a new project
@@ -65,11 +65,5 @@ Now that you have a Celerity application up and running, you can dive deeper int
 - [Celerity Applications](../applications/intro)
 - [Celerity Runtime](../runtime/intro)
 - [Celerity CLI](../../cli/docs/intro)
-- [Deploy Engine](../../deploy-engine/docs/intro)
+- [Bluelink Deploy Engine](https://bluelink.dev/deploy-engine/docs/intro)
 
-
-## Celerity for Infrastructure as Code (IaC)
-
-You can also use Celerity as an infrastructure management tool using blueprints for IaC and the Deploy Engine for deployment.
-
-[Follow the Getting Started guide for Celerity for IaC](./getting-started-iac) to learn how to create and deploy your first blueprint.

@@ -4,7 +4,7 @@ sidebar_position: 2
 
 # API Keys
 
-API keys can be used to authenticate with Celerity components with HTTP APIs such as the [Deploy Engine API](/deploy-engine/docs/intro) and the [Workflow Runtime](/workflow-runtime/docs/intro).
+API keys can be used to authenticate with Celerity components with HTTP APIs such as the [Workflow Runtime](/workflow-runtime/docs/intro).
 
 API keys are shared secrets that are only known by the caller and an instance of one of the Celerity applications.
 
