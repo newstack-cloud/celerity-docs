@@ -4,9 +4,9 @@ sidebar_position: 10
 
 # `celerity/topic`
 
-**v2026-02-01 (draft)**
+**v2026-02-28 (draft)**
 
-**blueprint transform:** `celerity-2026-02-01`
+**blueprint transform:** `celerity-2026-02-28`
 
 The `celerity/topic` resource type is used to define a topic that can be used to publish and subscribe to messages for a Celerity application. Topics are typically used in event-driven architectures to be used between applications for asynchronous communication and to allow applications to respond to infrastructure events (e.g. database changes, file uploads, etc.).
 
@@ -112,7 +112,7 @@ As topics are typically used to allow asynchronous message passing for decoupled
 
 ```yaml
 version: 2025-05-12
-transform: celerity-2026-02-01
+transform: celerity-2026-02-28
 variables:
   encryptionKeyId:
     type: string

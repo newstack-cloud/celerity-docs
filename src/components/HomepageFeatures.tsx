@@ -11,7 +11,7 @@ type FeatureItem = {
 const FeatureList: FeatureItem[] = [
   {
     title: 'Move Fast',
-    image: '/img/undraw_to_the_stars_re_wq2x.svg',
+    image: '/img/undraw_to-the-stars.svg',
     description: (
       <>
         Celerity is designed to help you move fast with its comprehensive
@@ -22,7 +22,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: 'Run Anywhere with Ease',
-    image: '/img/undraw_cloud_hosting_7xb1.svg',
+    image: '/img/undraw_cloud-hosting.svg',
     description: (
       <>
         Celerity lets you focus on the problems you are trying to solve,
@@ -33,7 +33,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: 'Useful Primitives',
-    image: '/img/undraw_building_blocks_re_5ahy.svg',
+    image: '/img/undraw_building-blocks.svg',
     description: (
       <>
         Build with a set of useful primitives focusing on common types of applications
@@ -41,22 +41,11 @@ const FeatureList: FeatureItem[] = [
       </>
     ),
   },
-  {
-    title: 'IaC Simplified',
-    image: '/img/undraw_text_files_au1q.svg',
-    description: (
-      <>
-        Celerity Blueprints make it much easier to define your infrastructure.
-        They provide powerful abstractions where details such as networking and
-        permissions are taken care of while following industry best practises.
-      </>
-    ),
-  },
 ];
 
 function Feature({title, image, description}: FeatureItem) {
   return (
-    <div className={clsx('col col--3')}>
+    <div className={clsx('col col--4')}>
       <div className="text--center">
         <img className={styles.featureSvg} alt={title} src={image} />
       </div>

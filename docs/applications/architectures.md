@@ -32,7 +32,7 @@ An example of multiple consumers in a single application:
 
 ```yaml
 version: 2025-05-12
-transform: celerity-2026-02-01
+transform: celerity-2026-02-28
 variables:
     ordersQueue:
         type: string

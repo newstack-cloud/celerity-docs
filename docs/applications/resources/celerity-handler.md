@@ -4,9 +4,9 @@ sidebar_position: 5
 
 # `celerity/handler`
 
-**v2026-02-01 (draft)**
+**v2026-02-28 (draft)**
 
-**blueprint transform:** `celerity-2026-02-01`
+**blueprint transform:** `celerity-2026-02-28`
 
 The `celerity/handler` resource type is used to define a handler that can carry out a step in a workflow, process HTTP requests, WebSocket messages, or events from queues/message brokers, scheduled events, or cloud services.
 
@@ -810,7 +810,7 @@ For approach 2, you would define a metadata section in the blueprint like this:
 
 ```yaml
 version: 2025-05-12
-transform: celerity-2026-02-01
+transform: celerity-2026-02-28
 resources:
    # ...
 metadata:
@@ -836,7 +836,7 @@ along with resource types that can be linked to the handler resource type to add
 
 ```yaml
 version: 2025-05-12
-transform: celerity-2026-02-01
+transform: celerity-2026-02-28
 variables:
     # Variable definitions ...
 resources:
@@ -896,7 +896,7 @@ resources:
 
 ```yaml
 version: 2025-05-12
-transform: celerity-2026-02-01
+transform: celerity-2026-02-28
 variables:
     # Variable definitions ...
 resources:
@@ -954,7 +954,7 @@ resources:
 
 ```yaml
 version: 2025-05-12
-transform: celerity-2026-02-01
+transform: celerity-2026-02-28
 variables:
     # Variable definitions ...
 resources:
@@ -996,7 +996,7 @@ resources:
 
 ```yaml
 version: 2025-05-12
-transform: celerity-2026-02-01
+transform: celerity-2026-02-28
 variables:
     # Variable definitions ...
 resources:
@@ -1033,7 +1033,7 @@ resources:
 
 ```yaml
 version: 2025-05-12
-transform: celerity-2026-02-01
+transform: celerity-2026-02-28
 variables:
     # Variable definitions ...
 resources:
@@ -1071,7 +1071,7 @@ resources:
 
 ```yaml
 version: 2025-05-12
-transform: celerity-2026-02-01
+transform: celerity-2026-02-28
 variables:
     # Variable definitions ...
 resources:
@@ -1183,7 +1183,7 @@ resources:
 
 ```yaml
 version: 2025-05-12
-transform: celerity-2026-02-01
+transform: celerity-2026-02-28
 variables:
     # Variable definitions ...
 resources:
@@ -1220,7 +1220,7 @@ resources:
 
 ```yaml
 version: 2025-05-12
-transform: celerity-2026-02-01
+transform: celerity-2026-02-28
 variables:
     # Variable definitions ...
 resources:
@@ -1250,7 +1250,7 @@ resources:
 
 ```yaml
 version: 2025-05-12
-transform: celerity-2026-02-01
+transform: celerity-2026-02-28
 variables:
     # Variable definitions ...
 resources:

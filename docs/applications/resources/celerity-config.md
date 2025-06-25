@@ -4,9 +4,9 @@ sidebar_position: 8
 
 # `celerity/config`
 
-**v2026-02-01 (draft)**
+**v2026-02-28 (draft)**
 
-**blueprint transform:** `celerity-2026-02-01`
+**blueprint transform:** `celerity-2026-02-28`
 
 The `celerity/config` resource type defines a secrets and configuration store to be used by a Celerity application.
 
@@ -168,7 +168,7 @@ Config resources can not link to other resources.
 
 ```yaml
 version: 2025-05-12
-transform: celerity-2026-02-01
+transform: celerity-2026-02-28
 resources:
   myAppConfig:
     type: "celerity/config"
@@ -185,7 +185,7 @@ resources:
 
 ```yaml
 version: 2025-05-12
-transform: celerity-2026-02-01
+transform: celerity-2026-02-28
 variables:
   customEncryptionKeyId:
     type: string

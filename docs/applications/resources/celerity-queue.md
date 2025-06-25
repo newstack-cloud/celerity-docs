@@ -4,9 +4,9 @@ sidebar_position: 11
 
 # `celerity/queue`
 
-**v2026-02-01 (draft)**
+**v2026-02-28 (draft)**
 
-**blueprint transform:** `celerity-2026-02-01`
+**blueprint transform:** `celerity-2026-02-28`
 
 The `celerity/queue` resource type is used to define a queue that can be used for asynchronous processing of messages in a Celerity application. This resource type is typically used in conjunction with the `celerity/consumer` resource type to process messages from the queue and a handler in any application type that can write messages to the queue.
 
