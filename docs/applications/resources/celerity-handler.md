@@ -13,8 +13,6 @@ The `celerity/handler` resource type is used to define a handler that can carry 
 Handlers can be deployed to different target environments such as FaaS[^1], containerised environments, or custom servers.
 For containerised and custom server environments, the Celerity runtime is responsible for setting up the appropriate server or polling mechanism to handle incoming requests or messages and route them to the appropriate handler.
 
-In addition to being wired up to `celerity/*` resource types in the [linked from](#linked-from) section, handlers can be configured to respond to specific events in cloud services such as object storage, database streams, and other services where the event source is created outside of the blueprint; the `events` property of a handler is used to wire it up to these event sources created outside of a blueprint.
-
 ## Specification
 
 The specification is the structure of the resource definition that comes under the `spec` field of the resource in a blueprint.
@@ -147,16 +145,6 @@ environmentVariables:
   DB_PORT: "${variables.dbPort}"
 ```
 
-### events
-
-A mapping of cloud service event configurations that the handler will respond to,
-this can include events from object storage, databases, and other services.
-Depending on the target environment, the handler will be wired up to the appropriate event source (e.g. AWS S3, Google Cloud Storage, Azure Blob Storage).
-
-**type**
-
-mapping[string, [eventConfiguration](#eventconfiguration)]
-
 ## Annotations
 
 Annotations define additional metadata that can determine the behaviour of the resource in relation to other resources in the blueprint or to add behaviour to a resource that is not in its spec.
@@ -271,73 +259,7 @@ Marks the handler to be used as a custom guard for incoming requests or messages
 
 boolean
 
-### `celerity/queue` 🔗 `celerity/handler`
-
-<p style={{fontSize: '1.2em'}}><strong>celerity.handler.queue</strong></p>
-
-Marks the handler to be used with a queue for handling messages from the queue.
-This is only required when there is ambiguity where a handler is linked from multiple resources in a blueprint (e.g. a schedule, API and queue). If the handler is only linked to a queue, this annotation is not required and the default behaviour is to use the handler with the queue.
-
-**type**
-
-boolean
-
 ___
-
-<p style={{fontSize: '1.2em'}}><strong>celerity.handler.queue.batchSize</strong></p>
-
-The size of the batch of messages to retrieve from the queue. This value is used to configure the maximum
-number of messages to retrieve in a single poll operation. Depending on the target environment, this value will be limited to different maximum values and may be ignored.
-
-**type**
-
-integer
-
-___
-
-<p style={{fontSize: '1.2em'}}><strong>celerity.handler.queue.visibilityTimeout</strong></p>
-
-The time in seconds that a message is hidden from other consumers after being retrieved from the queue.
-Depending on the target environment, the value may be ignored.
-
-**type**
-
-integer
-
-**default value**
-
-An appropriate default value for the target environment is used.
-
-___
-
-<p style={{fontSize: '1.2em'}}><strong>celerity.handler.queue.waitTimeSeconds</strong></p>
-
-The time in seconds to wait for messages to become available in the queue before polling again.
-Depending on the target environment, this value may be ignored.
-
-**type**
-
-integer
-
-**default value**
-
-An appropriate default value for the target environment is used.
-
-___
-
-<p style={{fontSize: '1.2em'}}><strong>celerity.handler.queue.partialFailures</strong></p>
-
-Whether partial failure reporting is supported. When enabled, the handler integration will report partial failures to the source queue, meaning that only failed messages will be retried.
-
-This is only supported in some target environments.
-
-**type**
-
-boolean
-
-**default value**
-
-`false`
 
 ### `celerity/schedule` 🔗 `celerity/handler`
 
@@ -352,80 +274,7 @@ in selecting the handler to associate with a schedule.
 **type**
 
 boolean
-
-### `celerity/datastore` 🔗 `celerity/handler`
-
-<p style={{fontSize: '1.2em'}}><strong>celerity.handler.datastore</strong></p>
-
-Marks the handler to be used with a NoSQL data store stream or trigger (e.g. DynamoDB stream) for handling events in the data store.
-This is only required when there is ambiguity where a handler is linked from multiple resources in a blueprint (e.g. a consumer, API and data store). If the handler is only linked to a data store, this annotation is not required and the default behaviour is to use the handler with the data store.
-
-**type**
-
-boolean
-
 ___
-
-<p style={{fontSize: '1.2em'}}><strong>celerity.handler.datastore.batchSize</strong></p>
-
-The size of the batch of events to retrieve from the data store stream/trigger. The maximum value depends on the target environment.
-
-**type**
-
-integer
-
-___
-
-<p style={{fontSize: '1.2em'}}><strong>celerity.handler.datastore.partialFailures</strong></p>
-
-Whether partial failure reporting is supported. When enabled, the handler integration will report partial failures to the data store, meaning that only failed messages will be retried.
-
-This is only supported in some target environments.
-
-**type**
-
-boolean
-
-___
-
-<p style={{fontSize: '1.2em'}}><strong>celerity.handler.datastore.startFromBeginning</strong></p>
-
-Whether the handler should start processing events from the beggining of a stream (or earliest available point).
-
-This is only supported in some target environments.
-
-**type**
-
-boolean
-
-### `celerity/bucket` 🔗 `celerity/handler`
-
-<p style={{fontSize: '1.2em'}}><strong>celerity.handler.bucket</strong></p>
-
-Marks the handler to be used with an object storage bucket for handling events from the bucket.
-This is only required when there is ambiguity where a handler is linked from multiple resources in a blueprint (e.g. a consumer, API and bucket). If the handler is only linked to a bucket, this annotation is not required and the default behaviour is to use the handler with the bucket.
-
-**type**
-
-boolean
-
-___
-
-<p style={{fontSize: '1.2em'}}><strong>celerity.handler.bucket.events</strong></p>
-
-The object storage events that should trigger the handler.
-
-**type**
-
-string - Comma-separated list of events
-
-**allowed values**
-
-`created` | `deleted` | `metadataUpdated`
-
-**examples**
-
-`created,deleted`
 
 ### `celerity/consumer` 🔗 `celerity/handler`
 
@@ -499,231 +348,19 @@ string
 
 `example-handler-v1` (Custom Server or Containerised Environment)
 
-## Data Types
-
-### eventConfiguration
-
-Configuration for a cloud service event trigger that the handler will respond to.
-This supports a limited set of event sources, such as object storage, NoSQL database streams/events, data streams and a few other services.
-
-Due to the differences in event sources across cloud providers, the amount of options is kept minimal and as general as possible to support the most common event sources.
-
-:::note
-Blueprints with one or more handlers that all are configured with an event source directly do not need to have an application resource type defined. In containerised environments, the behaviour for the application that hosts the handlers will be configured to be that of the `celerity/consumer` resource type. This is because the handlers will be wired up to a queue or message broker that is polled by the runtime; at deploy time the queue or message broker is wired up to handle incoming messages from the external event sources.
-:::
-
-To support the a wider range of event sources, you will need to wire up an event source to a queue or message broker and use a `celerity/consumer` resource to handle the events.
-
-#### FIELDS
-___
-
-<p style={{fontSize: '1.2em'}}><strong>sourceType (required)</strong></p>
-
-The type of event source that the handler will respond to.
-
-**field type**
-
-string
-
-**allowed values**
-
-`objectStorage` | `dbStream` | `dataStream`
-___
-
-<p style={{fontSize: '1.2em'}}><strong>sourceConfiguration (required)</strong></p>
-
-The event source configuration for the event source type. 
-
-**field type**
-
-[objectStorageEventConfiguration](#objectstorageeventconfiguration) |
-[dbStreamConfiguration](#dbstreamconfiguration) |
-[dataStreamConfiguration](#datastreamconfiguration)
-
-___
-
-### objectStorageEventConfiguration
-
-Configuration for an object storage event trigger that the handler will respond to.
-This supports object storage services such as AWS S3, Google Cloud Storage, and Azure Blob Storage based on the target environment.
-
-#### FIELDS
-___
-
-<p style={{fontSize: '1.2em'}}><strong>events (required)</strong></p>
-
-The object storage events that should trigger the handler.
-
-**field type**
-
-array[string]
-
-**allowed values**
-
-`created` | `deleted` | `metadataUpdated`
-
-**examples**
-
-`["created", "deleted"]`
-___
-
-
-<p style={{fontSize: '1.2em'}}><strong>bucket (required)</strong></p>
-
-The name of the bucket that the handler will respond to events from.
-
-**field type**
-
-string
-
-**examples**
-
-`order-invoice-bucket`
-___
-
-### dbStreamConfiguration
-
-Configuration for a database stream event trigger that the handler will respond to.
-This supports NoSQL database streams/events such as DynamoDB Streams, Google Cloud Datastore, and Azure Cosmos DB based where the selected service is based on the target environment.
-
-You can find more information about the configuration mappings for database streams in the [configuration mappings](#serverless-database-streams) section. You can also dive into how DB streams work with containerised and custom server environments [here](/docs/applications/architectures#events---cloud-service-events)
-
-#### FIELDS
-___
-
-<p style={{fontSize: '1.2em'}}><strong>batchSize</strong></p>
-
-The size of the batch of events to retrieve from the database stream.
-The maximum value depends on the target environment, see the [configuration mappings](#serverless-database-streams) section for more details.
-
-**field type**
-
-integer
-___
-
-<p style={{fontSize: '1.2em'}}><strong>dbStreamId (required)</strong></p>
-
-The ID of the database stream that the handler will respond to events from.
-The format of the ID depends on the target environment, see the [configuration mappings](#serverless-database-streams) section for more details.
-
-**field type**
-
-string
-
-**examples**
-
-`arn:aws:dynamodb:us-east-1:123456789012:table/MyTable/stream/2021-07-01T00:00:00.000`
-___
-
-<p style={{fontSize: '1.2em'}}><strong>partialFailures</strong></p>
-
-Whether partial failure reporting is supported.
-When enabled, the consumer will report partial failures to the source stream,
-meaning that only failed messages will be retried.
-
-This is only supported in some target environments, see the [configuration mappings](#serverless-database-streams) section for more details.
-
-**type**
-
-boolean
-
-___
-
-<p style={{fontSize: '1.2em'}}><strong>startFromBeginning</strong></p>
-
-Whether the handler should start processing events from the beginning of the stream (or earliest available point).
-
-This is only supported in some target environments, see the [configuration mappings](#serverless-database-streams) section for more details.
-
-**type**
-
-boolean
-___
-
-### dataStreamConfiguration
-
-Configuration for data stream event triggers that the handler will respond to.
-This supports data stream services such as Amazon Kinesis and Azure Event Hubs, where the selected service is based on the target environment.
-
-You can find more information about the configuration mappings for data streams in the [configuration mappings](#serverless-data-streams) section. You can also dive into how DB streams work with containerised and custom server environments [here](/docs/applications/architectures#events---cloud-service-events)
-
-#### FIELDS
-___
-
-<p style={{fontSize: '1.2em'}}><strong>batchSize</strong></p>
-
-The size of the batch of events to retrieve from the data stream.
-The maximum value depends on the target environment, see the [configuration mappings](#serverless-data-streams) section for more details.
-
-**field type**
-
-integer
-___
-
-<p style={{fontSize: '1.2em'}}><strong>dataStreamId (required)</strong></p>
-
-The ID of the data stream that the handler will respond to events from.
-The format of the ID depends on the target environment, see the [configuration mappings](#serverless-data-streams) section for more details.
-
-**field type**
-
-string
-
-**examples**
-
-`arn:aws:kinesis:us-east-1:123456789012:stream/MyStream`
-___
-
-<p style={{fontSize: '1.2em'}}><strong>partialFailures</strong></p>
-
-Whether partial failure reporting is supported.
-When enabled, the consumer will report partial failures to the source stream,
-meaning that only failed messages will be retried.
-
-This is only supported in some target environments, see the [configuration mappings](#serverless-data-streams) section for more details.
-
-**type**
-
-boolean
-
-___
-
-<p style={{fontSize: '1.2em'}}><strong>startFromBeginning</strong></p>
-
-Whether the handler should start processing events from the beginning of the stream (or earliest available point).
-
-This is only supported in some target environments, see the [configuration mappings](#serverless-data-streams) section for more details.
-
-**type**
-
-boolean
-___
-
 ## Linked From
 
 #### [`celerity/api`](/docs/applications/resources/celerity-api)
 
 When a handler is linked from an API, it will be used to respond to incoming HTTP requests or WebSocket messages. The configuration defined in the handler annotations determines the behaviour of the handler in respect to the API.
 
-#### [`celerity/queue`](/docs/applications/resources/celerity-queue)
-
-When a handler is linked from a queue, it will be used to process messages from the queue. The configuration defined in the handler annotations determines the behaviour of the handler in respect to the queue.
-
 #### [`celerity/schedule`](/docs/applications/resources/celerity-schedule)
 
 When a handler is linked from a schedule, it will be invoked by the scheduled trigger. The configuration defined in the handler annotations determines the behaviour of the handler in respect to the schedule.
 
-#### [`celerity/datastore`](/docs/applications/resources/celerity-datastore)
-
-When a handler is linked from a datastore, it will be used to process events from the data store. The configuration defined in the handler annotations determines the behaviour of the handler in respect to the datastore.
-
-#### [`celerity/bucket`](/docs/applications/resources/celerity-bucket)
-
-When a handler is linked from a bucket, it will be used to process events from the bucket. The configuration defined in the handler annotations determines the behaviour of the handler in respect to the bucket.
-
 #### [`celerity/consumer`](/docs/applications/resources/celerity-consumer)
 
-When a handler is linked to a consumer, it will be used to process messages received from the external queue or message broker defined in the consumer. The configuration defined in the handler annotations determines the behaviour of the handler in respect to the consumer.
+When a handler is linked to a consumer, it will be used to process messages received from the external queue, message broker or other event source connected to or defined in the consumer. The configuration defined in the handler annotations determines the behaviour of the handler in respect to the consumer.
 
 #### [`celerity/workflow`](/docs/applications/resources/celerity-workflow)
 
@@ -968,21 +605,31 @@ resources:
         spec:
             # Queue configuration ...
 
-    orderProcessor:
+    orderConsumer:
+        type: "celerity/consumer"
+        metadata:
+            displayName: Order Consumer
+            labels:
+                application: "ordersProcessing"
+        linkSelector:
+            byLabel:
+                application: "ordersProcessing"
+        spec:
+            batchSize: 10
+            visibilityTimeout: 30
+            waitTimeSeconds: 10
+            partialFailures: true
+
+    processOrders:
         type: "celerity/handler"
         metadata:
-            displayName: Order Processor
-            annotations:
-                celerity.handler.queue.batchSize: 10
-                celerity.handler.queue.visibilityTimeout: 30
-                celerity.handler.queue.waitTimeSeconds: 10
-                celerity.handler.queue.partialFailures: true
+            displayName: Process Orders Handler
             labels:
                 application: "ordersProcessing"
         spec:
-            handlerName: "OrderProcessor-v1"
+            handlerName: "ProcessOrders-v1"
             codeLocation: "handlers/orders"
-            handler: "orders_processor"
+            handler: "process_orders"
             runtime: "python3.13.x"
             memory: 512
             timeout: 30
@@ -998,7 +645,12 @@ resources:
 version: 2025-05-12
 transform: celerity-2026-02-28
 variables:
-    # Variable definitions ...
+    # The order updates topic ID would be defined in a separate blueprint
+    # following a standard practice in decoupling topics from applications
+    # when a topic can be subscribed to by multiple applications.
+    orderUpdatesTopicId:
+        type: string
+        description: The ID of the Celerity topic for order updates.
 resources:
     orderUpdatesConsumer:
         type: "celerity/consumer"
@@ -1008,7 +660,7 @@ resources:
             byLabel:
                 application: "orderUpdates"
         spec:
-            # Consumer configuration ...
+            sourceId: "${variables.orderUpdatesTopicId}"
 
     orderUpdateHandler:
         type: "celerity/handler"
@@ -1045,22 +697,32 @@ resources:
             byLabel:
                 application: "orders"
         spec:
-            # Queue configuration ...
+            # Data store configuration ...
 
-    orderEventProcessor:
+    orderEventsConsumer:
+        type: "celerity/consumer"
+        metadata:
+            displayName: Order Updates Consumer
+            labels:
+                application: "orders"
+        linkSelector:
+            byLabel:
+                application: "orders"
+        spec:
+            batchSize: 10
+            partialFailures: true
+            startFromBeginning: true
+
+    processOrderEvents:
         type: "celerity/handler"
         metadata:
-            displayName: Order Event Processor
-            annotations:
-                celerity.handler.datastore.batchSize: 10
-                celerity.handler.datastore.partialFailures: true
-                celerity.handler.datastore.startFromBeginning: true
+            displayName: Process Order Events Handler
             labels:
                 application: "orders"
         spec:
-            handlerName: "OrderEventProcessor-v1"
+            handlerName: "ProcessOrderEvents-v1"
             codeLocation: "handlers/orders"
-            handler: "order_event_processor"
+            handler: "process_order_events"
             runtime: "python3.13.x"
             memory: 512
             timeout: 30
@@ -1184,8 +846,6 @@ resources:
 ```yaml
 version: 2025-05-12
 transform: celerity-2026-02-28
-variables:
-    # Variable definitions ...
 resources:
     syncOrdersSchedule:
         type: "celerity/schedule"
@@ -1195,7 +855,7 @@ resources:
             byLabel:
                 application: "syncOrders"
         spec:
-            # Schedule configuration ...
+            schedule: "rate(1 hour)"
 
     syncOrdersHandler:
         type: "celerity/handler"
@@ -1224,10 +884,26 @@ transform: celerity-2026-02-28
 variables:
     # Variable definitions ...
 resources:
+    orderEventsConsumer:
+        type: "celerity/consumer"
+        metadata:
+            displayName: Order Events Consumer
+        linkSelector:
+            byLabel:
+                application: "invoices"
+        spec:
+            externalEvents:
+                sourceType: "objectStorage"
+                sourceConfiguration:
+                    events: ["created", "deleted"]
+                    bucket: "order-events-bucket"
+
     invoiceHandler:
         type: "celerity/handler"
         metadata:
             displayName: Invoice Handler
+            labels:
+                application: "invoices"
         spec:
             handlerName: "Invoice-Handler-v1"
             codeLocation: "handlers/invoices"
@@ -1236,11 +912,6 @@ resources:
             memory: 512
             timeout: 30
             tracingEnabled: false
-            events:
-                sourceType: "objectStorage"
-                sourceConfiguration:
-                    events: ["created", "deleted"]
-                    bucket: "order-invoice-bucket"
             environmentVariables:
                 DB_HOST: "${variables.dbHost}"
                 DB_PORT: "${variables.dbPort}"
@@ -1254,19 +925,15 @@ transform: celerity-2026-02-28
 variables:
     # Variable definitions ...
 resources:
-    orderEventHandler:
-        type: "celerity/handler"
+    orderEventsConsumer:
+        type: "celerity/consumer"
         metadata:
-            displayName: Order Event Handler
+            displayName: Order Events Consumer
+        linkSelector:
+            byLabel:
+                application: "invoices"
         spec:
-            handlerName: "OrderEvent-Handler-v1"
-            codeLocation: "handlers/orders"
-            handler: "event_handler"
-            runtime: "python3.13.x"
-            memory: 512
-            timeout: 30
-            tracingEnabled: false
-            events:
+            externalEvents:
                 sourceType: "dataStream"
                 sourceConfiguration:
                     batchSize: 100
@@ -1276,6 +943,21 @@ resources:
                     dataStreamId: "arn:aws:kinesis:us-east-1:123456789012:stream/MyStream"
                     partialFailures: true
                     startFromBeginning: true
+
+    orderEventHandler:
+        type: "celerity/handler"
+        metadata:
+            displayName: Order Event Handler
+            labels:
+                application: "invoices"
+        spec:
+            handlerName: "OrderEvent-Handler-v1"
+            codeLocation: "handlers/orders"
+            handler: "event_handler"
+            runtime: "python3.13.x"
+            memory: 512
+            timeout: 30
+            tracingEnabled: false
             environmentVariables:
                 DB_HOST: "${variables.dbHost}"
                 DB_PORT: "${variables.dbPort}"
@@ -1329,6 +1011,7 @@ Celerity will map OS-only runtimes (`os.*`) to custom handlers in Azure Function
 
 In the Celerity::1 local environment, handlers are loaded into the Celerity runtime in a single process.
 Depending on links and configuration, the handler will be wired up to the appropriate HTTP route, WebSocket route, event source, stream or scheduled trigger.
+In Celerity::1, event sources and datastore streams will flow through Valkey, either as a message sent directly to a stream consumed by the Celerity runtime or to a pub/sub channel in Valkey that the Celerity runtime will be subscribed to indirectly through a stream. Events to trigger handlers are configured through the [`celerity/consumer`](./celerity-consumer#celerity1) resource type.
 
 ### AWS
 
@@ -1372,86 +1055,6 @@ In the Azure Serverless environment, handlers are deployed as Azure Functions.
 Depending on links and configuration, the handler will be wired up to the appropriate HTTP route, WebSocket route, event source, stream or scheduled trigger.
 HTTP handlers will be wired up to Azure API Management, event sources such as Azure Event Hubs, Azure Blob Storage and Azure Queue Storage will be wired up to the Azure Function directly. For scheduled triggers, a timer trigger is configured for the function. For queues, Azure Queue Storage queues will be configured as triggers for the Azure Function. For workflows, Azure Logic Apps will be configured to trigger the Azure Function as a step in the workflow.
 
-## Configuration Mappings
-
-### Serverless Database Streams
-
-The following is a table of database stream configuration fields and how they map to different target environments when the Celerity application is deployed as a Serverless stream flow[^2].
-Google Cloud Datastore event triggers aren't actually stream-based, but comes under database streams as is the closest analogue to DynamoDB Streams and Azure Cosmos DB Triggers.
-
-<table>
-    <thead>
-        <tr>
-            <th>Celerity Handler Events</th>
-            <th>DynamoDB Stream Event Source for AWS Lambda</th>
-            <th>Google Cloud Datastore Trigger for Cloud Functions</th>
-            <th>Azure Cosmos DB Trigger for Azure Functions</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <td>batchSize</td>
-            <td>batchSize (default: `100`, max: `10000`)</td>
-            <td>N/A</td>
-            <td>maxItemsPerInvocation</td>
-        </tr>
-        <tr>
-            <td>dbStreamId</td>
-            <td>eventSourceArn</td>
-            <td>`{database}(:{namespace})?` (Maps to event filters)</td>
-            <td>`{databaseName}:{collectionName}`</td>
-        </tr>
-        <tr>
-            <td>partialFailures</td>
-            <td>functionResponseTypes</td>
-            <td>N/A</td>
-            <td>N/A</td>
-        </tr>
-        <tr>
-            <td>startFromBeginning</td>
-            <td>startingPosition = "TRIM_HORIZON"</td>
-            <td>N/A</td>
-            <td>startFromBeginning</td>
-        </tr>
-    </tbody>
-</table>
-
-### Serverless Data Streams
-
-The following is a table of data stream configuration fields and how they map to different target environments when the Celerity application is deployed as a Serverless stream flow[^3].
-
-<table>
-    <thead>
-        <tr>
-            <th>Celerity Handler Events</th>
-            <th>Kinesis Data Stream Event Source for AWS Lambda</th>
-            <th>Azure Events Hub Trigger for Azure Functions</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <td>batchSize</td>
-            <td>batchSize (default: `100`, max: `10000`)</td>
-            <td>maxItemsPerInvocation</td>
-        </tr>
-        <tr>
-            <td>dataStreamId</td>
-            <td>eventSourceArn</td>
-            <td>[Event Hub Trigger Attributes](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-event-hubs-trigger?tabs=python-v2%2Cisolated-process%2Cnodejs-v4%2Cfunctionsv2%2Cextensionv5&pivots=programming-language-csharp#attributes) - will map to a combination of attributes.</td>
-        </tr>
-        <tr>
-            <td>partialFailures</td>
-            <td>functionResponseTypes</td>
-            <td>N/A</td>
-        </tr>
-        <tr>
-            <td>startFromBeginning</td>
-            <td>startingPosition = "TRIM_HORIZON"</td>
-            <td>N/A</td>
-        </tr>
-    </tbody>
-</table>
-
 ## Timeouts and long-running tasks
 
 In a Serverless environment, the maximum execution time for a handler is limited.
@@ -1487,5 +1090,3 @@ Using the Celerity workflow runtime as an alternative to cloud provider workflow
 </table>
 
 [^1]: Function-as-a-Service such as AWS Lambda, Google Cloud Functions, and Azure Functions.
-[^2]: Examples of Serverless stream flows include [Amazon DynamoDB Streams and AWS Lambda](https://docs.aws.amazon.com/lambda/latest/dg/with-ddb.html), [Google Cloud Datastore triggering Google Cloud Functions](https://cloud.google.com/datastore/docs/extend-with-functions-2nd-gen) and [Azure Cosmos DB Streams triggering Azure Functions](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-cosmosdb?toc=%2Fazure%2Fcosmos-db%2Ftoc.json&bc=%2Fazure%2Fcosmos-db%2Fbreadcrumb%2Ftoc.json&tabs=csharp).
-[^3]: Examples of Serverless stream flows include [Amazon Kinesis Streams and AWS Lambda](https://docs.aws.amazon.com/lambda/latest/dg/with-kinesis.html) and [Azure Event Hubs triggering Azure Functions](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-event-hubs?tabs=csharp).

@@ -4,14 +4,14 @@ sidebar_position: 5
 
 # App Deploy Configuration
 
-This section provides documentation for a simplified configuration format tailored for deploying Celerity applications.
+This section provides documentation for a configuration format for deploying Celerity applications to target environments.
 
 ## Overview
 
-App deploy configuration is used for blueprint variable overrides and configuration for the target environment to deploy the application to. This configuration will be converted to the standard [deploy configuration](./deploy-configuration) format when an application is built and deployed.
+App deploy configuration is used for blueprint variable overrides and configuration for the target environment to deploy the application to. This configuration will be converted to the Bluelink [deploy configuration](https://bluelink.dev/cli/docs/deploy-configuration) format when an application is built and deployed.
 
 App deploy configuration is used with the following commands:
-- `app build` - Used to build the application, target environment configuration helps determine how the application should be built.
+- `build` - Used to build the application, target environment configuration helps determine how the application should be built.
 - `stage-changes` - Used to ensure that all the final blueprint variables are set and that the Celerity app transformer and target environment provider is configured correctly.
 - `deploy` - Used to ensure that all the final blueprint variables are set and that the the Celerity app transformer and target environment provider are configured correctly when deploying resources for a new blueprint instance.
 - `destroy` - Used to ensure that Celerity app transformer and target environment provider are configured correctly when destroying resources in a blueprint instance. This command does not make use of an input blueprint file so blueprint variable overrides are not used.

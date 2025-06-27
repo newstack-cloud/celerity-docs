@@ -8,12 +8,12 @@ sidebar_position: 3
 
 **blueprint transform:** `celerity-2026-02-28`
 
-The `celerity/consumer` resource type is used to define a subscriber to messages on a `celerity/topic`, an externally defined queue or message broker.
+The `celerity/consumer` resource type is used to define a subscriber to messages on a `celerity/topic`, events in a `celerity/datastore` or a `celerity/bucket`, messages from a `celerity/queue`, an externally defined queue or message broker.
 
 A consumer can be deployed to different target environments such as a Serverless event-driven flow[^1], a containerised environment, or a custom server.
 For containerised and custom server environments, the default mode is for the Celerity runtime provides a polling mechanism to check for new messages in a queue or message broker. There are some exceptions like the Google Cloud Run target environment where a push model is used to deliver messages to the consumer application.
 
-In some target environments, infrastructure resources are created for a consumer when the `sourceId` is a Celerity topic, this will often be a queue that subscribes to the topic to implement a reliable and scalable fan-out approach.
+In some target environments, infrastructure resources are created for a consumer. When `sourceId` is a Celerity topic, this will often be a queue that subscribes to the topic to implement a reliable and scalable fan-out approach. When a `celerity/datastore` or `celerity/bucket` is linked to a consumer, depending on the target environment, intermediary infrastructure resources may also be created to deliver events to the consumer application.
 When the `sourceId` is an external queue or message broker, the consumer is configured to listen to the external queue or message broker.
 
 :::note
@@ -27,11 +27,13 @@ A topic should be defined in blueprints for producer applications and a consumer
 The specification is the structure of the resource definition that comes under the `spec` field of the resource in a blueprint.
 The rest of this section lists fields that are available to configure the `celerity/consumer` resource followed by examples of different configurations for the resource type, a section outlining the behaviour in supported target environments along with additional documentation.
 
-### sourceId (required)
+### sourceId (conditionally required)
 
-The source ID is a unique identifier for the queue or message broker that the consumer will listen to for messages.
-For example, this could be a Celerity topic ID, the URL of an Amazon SQS queue, a Google Cloud Pub/Sub topic, or a name of an Azure Storage Queue.
+The source ID is a unique identifier for the topic, queue, message broker or other event source that the consumer will listen to for messages.
+For example, this could be a Celerity topic ID, the URL of an Amazon SQS queue, a Google Cloud Pub/Sub topic, or a name of an Azure Service Bus Queue.
 The type of source is based on the provided target environment at build/deploy time.
+
+There are two cases where `sourceId` is not required. The first is when the consumer is linked from a `celerity/datastore`, `celerity/bucket` or `celerity/queue` resource type, in which case the `sourceId` will be derived from the linked resource. The second is when the `externalEvents` is set with a stream ID or storage bucket name, in which case the `sourceId` will be derived from the event source configuration.
 
 **type**
 
@@ -91,6 +93,14 @@ boolean
 
 `false`
 
+### externalEvents
+
+A mapping of cloud service event configurations that the consumer will respond to, this can include events from object storage, databases, and other services. Depending on the target environment, the consumer will be wired up to the appropriate event source (e.g. AWS S3, Google Cloud Storage, Azure Blob Storage).
+
+**type**
+
+mapping[string, [externalEventConfiguration](#externaleventconfiguration)]
+
 ## Annotations
 
 Annotations define additional metadata that can determine the behaviour of the resource in relation to other resources in the blueprint or to add behaviour to a resource that is not in its spec.
@@ -108,6 +118,36 @@ This is especially useful when deploying to a containerised or custom server env
 **type**
 
 string
+___
+
+<p style={{fontSize: '1.2em'}}><strong>celerity.consumer.deadLetterQueue</strong></p>
+
+When the `sourceId` is a Celerity topic, by default, a dead letter queue (or equivalent) will be created for the consumer to receive messages that could not be processed after a maximum number of attempts has been surpassed.
+This annotation can be set to `false` to disable the creation of a dead letter queue for the consumer.
+
+**type**
+
+boolean
+
+**default**
+
+`true`
+
+___
+
+<p style={{fontSize: '1.2em'}}><strong>celerity.consumer.deadLetterQueueMaxAttempts</strong></p>
+
+The maximum number of attempts to process a message before it is sent to the dead letter queue
+when the `sourceId` is a Celerity topic and the dead letter queue behaviour is enabled.
+
+**type**
+
+integer
+
+**default**
+
+The default value for the target environment is used. See the [Dead Letter Queue Configuration Mappings](#dead-letter-queue-configuration-mappings) section for more details.
+
 ___
 
 ### `celerity/vpc` 🔗 `celerity/consumer`
@@ -159,15 +199,84 @@ string
 
 `public` - When a VPC links to an consumer, traffic will be accepted from the public internet via an application load balancer if one is configured for the application.
 
+___
+
+### `celerity/datastore` 🔗 `celerity/consumer`
+
+#### celerity.consumer.datastore
+
+Specifies the name of the data store (in the blueprint) that the consumer should listen to for events. This is only required when there is ambiguity where a consumer matches the the link selector of multiple data sources in the blueprint. If the consumer is only linked to a single data store, this annotation is not required and the default behaviour will be to listen to the data store that matches the link selector.
+
+**type**
+
+string
+
+___
+
+#### celerity.consumer.datastore.startFromBeginning
+
+Whether the consumer should start processing events from the beginning of the stream (or earliest available point).
+
+This is only supported in some target environments.
+
+**type**
+
+boolean
+
+___
+
+### `celerity/queue` 🔗 `celerity/consumer`
+
+#### celerity.consumer.queue
+
+Specifies the name of the queue (in the blueprint) that the consumer should listen to for messages. This is only required when there is ambiguity where a consumer matches the the link selector of multiple queues in the blueprint. If the consumer is only linked to a single queue, this annotation is not required and the default behaviour will be to listen to the queue that matches the link selector.
+
+**type**
+
+string
+
+___
+
+### `celerity/bucket` 🔗 `celerity/consumer`
+
+#### celerity.consumer.bucket
+
+Specifies the name of the bucket (in the blueprint) that the consumer should listen to for events. This is only required when there is ambiguity where a consumer matches the the link selector of multiple buckets in the blueprint. If the consumer is only linked to a single bucket, this annotation is not required and the default behaviour will be to listen to events for the bucket that matches the link selector.
+
+**type**
+
+string
+
+___
+
+#### celerity.consumer.bucket.events
+
+The object storage events that should trigger the consumer.
+
+**type**
+
+string - Comma-separated list of events
+
+**allowed values**
+
+`created` | `deleted` | `metadataUpdated`
+
+**examples**
+
+`created,deleted`
+
+___
+
 ## Outputs
 
 Outputs are computed values that are accessible via the `{resourceName}.spec.*` field accessor in a blueprint substitution.
 For example, if the resource name is `myConsumer`, the output would be accessible via `${myConsumer.spec.id}`.
 
-### queueId (optional)
+### subscriberId (optional)
 
-The ID of the queue subscriber that is created for the consumer when the `sourceId` is a Celerity topic.
-This output is **only** present in the outputs when the `sourceId` is a Celerity topic and the target environment requires a queue to be created to subscribe to the topic to follow best practises in creating a scalable and resilient architecture.
+The ID of the subscription that is created for the consumer when the `sourceId` is a Celerity topic.
+This will be a queue ID or a subscription ID depending on the target environment.
+This output is **only** present in the outputs when the `sourceId` is a Celerity topic and the target environment requires a queue or subscription to be created to subscribe to the topic to follow best practises in creating a scalable and resilient architecture.
 
 **type**
 
@@ -177,7 +286,214 @@ string | null
 
 `arn:aws:sqs:us-east-1:123456789012:example-queue-NZJ5JSMVGFIE` - An Amazon SQS Queue ARN
 
+## Data Types
+
+### externalEventConfiguration
+
+Configuration for a cloud service event trigger that the consumer will respond to.
+This supports a limited set of event sources, such as object storage, NoSQL database streams/events, data streams and a few other services.
+
+Due to the differences in event sources across cloud providers, the amount of options is kept minimal and as general as possible to support the most common event sources.
+
+To support a wider range of event sources, you will need to wire up an event source to a queue or message broker and use a `celerity/consumer` resource to handle the events.
+
+#### FIELDS
+___
+
+<p style={{fontSize: '1.2em'}}><strong>sourceType (required)</strong></p>
+
+The type of event source that the consumer will respond to.
+
+**field type**
+
+string
+
+**allowed values**
+
+`objectStorage` | `dbStream` | `dataStream`
+___
+
+<p style={{fontSize: '1.2em'}}><strong>sourceConfiguration (required)</strong></p>
+
+The event source configuration for the event source type. 
+
+**field type**
+
+[objectStorageEventConfiguration](#objectstorageeventconfiguration) |
+[dbStreamConfiguration](#dbstreamconfiguration) |
+[dataStreamConfiguration](#datastreamconfiguration)
+
+___
+
+### objectStorageEventConfiguration
+
+Configuration for an object storage event trigger that the consumer will respond to.
+This supports object storage services such as AWS S3, Google Cloud Storage, and Azure Blob Storage based on the target environment.
+
+#### FIELDS
+___
+
+<p style={{fontSize: '1.2em'}}><strong>events (required)</strong></p>
+
+The object storage events that should trigger the consumer.
+
+**field type**
+
+array[string]
+
+**allowed values**
+
+`created` | `deleted` | `metadataUpdated`
+
+**examples**
+
+`["created", "deleted"]`
+___
+
+
+<p style={{fontSize: '1.2em'}}><strong>bucket (required)</strong></p>
+
+The name of the bucket that the consumer will respond to events from.
+
+**field type**
+
+string
+
+**examples**
+
+`order-invoice-bucket`
+___
+
+### dbStreamConfiguration
+
+Configuration for a database stream event trigger that the consumer will respond to.
+This supports NoSQL database streams/events such as DynamoDB Streams, Google Cloud Datastore, and Azure Cosmos DB based where the selected service is based on the target environment.
+
+You can find more information about the configuration mappings for database streams in the [configuration mappings](#serverless-database-streams) section. You can also dive into how DB streams work with containerised and custom server environments [here](/docs/applications/architectures#events---cloud-service-events)
+
+#### FIELDS
+___
+
+<p style={{fontSize: '1.2em'}}><strong>batchSize</strong></p>
+
+The size of the batch of events to retrieve from the database stream.
+The maximum value depends on the target environment, see the [configuration mappings](#serverless-database-streams) section for more details.
+
+**field type**
+
+integer
+___
+
+<p style={{fontSize: '1.2em'}}><strong>dbStreamId (required)</strong></p>
+
+The ID of the database stream that the consumer will respond to events from.
+The format of the ID depends on the target environment, see the [configuration mappings](#serverless-database-streams) section for more details.
+
+**field type**
+
+string
+
+**examples**
+
+`arn:aws:dynamodb:us-east-1:123456789012:table/MyTable/stream/2021-07-01T00:00:00.000`
+___
+
+<p style={{fontSize: '1.2em'}}><strong>partialFailures</strong></p>
+
+Whether partial failure reporting is supported.
+When enabled, the consumer will report partial failures to the source stream,
+meaning that only failed messages will be retried.
+
+This is only supported in some target environments, see the [configuration mappings](#serverless-database-streams) section for more details.
+
+**type**
+
+boolean
+
+___
+
+<p style={{fontSize: '1.2em'}}><strong>startFromBeginning</strong></p>
+
+Whether the consumer should start processing events from the beginning of the stream (or earliest available point).
+
+This is only supported in some target environments, see the [configuration mappings](#serverless-database-streams) section for more details.
+
+**type**
+
+boolean
+___
+
+### dataStreamConfiguration
+
+Configuration for data stream event triggers that the consumer will respond to.
+This supports data stream services such as Amazon Kinesis and Azure Event Hubs, where the selected service is based on the target environment.
+
+You can find more information about the configuration mappings for data streams in the [configuration mappings](#serverless-data-streams) section. You can also dive into how DB streams work with containerised and custom server environments [here](/docs/applications/architectures#events---cloud-service-events)
+
+#### FIELDS
+___
+
+<p style={{fontSize: '1.2em'}}><strong>batchSize</strong></p>
+
+The size of the batch of events to retrieve from the data stream.
+The maximum value depends on the target environment, see the [configuration mappings](#serverless-data-streams) section for more details.
+
+**field type**
+
+integer
+___
+
+<p style={{fontSize: '1.2em'}}><strong>dataStreamId (required)</strong></p>
+
+The ID of the data stream that the consumer will respond to events from.
+The format of the ID depends on the target environment, see the [configuration mappings](#serverless-data-streams) section for more details.
+
+**field type**
+
+string
+
+**examples**
+
+`arn:aws:kinesis:us-east-1:123456789012:stream/MyStream`
+___
+
+<p style={{fontSize: '1.2em'}}><strong>partialFailures</strong></p>
+
+Whether partial failure reporting is supported.
+When enabled, the consumer will report partial failures to the source stream,
+meaning that only failed messages will be retried.
+
+This is only supported in some target environments, see the [configuration mappings](#serverless-data-streams) section for more details.
+
+**type**
+
+boolean
+
+___
+
+<p style={{fontSize: '1.2em'}}><strong>startFromBeginning</strong></p>
+
+Whether the consumer should start processing events from the beginning of the stream (or earliest available point).
+
+This is only supported in some target environments, see the [configuration mappings](#serverless-data-streams) section for more details.
+
+**type**
+
+boolean
+___
+
 ## Linked From
+
+A consumer can be linked from a number of resource types in a blueprint, these resource types either define the networking configuration for the consumer, or the event source that the consumer will listen to.
+
+:::note
+When a consumer matches multiple resources of the same type (e.g. multiple `celerity/queue` instances), an annotation must be used to disambiguate which resource the consumer should listen to as a consumer can only have one event or message source.
+:::
+
+:::warning
+A consumer can not be linked to multiple message/event source resource types in a blueprint.
+For example, a consumer can not be linked to both a `celerity/datastore` and a `celerity/queue` resource type.
+:::
 
 #### [`celerity/vpc`](/docs/applications/resources/celerity-vpc)
 
@@ -185,6 +501,19 @@ Depending on the target environment, a consumer application may be deployed to a
 When a consumer is combined into a single application with an API, schedule or other triggers for handlers,
 a single VPC will be created for the application and all resource types that make up the application will be deployed into the VPC.
 When deploying to serverless environments, a consumer is a placeholder for a connection between a topic or queue and a handler, and does not require a VPC.
+
+#### [`celerity/datastore`](/docs/applications/resources/celerity-datastore)
+
+When a consumer is linked from a `celerity/datastore` resource type, the consumer will be configured to listen to events in the datastore.
+Depending on the target environment, this can be a direct stream of events from the datastore, a queue or pub/sub integration to deliver events to the consumer application.
+
+#### [`celerity/queue`](/docs/applications/resources/celerity-queue)
+
+When a consumer is linked from a `celerity/queue` resource type, the consumer will be configured to listen to messages in the queue.
+
+#### [`celerity/bucket`](/docs/applications/resources/celerity-bucket)
+
+When a consumer is linked from a `celerity/bucket` resource type, the consumer will be configured to listen to events in the bucket.
 
 ## Links To
 
@@ -208,7 +537,7 @@ Where an application is made up of a composition of consumers, an API, schedules
 version: 2025-05-12
 transform: celerity-2026-02-28
 variables:
-    ordersQueue:
+    ordersTopic:
         type: string
 resources:
     ordersConsumer:
@@ -219,27 +548,36 @@ resources:
             byLabel:
                 application: "orders"
         spec:
-            sourceId: "${variables.ordersQueue}"
+            sourceId: "${variables.ordersTopic}"
             batchSize: 10
             visibilityTimeout: 30
             waitTimeSeconds: 20
             partialFailures: true
 ```
 
+See [`celerity/handler`](/docs/applications/resources/celerity-handler#handlers-for-a-message-queue) for integrated examples of how to use consumers for an application.
+
 ## Target Environments
 
 ### Celerity::1
 
-In the Celerity::1 local environment, a consumer is deployed as a containerised version of the Celerity runtime that polls a queue or message broker for messages.
-If the consumer `sourceId` is a Celerity topic, the topic will be directly polled by the consumer application in the Celerity::1 environment. 
+In the Celerity::1 local environment, a consumer is deployed as a containerised version of the Celerity runtime that consumes a Valkey [stream](https://valkey.io/topics/streams-intro/) for messages, using a stream allows for reliable message delivery that provides parity with the behaviour of cloud queue services. The consumer will treat the stream as a queue by keeping track of an ID for the last message processed, this ID is stored as a key/value pair in the same valkey instance. On initalisation, the consumer reads the last processed ID from valkey and starts consuming messages from the stream that have an ID greater than the last processed ID. The last processed ID is set after each message has been successfully processed by a handler in the consumer application.
+
+A visibility timeout (or lock duration) is implemented for messages in the stream by using a Valkey list to store the IDs of messages that are currently being processed by a given consumer, where the consumer has an ID that is used to form the key for the list.
+
+If the consumer `sourceId` is a Celerity topic, the consumer will be configured to consume messages from a stream that is prepared for the topic, see [`celerity/topic`](/docs/applications/resources/celerity-topic#celerity1) for more information on how topics work in the Celerity::1 environment. If a dead-letter queue is configured, the message will be forwarded to a dedicated Redis stream which can then be inspected through tools such as the Celerity CLI.
+
+For other event sources, the Celerity::1 environment will introduce some intermediary components to receive events from the source data store, bucket or queue and forward them to the consumer application via a dedicated Valkey stream. For external event sources, the Celerity::1 environment will use a local containerised version of the Celerity runtime to poll the external source for messages if the Celerity runtime supports it, otherwise, the consumer application will not be able to consume messages from the external source. For unsupported external event sources, you can manually test your consumer application by using the Celerity CLI (or another tool) to publish messages to the Valkey stream dedicated to the consumer application.
 
 Links from VPCs to consumers are ignored for this environment as the consumer application is deployed to a local container network on a developer or CI machine.
 
 ### AWS
 
-In the AWS environment, a consumer is deployed as a containerised version of the Celerity runtime that polls a queue or message broker for messages.
+In the AWS environment, a consumer is deployed as a containerised version of the Celerity runtime that polls an SQS queue or consumes a Kinesis or DynamoDB stream for messages, depending on the configured event source.
 
 When the `sourceId` is a Celerity topic, an SQS Queue is created to subscribe to the topic to implement a reliable and scalable fan-out approach. The consumer application is then configured to poll the SQS Queue for messages.
+
+For Kinesis and DynamoDB streams, the Celerity runtime variation with an embedded [KCL MultiLangDaemon](https://docs.aws.amazon.com/streams/latest/dev/develop-kcl-consumers-non-java.html) is used to consume messages from the stream, with the runtime consuming events received by the KCL MultiLangDaemon. The [Kinesis Adaptor for DynamoDB Streams](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.KCLAdapter.html) is used to consume DynamoDB streams.
 
 Consumers can be deployed to [ECS](https://aws.amazon.com/ecs/) or [EKS](https://aws.amazon.com/eks/) backed by [Fargate](https://aws.amazon.com/fargate/) or [EC2](https://aws.amazon.com/ec2/) using [deploy configuration](#app-deploy-configuration) for the AWS target environment.
 
@@ -310,7 +648,7 @@ A sidecar [ADOT collector](https://aws-otel.github.io/docs/getting-started/colle
 
 ### AWS Serverless
 
-In the AWS Serverless environment, consumer applications are deployed as triggers for the AWS Lambda handlers defined for the consumer application.
+In the AWS Serverless environment, consumer applications are deployed as SQS, Kinesis, S3 or DynamoDB Stream triggers (event source mappings) for the AWS Lambda handlers defined for the consumer application.
 
 When the `sourceId` is a Celerity topic, an SQS Queue is created to subscribe to the topic to implement a reliable and scalable fan-out approach. The queue will be configured as the trigger for the handlers linked to from the consumer application.
 
@@ -327,6 +665,7 @@ consumer applications can be deployed to [Cloud Run](https://cloud.google.com/ru
 Cloud Run is a relatively simple environment to deploy applications to, the consumer application is deployed as a containerised application.
 
 When the `sourceId` is a Celerity topic, a Pub/Sub subscription is created without the need for any intermediary infrastructure.
+For other event sources, an integration is set up to receive events from the source data store, bucket or queue and forward them to the consumer application via a Pub/Sub topic. The Celerity runtime will then receive messages from the Pub/Sub topic.
 
 For consumer applications, Cloud Run uses a push model where a [Pub/Sub push subscription](https://cloud.google.com/run/docs/tutorials/pubsub) is configured for a Cloud Run app. Due to this, the Celerity runtime will not be configured to poll a message source, a HTTP API will be set up instead to receive messages from the Pub/Sub push subscription.
 
@@ -341,7 +680,8 @@ A sidecar [OpenTelemetry Collector](https://github.com/GoogleCloudPlatform/opent
 
 #### GKE
 
-In the GKE environment, the Celerity runtime will use a [pull subscription](https://cloud.google.com/pubsub/docs/pull) to poll a Pub/Sub topic for messages from a Pub/Sub topic.
+In the GKE environment, the Celerity runtime will use a [pull subscription](https://cloud.google.com/pubsub/docs/pull) to poll a Pub/Sub topic for messages.
+For other event sources, an integration is set up to receive events from the source data store, bucket or queue and forward them to the consumer application via a Pub/Sub topic. The Celerity runtime will then pull messages from the Pub/Sub topic.
 
 When a consumer application is first deployed to GKE, a new cluster is created for the application unless you specify an existing cluster to use in the deploy configuration.
 
@@ -377,6 +717,7 @@ The [OpenTelemetry Operator](https://cloud.google.com/blog/topics/developers-pra
 In the Google Cloud Serverless environment, consumer applications are deployed as Google Cloud Functions that are triggered by a Pub/Sub topic.
 
 When the `sourceId` is a Celerity topic, a Pub/Sub subscription is created without the need for any intermediary infrastructure.
+For other event sources, direct triggers are set up for the consumer handlers for the configured data store, storage bucket or queue event source.
 
 When tracing is enabled, the built-in Google Cloud metrics and tracing offerings will be used to collect traces and metrics for the handlers. Traces and metrics can be collected in to tools like Grafana with plugins that use Google Cloud Trace as a data source. You can export logs and metrics to other tools like Grafana with plugins that use Google Cloud Logging and Monitoring as a data source.
 
@@ -390,7 +731,8 @@ Consumer applications can be deployed to [Azure Container Apps](https://azure.mi
 
 Container Apps is a relatively simple environment to deploy applications to, the consumer application is deployed as an [event-driven job](https://learn.microsoft.com/en-us/azure/container-apps/tutorial-event-driven-jobs).
 
-When the `sourceId` is a Celerity topic, an Azure Storage Queue is created to subscribe to the topic to implement a reliable and scalable fan-out approach. The Azure Container Apps job environment is then configured to poll the Azure Storage Queue for messages.
+When the `sourceId` is a Celerity topic, an Azure Service Bus Queue is created to subscribe to the topic to implement a reliable and scalable fan-out approach. The Azure Container Apps job environment is then configured to listen to the Service Bus Queue for messages.
+For other event sources, an integration is set up to receive events from the source data store, bucket or queue and forward them to the consumer application via a Service Bus Queue.
 
 Autoscaling is determined based on the number of messages received in the queue. By default, the [scaling rules](https://learn.microsoft.com/en-us/azure/container-apps/jobs?tabs=azure-cli#event-driven-jobs) are set to scale the number of instances with a minimum of 0 executions and a maximum of 10 executions in production app environments. For development app environments, the default configuration is set to scale from 0 to 5 executions. [Deploy configuration](#app-deploy-configuration) can be used to override this behaviour.
 
@@ -419,7 +761,8 @@ Running a Celerity application on AKS will often not be the most cost-effective 
 If you are looking for a cost-effective solution for low-load applications on Azure, consider using [Azure Container Apps](#container-apps) instead.
 :::
 
-When the `sourceId` is a Celerity topic, an Azure Storage Queue is created to subscribe to the topic to implement a reliable and scalable fan-out approach. The Celerity runtime is configured to poll the Azure Storage Queue for messages.
+When the `sourceId` is a Celerity topic, an Azure Service Bus Queue is created to subscribe to the topic to implement a reliable and scalable fan-out approach. The Celerity runtime is configured to listen for messages from the Service Bus Queue for messages.
+For other event sources, an integration is set up to receive events from the source data store, bucket or queue and forward them to the consumer application via a Service Bus Queue. The Celerity runtime will then listen for messages from the Service Bus Queue.
 
 The cluster is created across 2 availability zones for better availability guarantees. Best effort zone balancing is used with [Azure VM Scale Sets](https://learn.microsoft.com/en-us/azure/virtual-machine-scale-sets/virtual-machine-scale-sets-use-availability-zones?tabs=portal-2#zone-balancing). 2 separate node pools will be configured for the cluster, 1 for the Kubernetes system components and 1 for your application. When using an existing cluster, a new node pool will be created specifically for this application.
 
@@ -445,12 +788,13 @@ The [OpenTelemetry Operator](https://opentelemetry.io/docs/kubernetes/operator/)
 
 In the Azure Serverless environment, Azure Functions are deployed for the handlers which are triggered by a queue.
 
-When the `sourceId` is a Celerity topic, an Azure Storage Queue is created to subscribe to the topic to implement a reliable and scalable fan-out approach. The Azure Storage Queue will then be configured as a [trigger](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-storage-queue-trigger?tabs=python-v2%2Cisolated-process%2Cnodejs-v4%2Cextensionv5&pivots=programming-language-csharp) for the deployed Azure Function(s).
+When the `sourceId` is a Celerity topic, an Azure Service Bus Queue is created to subscribe to the topic to implement a reliable and scalable fan-out approach. The Azure Service Bus Queue will then be configured as a [trigger](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-service-bus-trigger?tabs=python-v2%2Cisolated-process%2Cnodejs-v4%2Cextensionv5&pivots=programming-language-csharp) for the deployed Azure Function(s).
+For other event sources such as data sources or blob storage containers, either a direct trigger is set up for the consumer handlers or an integration with Service Bus is configured to be able to trigger the consumer application functions through Service Bus.
 
 When it comes metrics and tracing for the Azure Functions that process messages, traces and metrics go to Application Insights by default, from which you can export logs, traces and metrics to other tools like Grafana with plugins that use Azure Monitor as a data source.
 [OpenTelemetry for Azure Functions](https://learn.microsoft.com/en-us/azure/azure-functions/opentelemetry-howto?tabs=otlp-export&pivots=programming-language-csharp) is also supported for some languages, you can use the deploy configuration to enable OpenTelemetry for Azure Functions.
 
-Consumers can be deployed to Azure Functions with Azure Storage Queue triggers using [deploy configuration](/cli/docs/deploy-configuration) for the Azure Serverless target environment.
+Consumers can be deployed to Azure Functions with Azure Service Bus Queue triggers using [deploy configuration](/cli/docs/app-deploy-configuration) for the Azure Serverless target environment.
 
 ## Configuration Mappings
 
@@ -464,7 +808,7 @@ The following is a table of `celerity/consumer` configuration fields and how the
         <th>Celerity Consumer</th>
         <th>AWS SQS</th>
         <th>Google Cloud Pub/Sub</th>
-        <th>Azure Storage Queue</th>
+        <th>Azure Service Bus Queue</th>
         </tr>
     </thead>
     <tbody>
@@ -472,19 +816,19 @@ The following is a table of `celerity/consumer` configuration fields and how the
         <td>batchSize</td>
         <td>batchSize (default: `10`, min: `1`, max: `10000`)</td>
         <td>N/A</td>
-        <td>batchSize (default: `16`, max: `32`)</td>
+        <td>maxMessagesBatchSize (default: `1000`)</td>
         </tr>
         <tr>
         <td>visibilityTimeout</td>
         <td>N/A</td>
         <td>N/A</td>
-        <td>visibilityTimeout (default: `0s`)</td>
+        <td>N/A</td>
         </tr>
         <tr>
         <td>waitTimeSeconds</td>
         <td>N/A</td>
         <td>N/A</td>
-        <td>maxPollingInterval (default: `60s`, min: `100ms`)</td>
+        <td>maxBatchWaitTime (default: `00:00:30`, max: `00:02:30`)</td>
         </tr>
         <tr>
         <td>partialFailures</td>
@@ -495,7 +839,107 @@ The following is a table of `celerity/consumer` configuration fields and how the
     </tbody>
 </table>
 
-[^1]: Examples of Serverless event-driven flows include [Amazon SQS Queues triggerring AWS Lambda Functions](https://docs.aws.amazon.com/lambda/latest/dg/with-sqs.html), [Google Cloud Pub/Sub triggering Google Cloud Functions](https://cloud.google.com/functions/docs/calling/pubsub), and [Azure Queue Storage triggering Azure Functions](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-storage-queue-trigger?tabs=python-v2%2Cisolated-process%2Cnodejs-v4%2Cextensionv5&pivots=programming-language-typescript).
+### Dead Letter Queues
+
+The following is a table of `celerity/consumer` configuration fields for queues or subscriptions that can be configured to send messages to a dead letter queue (DLQ) after a certain number of failed processing attempts. This applies when the `sourceId` is a Celerity topic.
+
+For Google Cloud Pub/Sub, the DLQ is implemented as a dead letter topic that is configured for the subscription created for the consumer.
+
+<table>
+    <thead>
+        <tr>
+        <th>AWS SQS</th>
+        <th>Google Cloud Pub/Sub</th>
+        <th>Azure Service Bus Queue</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+        <td>maxReceiveCount (default: `10`)</td>
+        <td>maxDeliveryAttempts (default: `5`, min: `5`, max: `100`)</td>
+        <td>MaxDeliveryCount (default: `10`, max: `2000`)</td>
+        </tr>
+    </tbody>
+</table>
+
+
+### Serverless Database Streams
+
+The following is a table of database stream configuration fields and how they map to different target environments when the Celerity application is deployed as a Serverless stream flow[^2].
+Google Cloud Datastore event triggers aren't actually stream-based, but comes under database streams as is the closest analogue to DynamoDB Streams and Azure Cosmos DB Triggers.
+
+<table>
+    <thead>
+        <tr>
+            <th>Celerity Handler Events</th>
+            <th>DynamoDB Stream Event Source for AWS Lambda</th>
+            <th>Google Cloud Datastore Trigger for Cloud Functions</th>
+            <th>Azure Cosmos DB Trigger for Azure Functions</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>batchSize</td>
+            <td>batchSize (default: `100`, max: `10000`)</td>
+            <td>N/A</td>
+            <td>maxItemsPerInvocation</td>
+        </tr>
+        <tr>
+            <td>dbStreamId</td>
+            <td>eventSourceArn</td>
+            <td>`{database}(:{namespace})?` (Maps to event filters)</td>
+            <td>`{databaseName}:{collectionName}`</td>
+        </tr>
+        <tr>
+            <td>partialFailures</td>
+            <td>functionResponseTypes</td>
+            <td>N/A</td>
+            <td>N/A</td>
+        </tr>
+        <tr>
+            <td>startFromBeginning</td>
+            <td>startingPosition = "TRIM_HORIZON"</td>
+            <td>N/A</td>
+            <td>startFromBeginning</td>
+        </tr>
+    </tbody>
+</table>
+
+### Serverless Data Streams
+
+The following is a table of data stream configuration fields and how they map to different target environments when the Celerity application is deployed as a Serverless stream flow[^3].
+
+<table>
+    <thead>
+        <tr>
+            <th>Celerity Handler Events</th>
+            <th>Kinesis Data Stream Event Source for AWS Lambda</th>
+            <th>Azure Events Hub Trigger for Azure Functions</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>batchSize</td>
+            <td>batchSize (default: `100`, max: `10000`)</td>
+            <td>maxItemsPerInvocation</td>
+        </tr>
+        <tr>
+            <td>dataStreamId</td>
+            <td>eventSourceArn</td>
+            <td>[Event Hub Trigger Attributes](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-event-hubs-trigger?tabs=python-v2%2Cisolated-process%2Cnodejs-v4%2Cfunctionsv2%2Cextensionv5&pivots=programming-language-csharp#attributes) - will map to a combination of attributes.</td>
+        </tr>
+        <tr>
+            <td>partialFailures</td>
+            <td>functionResponseTypes</td>
+            <td>N/A</td>
+        </tr>
+        <tr>
+            <td>startFromBeginning</td>
+            <td>startingPosition = "TRIM_HORIZON"</td>
+            <td>N/A</td>
+        </tr>
+    </tbody>
+</table>
 
 ## App Deploy Configuration
 
@@ -572,3 +1016,7 @@ The default value is `10` for production app environments and `5` for developmen
   }
 }
 ```
+
+[^1]: Examples of Serverless event-driven flows include [Amazon SQS Queues triggerring AWS Lambda Functions](https://docs.aws.amazon.com/lambda/latest/dg/with-sqs.html), [Google Cloud Pub/Sub triggering Google Cloud Functions](https://cloud.google.com/functions/docs/calling/pubsub), and [Azure Queue Storage triggering Azure Functions](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-storage-queue-trigger?tabs=python-v2%2Cisolated-process%2Cnodejs-v4%2Cextensionv5&pivots=programming-language-typescript).
+[^2]: Examples of Serverless stream flows include [Amazon DynamoDB Streams and AWS Lambda](https://docs.aws.amazon.com/lambda/latest/dg/with-ddb.html), [Google Cloud Datastore triggering Google Cloud Functions](https://cloud.google.com/datastore/docs/extend-with-functions-2nd-gen) and [Azure Cosmos DB Streams triggering Azure Functions](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-cosmosdb?toc=%2Fazure%2Fcosmos-db%2Ftoc.json&bc=%2Fazure%2Fcosmos-db%2Fbreadcrumb%2Ftoc.json&tabs=csharp).
+[^3]: Examples of Serverless stream flows include [Amazon Kinesis Streams and AWS Lambda](https://docs.aws.amazon.com/lambda/latest/dg/with-kinesis.html) and [Azure Event Hubs triggering Azure Functions](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-event-hubs?tabs=csharp).

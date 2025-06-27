@@ -147,8 +147,8 @@ resources:
 
 ### Celerity::1
 
-In the Celerity::1 local environment, a schedule application is deployed as a containerised version of the Celerity runtime that polls a queue for scheduled trigger messages.
-Schedules are registered with a local scheduler that is used to send messages to the queue at the scheduled time or interval.
+In the Celerity::1 local environment, a schedule application is deployed as a containerised version of the Celerity runtime that consumes a stream from Valkey as per the behaviour defined in the [`celerity/consumer`](./celerity-consumer#celerity1) resource type.
+Schedules are registered as a cron job running on a local container that will send a message to a stream dedicated to scheduled events in Valkey that will be consumed by the Celerity runtime.
 
 Links from VPCs to schedules are ignored for this environment as the schedule application is deployed to a local container network on a developer or CI machine.
 

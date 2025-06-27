@@ -129,7 +129,8 @@ Appropriate security groups are managed by the VPC to API link.
 When a VPC is not defined for the container-backed AWS, Google Cloud and Azure target environments, the default VPC for the account will be used.
 
 VPC annotations and links do not have any effect for serverless environments.
-Serverless APIs are managed by the cloud provider and are not deployed to a customer-managed VPC.
+Serverless APIs are managed by the cloud provider and are not deployed to a customer-managed VPC,
+only handlers can be deployed to VPCs in serverless environments.
 
 :::warning
 When a VPC is not defined for container-backed cloud environments, annotations in the `celerity/api` will apply to the default VPC for the account.
