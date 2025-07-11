@@ -33,6 +33,21 @@ string
 
 Annotations define additional metadata that can determine the behaviour of the resource in relation to other resources in the blueprint or to add behaviour to a resource that is not in its spec.
 
+### `celerity/schedule`
+
+The following are a set of annotations that are specific to the `celerity/schedule` resource type.
+These annotations are nothing to do with relationships between resources, but are used to configure the behaviour of the schedule.
+
+<p style={{fontSize: '1.2em'}}><strong>celerity.app</strong></p>
+
+Provides a way to group schedules together that are part of the same application.
+This is especially useful when deploying to a containerised or custom server environment as it allows you to deploy multiple schedules as a part of a single deployed application.
+
+**type**
+
+string
+___
+
 ### `celerity/vpc` 🔗 `celerity/schedule`
 
 The following are a set of annotations that determine the behaviour of the schedule in relation to a VPC.

@@ -167,7 +167,7 @@ You can provide command line options to skip parts of the interactive process of
 
 **Configuration Key**: `initLanguage`
 
-**Allowed Values**: `nodejs` | `python` | `java` | `dotnet` | `go` | `rust`
+**Allowed Values**: `nodejs` | `python` | `java` | `dotnet` | `go`
 
 The language or framework to use for a new Celerity project.
 

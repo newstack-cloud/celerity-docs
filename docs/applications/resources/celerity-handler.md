@@ -287,6 +287,14 @@ This is only required when there is ambiguity where a handler is linked to any c
 
 boolean
 
+<p style={{fontSize: '1.2em'}}><strong>celerity.handler.consumer.route</strong></p>
+
+Specifies a route or event type that the handler will respond to when processing messages from a consumer. Consumer routing requires mesages to be valid JSON objects containing the configured routing key, which is `event` by default.
+
+**type**
+
+string
+
 ### `celerity/workflow` 🔗 `celerity/handler`
 
 <p style={{fontSize: '1.2em'}}><strong>celerity.handler.workflow</strong></p>
@@ -681,6 +689,71 @@ resources:
                 DB_PORT: "${variables.dbPort}"
 ```
 
+### Handlers for a Pub/Sub System with Routing
+
+```yaml
+version: 2025-05-12
+transform: celerity-2026-02-28
+variables:
+    # The order events topic ID would be defined in a separate blueprint
+    # following a standard practice in decoupling topics from applications
+    # when a topic can be subscribed to by multiple applications.
+    orderEventsTopicId:
+        type: string
+        description: The ID of the Celerity topic for order events.
+resources:
+    orderEventsConsumer:
+        type: "celerity/consumer"
+        metadata:
+            displayName: Order Events Consumer
+        linkSelector:
+            byLabel:
+                application: "orderEvents"
+        spec:
+            sourceId: "${variables.orderEventsTopicId}"
+            routingKey: "eventType"
+
+    orderRemovalHandler:
+        type: "celerity/handler"
+        metadata:
+            displayName: Remove Order Handler
+            labels:
+                application: "orderEvents"
+            annotations:
+                celerity.handler.consumer.route: "orderRemoved"
+        spec:
+            handlerName: "RemoveOrderHandler-v1"
+            codeLocation: "handlers/orders"
+            handler: "remove_order"
+            runtime: "python3.13.x"
+            memory: 512
+            timeout: 30
+            tracingEnabled: false
+            environmentVariables:
+                DB_HOST: "${variables.dbHost}"
+                DB_PORT: "${variables.dbPort}"
+
+    orderChangeHandler:
+        type: "celerity/handler"
+        metadata:
+            displayName: Order Change Handler
+            labels:
+                application: "orderEvents"
+            annotations:
+                celerity.handler.consumer.route: "orderChanged"
+        spec:
+            handlerName: "OrderChangeHandler-v1"
+            codeLocation: "handlers/orders"
+            handler: "order_change_processor"
+            runtime: "python3.13.x"
+            memory: 512
+            timeout: 30
+            tracingEnabled: false
+            environmentVariables:
+                DB_HOST: "${variables.dbHost}"
+                DB_PORT: "${variables.dbPort}"
+```
+
 ### Handlers for a Data Store Stream
 
 ```yaml
@@ -741,6 +814,10 @@ resources:
         type: "celerity/api"
         metadata:
             displayName: Orders API
+            annotations:
+                # Celerity app annotation to group API and consumer
+                # resources to be deployed as a single application.
+                celerity.app: "orderService"
         linkSelector:
             byLabel:
                 application: "orders"
@@ -751,6 +828,8 @@ resources:
         type: "celerity/consumer"
         metadata:
             displayName: Order Updates Consumer
+            annotations:
+                celerity.app: "orderService"
         linkSelector:
             byLabel:
                 application: "orders"

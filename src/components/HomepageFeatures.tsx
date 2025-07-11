@@ -32,12 +32,12 @@ const FeatureList: FeatureItem[] = [
     ),
   },
   {
-    title: 'Useful Primitives',
+    title: 'Build with Useful Primitives',
     image: '/img/undraw_building-blocks.svg',
     description: (
       <>
         Build with a set of useful primitives focusing on common types of applications
-        such as a REST API, WebSocket API or a Pub/Sub Consumer.
+        such as a REST API, WebSocket API, Workflow or a Pub/Sub Consumer.
       </>
     ),
   },

@@ -121,6 +121,25 @@ auth:
 
 Annotations define additional metadata that can determine the behaviour of the resource in relation to other resources in the blueprint or to add behaviour to a resource that is not in its spec.
 
+### `celerity/api`
+
+The following are a set of annotations that are specific to the `celerity/api` resource type.
+These annotations are nothing to do with relationships between resources, but are used to configure the behaviour of the api.
+
+<p style={{fontSize: '1.2em'}}><strong>celerity.app</strong></p>
+
+Provides a way to group application components together that are a part of the same application.
+This is especially useful when deploying to a containerised or custom server environment as it allows you to combine consumers, schedules and APIs into a single deployed application.
+
+:::warning
+Only **_one_** API can be a part of a single application.
+:::
+
+**type**
+
+string
+___
+
 ### `celerity/vpc` 🔗 `celerity/api`
 
 The following are a set of annotations that determine the behaviour of the API in relation to a VPC.
@@ -876,15 +895,33 @@ In environments that support binary messages (e.g. Celerity runtime in a contain
 a message is expected to be of the following format:
 
 ```
-<routeLength><route><message>
+<routeLength><route><messageIdLength><messageId><message>
 ```
 
 `<routeLength>` is a 1-byte unsigned integer that represents the length of the route in bytes.
 
-`<route>` is an encoded utf-8 string for the route of the message that is used to route the message to the correct handler, this will be exactly the length specified in `<routeLength>`. A route can not have a length greater than 255 bytes, for performance reasons it is recommended to keep the route as short as possible.
+`<route>` is a reserved route key byte or an encoded utf-8 string for the route of the message that is used to route the message to the correct handler, this will be exactly the length specified in `<routeLength>`. A route can not have a length greater than 255 bytes, for performance reasons it is recommended to keep the route as short as possible.
+
+`<messageIdLength>` is a 1-byte unsigned integer that represents the length of the message ID in bytes, can be `0` if the message does not have an ID.
+
+`<messageId>` is a unique identifier for the message, this does not have to be set, if message ID length is 0 then the data that follows is expected to the payload of the message. The length of this field is specified in `<messageIdLength>`. A message ID can not have a length greater than 255 bytes, for performance reasons it is recommended to keep the message ID as short as possible.
 
 `<message>` is the actual binary data of the message.
 
+#### Reserved Routes
+
+There are some reserved routes that are used by the Celerity runtime for resilience and reconnection purposes.
+
+- `0x1` - This route is reserved for ping messages.
+- `0x2` - This route is reserved for pong messages, these are sent in response to ping messages.
+- `0x3` - This route is reserved for messages that are sent from the server to the client to indicate that it could not guarantee that a message was received by other clients in the same session. This will be the case if other clients in the session are unreachable or if an acknowedgement was not received after a certain amount of time from other nodes when the API is running as a cluster of Celerity runtime instances.
+
+    A **_session_** in this context refers to a group of clients that are sharing a real-time experience (e.g. a chat room, a collaborative document editor, etc.). In a service deployed as a cluster of nodes, a session can be distributed across multiple nodes, so the Celerity runtime includes a
+    mechanism for broadcasting messages to all nodes in the cluster with a best-effort approach to ensuring that messages are delivered to all clients in the session.
+    
+    The format of the message body is `{"messageId":"<messageId>","caller":"<caller>"}`. The client SDK will expose an API that will allow applications to handle potentially lost messages in an application-specific way.
+
+Due to the lack of a browser-based API for interacting with the WebSocket protocol ping/pong mechanism along with variance in browser implementations for server-sent pings, these concerns are brought up to the Celerity runtime protocol level to allow for more control over re-connection behaviour.
 
 ### WebSocket Auth Strategy
 
@@ -914,6 +951,10 @@ Upon successful authentication, the client will receive a message with the event
     "event": "authenticated",
     "data": {
         "success": true,
+        "userInfo": {
+            "id": "12345",
+            "name": "John Doe"
+        },
         "message": "Authenticated successfully"
     }
 }
@@ -943,6 +984,22 @@ The HTTP header configured as the API's auth guard token source must be sent in 
 For example, if the token source is `$.headers.Authorization`, the client must send the token in the `Authorization` header when connecting.
 
 Upon successful authentication, the connection will be upgraded to WebSockets and the client will be able to send and receive messages.
+
+After upgrading the connection, the server should also send a message to the client with the event `authenticated` in the following format:
+
+```json
+{
+    "event": "authenticated",
+    "data": {
+        "success": true,
+        "userInfo": {
+            "id": "12345",
+            "name": "John Doe"
+        },
+        "message": "Authenticated successfully"
+    }
+}
+```
 
 Upon failed authentication, the connection will be closed with the custom status code `4001` (Unauthorized). The client should handle this status code as an authentication failure.
 The custom status code is in the range reserved for application-specific status codes, see [RFC 6455](https://tools.ietf.org/html/rfc6455#section-7.4.2) for more information.

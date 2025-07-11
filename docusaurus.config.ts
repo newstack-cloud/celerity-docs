@@ -105,15 +105,6 @@ const config: Config = {
     [
       "@docusaurus/plugin-content-docs",
       {
-        id: "rust-sdk",
-        path: "rust-sdk",
-        routeBasePath: "rust-sdk",
-        sidebarPath: require.resolve("./sidebars-rust-sdk.js"),
-      },
-    ],
-    [
-      "@docusaurus/plugin-content-docs",
-      {
         id: "go-sdk",
         path: "go-sdk",
         routeBasePath: "go-sdk",
@@ -204,11 +195,6 @@ const config: Config = {
                 to: "/java-runtime/docs/intro",
               },
               {
-                label: "Rust",
-                activeBasePath: "/rust-sdk",
-                to: "/rust-sdk/docs/intro",
-              },
-              {
                 label: "Go",
                 activeBasePath: "/go-sdk",
                 to: "/go-sdk/docs/intro",
@@ -243,12 +229,6 @@ const config: Config = {
             type: "docsVersionDropdown",
             title: "Java SDK Version",
             docsPluginId: "java-runtime",
-            position: "left",
-          },
-          {
-            type: "docsVersionDropdown",
-            title: "Rust SDK Version",
-            docsPluginId: "rust-sdk",
             position: "left",
           },
           {
@@ -332,9 +312,6 @@ const config: Config = {
       },
       "java-runtime": {
         title: "Java Runtime & SDK",
-      },
-      "rust-sdk": {
-        title: "Rust SDK",
       },
       "go-sdk": {
         title: "Go SDK",

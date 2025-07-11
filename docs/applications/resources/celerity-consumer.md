@@ -35,6 +35,10 @@ The type of source is based on the provided target environment at build/deploy t
 
 There are two cases where `sourceId` is not required. The first is when the consumer is linked from a `celerity/datastore`, `celerity/bucket` or `celerity/queue` resource type, in which case the `sourceId` will be derived from the linked resource. The second is when the `externalEvents` is set with a stream ID or storage bucket name, in which case the `sourceId` will be derived from the event source configuration.
 
+:::note
+A source ID should not be set when the consumer has at least one entry in the `externalEvents` mapping, as the source ID will be derived from the event source configuration.
+:::
+
 **type**
 
 string
@@ -93,9 +97,27 @@ boolean
 
 `false`
 
+### routingKey
+
+The routing key used to filter messages based on the payload of the message.
+This is only applicable when the consumer message payload is a valid JSON object that contain the specified routing key field.
+This defaults to `event` and is only used when routing is activated through the use of a `celerity.handler.consumer.route` annotation set on a handler.
+
+**type**
+
+string
+
+**default value**
+
+`event`
+
 ### externalEvents
 
 A mapping of cloud service event configurations that the consumer will respond to, this can include events from object storage, databases, and other services. Depending on the target environment, the consumer will be wired up to the appropriate event source (e.g. AWS S3, Google Cloud Storage, Azure Blob Storage).
+
+:::note
+External events should not be present when the source ID is set.
+:::
 
 **type**
 
@@ -129,7 +151,7 @@ This annotation can be set to `false` to disable the creation of a dead letter q
 
 boolean
 
-**default**
+**default value**
 
 `true`
 
@@ -144,7 +166,7 @@ when the `sourceId` is a Celerity topic and the dead letter queue behaviour is e
 
 integer
 
-**default**
+**default value**
 
 The default value for the target environment is used. See the [Dead Letter Queue Configuration Mappings](#dead-letter-queue-configuration-mappings) section for more details.
 

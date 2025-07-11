@@ -38,7 +38,6 @@ You will be prompted to select a programming language for your application, befo
 - Java
 - C# (dotnet)
 - Go
-- Rust
 
 See the [runtime](../runtime/intro#supported-languages) documentation for more information and to see how you can implement Celerity applications in other languages.
 

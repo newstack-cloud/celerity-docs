@@ -118,7 +118,6 @@ The Celerity runtime currently supports the following languages with tailored SD
 - Java
 - C#
 - Go
-- Rust
 
 The runtime also supports any other language that can be compiled ahead of time into an executable binary.
-Languages such as C++, C or Zig can be used but lack the official SDK support that the languages listed above have. For these languages, you can use the [Local Runtime API](#) to interact with the runtime from your handler code.
+Languages such as Rust, C++, C or Zig can be used but lack the official SDK support that the languages listed above have. For these languages, you can use the [Local Runtime API](#) to interact with the runtime from your handler code.
