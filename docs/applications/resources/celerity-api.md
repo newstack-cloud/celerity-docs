@@ -895,12 +895,14 @@ In environments that support binary messages (e.g. Celerity runtime in a contain
 a message is expected to be of the following format:
 
 ```
-<routeLength><route><messageIdLength><messageId><message>
+<routeLength><route><requireAck><messageIdLength><messageId><message>
 ```
 
 `<routeLength>` is a 1-byte unsigned integer that represents the length of the route in bytes.
 
 `<route>` is a reserved route key byte or an encoded utf-8 string for the route of the message that is used to route the message to the correct handler, this will be exactly the length specified in `<routeLength>`. A route can not have a length greater than 255 bytes, for performance reasons it is recommended to keep the route as short as possible.
+
+`<requireAck>` is a 1-byte unsigned integer that represents whether the message requires an acknowledgement, this is `0x0` if the message does not require an acknowledgement and `0x1` if the message requires an acknowledgement.
 
 `<messageIdLength>` is a 1-byte unsigned integer that represents the length of the message ID in bytes, can be `0` if the message does not have an ID.
 
@@ -921,7 +923,11 @@ There are some reserved routes that are used by the Celerity runtime for resilie
     
     The format of the message body is `{"messageId":"<messageId>","caller":"<caller>"}`. The client SDK will expose an API that will allow applications to handle potentially lost messages in an application-specific way.
 
-Due to the lack of a browser-based API for interacting with the WebSocket protocol ping/pong mechanism along with variance in browser implementations for server-sent pings, these concerns are brought up to the Celerity runtime protocol level to allow for more control over re-connection behaviour.
+- `0x4` - This route is reserved for acknowledging messages.
+
+    The format of the message body is `{"messageId":"<messageId>","timestamp":"<timestamp>"}`.
+
+Due to the lack of a browser-based API for interacting with the WebSocket protocol ping/pong mechanism along with variance in browser implementations for server-sent pings, these concerns are brought up to the Celerity runtime protocol level to allow for more control over reconnection behaviour.
 
 ### WebSocket Auth Strategy
 
