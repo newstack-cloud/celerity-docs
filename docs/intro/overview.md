@@ -150,8 +150,8 @@ Celerity provides SDKs for the following languages:
 
 - [Node.js (TypeScript)](/node-runtime/docs/intro)
 - [Python](/python-runtime/docs/intro)
-- [Go](/go-runtime/docs/intro)
-- [C#/.NET](/dotnet-runtime/docs/intro)
+- [Go](/go-sdk/docs/intro)
+- [C#/.NET](/csharp-runtime/docs/intro)
 - [Java](/java-runtime/docs/intro)
 
 ### Bluelink

@@ -60,7 +60,7 @@ Edit some source code for the users endpoint: the API will **reload automaticall
 
 Now that you have a Celerity application up and running, you can dive deeper into the documentation to learn more about the framework and its features.
 
-- [Celerity Overview](../overview)
+- [Celerity Overview](./overview)
 - [Celerity Applications](../applications/intro)
 - [Celerity Runtime](../runtime/intro)
 - [Celerity CLI](../../cli/docs/intro)
