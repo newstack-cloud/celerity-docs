@@ -10,9 +10,9 @@ sidebar_position: 3
 The Celerity runtime supports deployment as a horizontally scalable cluster of WebSocket servers.
 The approach is to allow for multiple WebSocket servers to be deployed in a way in which it does not matter which server a client connects to. This is made possible by using a shared message broker that is used to publish messages to other nodes in the cluster. Each node will then filter messages received from other nodes based on the target connection ID for the message and the clients that are connected to the node.
 
-The Celerity runtime uses Valkey pub/sub as the message broker for publishing messages to nodes in the cluster. This allows for a scalable and efficient way to handle WebSocket connections and messages. For improvements in reliability, this may be extended in the future to support message brokers with more robust delivery guarantees.
+The Celerity runtime uses Redis OSS[^1] pub/sub as the message broker for publishing messages to nodes in the cluster. This allows for a scalable and efficient way to handle WebSocket connections and messages. For improvements in reliability, this may be extended in the future to support message brokers with more robust delivery guarantees.
 
-The runtime also uses Valkey to store mappings of connection IDs to node groups, allowing for the runtime to select the channel to publish messages to in an efficient manner.
+The runtime also uses Redis OSS[^1] to store mappings of connection IDs to node groups, allowing for the runtime to select the channel to publish messages to in an efficient manner.
 
 ![Scalable WebSockets Architecture](../assets/celerity-runtime-websockets.png)
 
@@ -70,3 +70,5 @@ If a a batch request to write message IDs to the shared store fails, the node wi
 
 If a read request to check if a message ID has been processed fails, the message will be processed, where message delivery is prioritised over deduplication.
 :::
+
+[^1]: Redis OSS is the open-source version of Redis, depending on the environment, the runtime will choose an implementation that is compatible with the Redis OSS API (For example, Valkey is used in local environments and AWS ElastiCache is used for the AWS deployment target).

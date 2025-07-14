@@ -902,7 +902,7 @@ a message is expected to be of the following format:
 
 `<route>` is a reserved route key byte or an encoded utf-8 string for the route of the message that is used to route the message to the correct handler, this will be exactly the length specified in `<routeLength>`. A route can not have a length greater than 255 bytes, for performance reasons it is recommended to keep the route as short as possible.
 
-`<requireAck>` is a 1-byte unsigned integer that represents whether the message requires an acknowledgement, this is `0x0` if the message does not require an acknowledgement and `0x1` if the message requires an acknowledgement.
+`<requireAck>` is a 1-byte unsigned integer that represents whether the message requires an acknowledgement, this is `0x0` if the message does not require an acknowledgement and `0x1` if the message requires an acknowledgement. This is only taken into account for messages that have a message ID.
 
 `<messageIdLength>` is a 1-byte unsigned integer that represents the length of the message ID in bytes, can be `0` if the message does not have an ID.
 

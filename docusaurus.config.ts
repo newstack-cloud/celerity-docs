@@ -132,8 +132,13 @@ const config: Config = {
             items: [
               {
                 label: "Getting Started",
-                activeBasePath: "/docs/intro",
+                activeBasePath: "/docs/intro/getting-started",
                 to: "docs/intro/getting-started",
+              },
+              {
+                label: "Overview",
+                activeBasePath: "/docs/intro/overview",
+                to: "docs/intro/overview",
               },
               {
                 label: "Runtime",
