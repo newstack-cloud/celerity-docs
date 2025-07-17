@@ -81,7 +81,7 @@ The topic building block ([`celerity/topic`](/docs/applications/resources/celeri
 ### Consumer
 
 The consumer building block ([`celerity/consumer`](/docs/applications/resources/celerity-consumer)) is used to define a consumer (or subscriber) that can be used to consume messages from a queue, topic or other event source.
-A consumer is usually made up of an application component, and ub some cases, intermediary infrastructure such as a queue that can subscribe to a topic.
+A consumer is usually made up of an application component, and in some cases, intermediary infrastructure such as a queue that can subscribe to a topic.
 This includes support for consuming messages from sources such as AWS SQS, Azure Service Bus, GCP Pub/Sub and Google Cloud Tasks.
 
 [Read more about Celerity Consumers](/docs/applications/resources/celerity-consumer).
