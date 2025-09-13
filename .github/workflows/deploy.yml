@@ -34,8 +34,8 @@ jobs:
       - name: Set variables in dotenv file
         run: |
           echo "NEXT_PUBLIC_ALGOLIA_APP_ID=${{ vars.ALGOLIA_APP_ID }}" >> .env
-          echo "NEXT_PUBLIC_ALGOLIA_API_KEY=${{ secrets.ALGOLIA_SEARCH_API_KEY }}" >> .env
-          echo "NEXT_PUBLIC_ALGOLIA_INDEX_NAME=${{ secrets.ALGOLIA_INDEX_NAME }}" >> .env
+          echo "NEXT_PUBLIC_ALGOLIA_API_KEY=${{ vars.ALGOLIA_SEARCH_API_KEY }}" >> .env
+          echo "NEXT_PUBLIC_ALGOLIA_INDEX_NAME=${{ vars.ALGOLIA_INDEX_NAME }}" >> .env
           echo "ALGOLIA_SECRET_API_KEY=${{ secrets.ALGOLIA_SECRET_API_KEY }}" >> .env
 
       - name: Restore cache
