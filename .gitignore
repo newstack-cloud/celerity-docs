@@ -29,3 +29,7 @@ yarn-error.log*
 next-env.d.ts
 
 .vscode
+
+# Local documents to be used with AI tools for things like documentation
+# migration or routine tasks.
+local-*.md
