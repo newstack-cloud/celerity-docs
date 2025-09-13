@@ -1,0 +1,425 @@
+---
+title: Celerity Config
+description: Celerity Config resource type
+---
+
+**`celerity/config`**
+
+**Spec Version:** `v2025-10-01-draft`  
+**Ecosystem Compatibility:** v0 (Current) / v1 (Preview)
+
+**blueprint transform:** `celerity-2025-10-01-draft`
+
+<Callout title="Ecosystem Compatibility" type="info">
+- **v0 (Current)**: AWS only, supporting AWS Secrets Manager and AWS SSM Parameter Store.
+- **v1 (Preview)**: Multi-cloud, supporting Google Cloud Secret Manager and Azure Key Vault in addition to AWS Secrets Manager and AWS SSM Parameter Store.
+
+Read more about Celerity versions [here](/docs/framework/versions).
+</Callout>
+
+The `celerity/config` resource type defines a secrets and configuration store to be used by a Celerity application.
+
+## Specification
+
+The specification is the structure of the resource definition that comes under the `spec` field of the resource in a blueprint.
+The rest of this section lists fields that are available to configure the `celerity/config` resource followed by examples of different configurations for the resource and how secret and configuration stores are implemented in target environments along with additional documentation.
+
+Depending on the target environment, secrets and configuration for an application will be stored in one of two ways.
+This first would be an encrypted collection of key value pairs that will typically be a JSON-encoded string.
+The second would be a set of individually encrypted secrets and plain text configuration values, where non-sensitive configuration values will need to be specified in the `plaintext` field of the resource spec.
+
+You have 2 options for configuring a Celerity application, use a secret and configuration store or environment variables. It is recommended to use a secret and configuration store, or at least a combination of both, where environment variables for your application are sourced at build time from a secrets and configuration store. Celerity facilitates the latter with annotations that can be used with the application resource types such as `celerity/api`.
+
+<Callout title="Feature Availability" type="info">
+- ✅ **Available in v0** - Features currently supported
+- 🔄 **Planned for v0** - Features coming in future v0 evolution
+- 🚀 **Planned for v1** - Features coming in v1 release
+</Callout>
+
+### name
+
+A unique name to use for the secret and configuration store.
+If a name is not provided, a unique name will be generated for based on the blueprint that the secret and configuration store is defined in.
+
+**type**
+
+string
+
+### values
+
+A map of key/value pairs to be stored in the secret and configuration store.
+All values defined here will be stored as encrypted secrets, unless the key is included in the `plaintext` field, indicating that the value is a non-sensitive configuration value.
+
+<Callout title="Warning" type="warning">
+If the keys defined in this field clash with auto-generated secrets and configurations that are created and populated for linked resources, the values in this field will be overwritten.
+
+Usually, auto-generated secrets and configurations will be prefixed by the special prefix `CELERITY_APP_` used internally by Celerity in the runtime and SDK to load secrets and configuration values for your handlers.
+To avoid values defined in this field being overwritten, avoid using the `CELERITY_APP_` prefix in your config value keys.
+</Callout>
+
+✅ **Available in v0**
+
+**type**
+
+mapping[string, string | number | boolean]
+
+### plaintext
+
+A list of keys that do not hold sensitive values and should be stored as plain text configuration values.
+
+Depending on the target environment, these values may be stored as plain text or included in a JSON-encoded string of key/value pairs that is stored as an encrypted secret.
+
+✅ **Available in v0**
+
+**type**
+
+array[string]
+
+### replicate
+
+A boolean value indicating whether the secret and configuration store should be replicated across multiple regions.
+Celerity will attempt to replicate the secret and configuration store across multiple regions if the target environment supports it, see the [target environments documentation](#target-environments) for more information on how this is implemented.
+
+✅ **Available in v0**
+
+**type**
+
+boolean
+
+### encryptionKeyId
+
+The ID of the encryption key to use for encrypting secrets in the store.
+A default, platform-specific encryption key will be used if this field is not provided.
+
+✅ **Available in v0**
+
+**type**
+
+string
+
+### rotation
+
+Secret rotation configuration for automatically populated secrets in the store that are managed by Celerity.
+This is only applicable to secrets that are auto-populated by Celerity for links between handlers or application resource types and infrastructure resources.
+
+If not set, secrets managed by Celerity will not be rotated automatically.
+
+🚀 **Planned for v1** - Secret rotation functionality may become available in a future v0 evolution.
+
+**type**
+
+[rotationConfiguration](#rotationconfiguration)
+
+## Annotations
+
+There are no annotations required for linking other resources to a `celerity/config` resource or modifying the behaviour of a secret and configuration store resource.
+
+`linkSelector.byLabel` can be used to target secret and configuration stores from other resource types.
+
+## Outputs
+
+Outputs are computed values that are accessible via the `{resourceName}.spec.*` field accessor in a blueprint substitution.
+For example, if the resource name is `myConfigStore`, the output would be accessible via `${myConfigStore.spec.id}`.
+
+### id
+
+The ID of the created secret and configuration store in the target environment.
+
+**type**
+
+string
+
+**examples**
+
+`arn:aws:secretsmanager:us-west-2:123456789012:secret:my-secret-123456` (AWS Secrets Manager)
+
+`arn:aws:ssm:us-west-2:123456789012:parameter/app/config/*` (AWS Parameter Store)
+
+_A prefix is used for AWS parameter store as each parameter will have its own resource in AWS._
+
+`projects/my-project/secrets/my-secret` (Google Cloud)
+
+`my-secret` (Azure)
+
+## Data Types
+
+### rotationConfiguration
+
+Configuration for secret rotation for automatically populated secrets in the store that are managed by Celerity.
+
+<FieldsHeading />
+
+<FieldHeading fieldName="period" />
+
+The period of time (in days) after which secrets in the store managed by Celerity should be rotated.
+
+**field type**
+
+integer
+
+___
+
+## Linked From
+
+### `celerity/api`
+
+An API can link to a store to access secrets and configuration at runtime, linking an application to a config resource will automatically make secrets and configuration accessible to all handlers in the application without having to link each handler to the config resource.
+
+✅ **Available in v0**
+
+[Read more about Celerity APIs](/docs/framework/applications/resources/celerity-api)
+
+### `celerity/workflow`
+
+A workflow can link to a store to access secrets and configuration at runtime, linking an application to a config resource will automatically make secrets and configuration accessible to all handlers in the application without having to link each handler to the config resource.
+
+🚀 **Planned for v1** - This link will be applicable when workflow applications are supported, it may become available in a future v0 evolution.
+
+[Read more about Celerity workflows](/docs/framework/applications/resources/celerity-workflow)
+
+### `celerity/consumer`
+
+A consumer can link to a store to access secrets and configuration at runtime, linking an application to a config resource will automatically make secrets and configuration accessible to all handlers in the application without having to link each handler to the secret store.
+
+✅ **Available in v0**
+
+[Read more about Celerity consumers](/docs/framework/applications/resources/celerity-consumer)
+
+### `celerity/schedule`
+
+A schedule application can link to a store to access secrets and configuration at runtime, linking an application to a config resource will automatically make secrets and configuration accessible to all handlers in the application without having to link each handler to the config resource.
+
+✅ **Available in v0**
+
+[Read more about Celerity schedules](/docs/framework/applications/resources/celerity-schedule)
+
+### `celerity/handler`
+
+When a handler links out to a config resource, it will be configured with permissions and environment variables that will enable the handler to fetch secrets and configuration. Secrets and configuration will be fetched and passed into your handlers when they are created with the handlers SDK.
+
+✅ **Available in v0**
+
+[Read more about Celerity handlers](/docs/framework/applications/resources/celerity-handler)
+
+## Links To
+
+Config resources can not link to other resources.
+
+## Examples
+
+### Minimal Configuration
+
+```yaml
+version: 2025-05-12
+transform: celerity-2025-10-01-draft
+resources:
+  myAppConfig:
+    type: "celerity/config"
+    metadata:
+      displayName: My App Config
+    spec:
+      name: "my-app-config"
+      plaintext:
+        - "FETCH_TIMEOUT"
+        - "MAX_RETRIES"
+```
+
+### Custom Encryption Key
+
+```yaml
+version: 2025-05-12
+transform: celerity-2025-10-01-draft
+variables:
+  customEncryptionKeyId:
+    type: string
+    description: |
+      The ID of the custom encryption key to use for encrypting secrets in the config store.
+      For example, `arn:aws:kms:us-west-2:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab`
+      for AWS KMS master key when deploying to AWS.
+resources:
+  myAppConfig:
+    type: "celerity/config"
+    metadata:
+      displayName: My App Config
+    spec:
+      name: "my-app-config"
+      encryptionKeyId: "${variables.customEncryptionKeyId}"
+```
+
+## Pre-population Behaviours
+
+When an application or handler links to a config resource, Celerity will inspect the other resources in the blueprint to determine if any secrets or configuration need to be pre-populated in the config store.
+For example, if an application has handlers that link to an SQL database, Celerity will pre-populate the config store with the database connection details.
+
+For resource types that have an abstraction in the handlers SDK (e.g. `celerity/topic`), the config store will be populated with secret and configuration values with special prefixes that can be picked up by the SDK (or runtime). What this means is that as a developer, you don't need to worry about loading secrets/configuration in your handler code or knowing the values of certain secrets that the handlers SDK will use. Secrets and configuration will also be passed into your `celerity/handler` functions to access values that are specific to the application.
+
+## Target Environments
+
+### Celerity::1
+
+✅ **Available in v0**
+
+In the Celerity::1 local environment, secrets and configuration are stored as a key/value pair in a [valkey](https://github.com/valkey-io/valkey) instance running on a container network or directly on the host for a local or CI machine.
+The value will be the JSON-encoded string holding all the secrets and configuration values for the application.
+In the Celerity local environment, the same valkey instance will be reused for config stores and cache resource types.
+Replication and encryption configuration will be ignored in the Celerity::1 environment.
+Rotation configuration will also be ignored in the Celerity::1 environment, secrets will not be rotated automatically.
+
+<Callout title="No encryption in local & CI environments" type="warning">
+Application secrets are not encrypted in local & CI environment, this would be the same situation if `.env` or configuration files were being used on the developer's machine.
+It is best to avoid storing any production secrets in your CI environments, however, secrets will be redacted from logs when running in CI environments.
+</Callout>
+
+### AWS
+
+✅ **Available in v0**
+
+#### Secrets Manager (Default)
+
+In the AWS environment, by default, secrets and configuration is stored with the [AWS Secrets Manager](https://docs.aws.amazon.com/secretsmanager/latest/userguide/intro.html) service.
+
+As long as the `plaintext` field is omitted or empty, a secret store will be stored as a single secret in the Secrets Manager service as a JSON-encoded string of key/value pairs. When the `plaintext` field has at least one value, [Parameter Store](#parameter-store) will be used instead.
+
+A secret store will be stored as a single secret in the Secrets Manager service as a JSON-encoded string of key/value pairs.
+
+The maximum size of a secret in AWS Secrets Manager is 64KB, if the secret store exceeds this size, saving the secret will fail. To get around this you can split your secrets and configuration across multiple `celerity/config` resources.
+
+If `replicate` is set to `true`, the secret store will be replicated across multiple regions.
+The regions **must** be specified in the [app deploy configuration](#app-deploy-configuration).
+
+If the `encryptionKeyId` is provided, it must be the ARN of a [KMS key](https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html) in the same region as the secret store.
+
+If `replicate` is set to `true` and `encryptionKeyId` is provided, the encryption key will be ignored; region-specific encryption keys must be provided for each region in the app deploy configuration.
+
+#### Parameter Store
+
+In the AWS environment, secrets and configuration can also be stored with the [AWS Systems Manager Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html) service.
+
+If the `plaintext` field has at least one value, the `celerity/config` resource will be stored as a set of individual parameters in the Parameter Store service.
+
+If `replicate` is set to `true`, parameters will be replicated across multiple regions.
+The regions **must** be specified in the [app deploy configuration](#app-deploy-configuration). Celerity will make copies of the parameters in each region as AWS Parameter Store does not have built-in support for cross-region replication.
+
+If the `encryptionKeyId` is provided, it must be the ARN of a [KMS key](https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html) in the same region as the parameters.
+
+If `replicate` is set to `true` and `encryptionKeyId` is provided, the encryption key will be ignored; region-specific encryption keys must be provided for each region in the app deploy configuration.
+
+#### Rotation
+
+🚀 **Planned for v1** - Secret rotation functionality may become available in a future v0 evolution.
+
+When the `rotation` field is set in the `celerity/config` resource, Celerity will automatically rotate secrets that are managed by Celerity.
+This is only applicable to secrets that are auto-populated by Celerity for links between handlers or application resource types and infrastructure resources.
+A lambda function will be created in each region that the config store is saved to, which will be triggered by a CloudWatch event rule to rotate the secrets in the store based on the `period` (in days) specified in the rotation configuration.
+This lambda function will have permissions to update the specific infrastructure resources that the config store is linked to, such as an SQL database or a cache.
+
+### Google Cloud
+
+🚀 **Planned for v1** - This target environment will be available in a future v0 evolution.
+
+In the Google Cloud environment, secrets and configuration is stored with the [Google Cloud Secret Manager](https://cloud.google.com/secret-manager/docs) service.
+
+A secret store will be stored as a single secret in the Secret Manager service as a JSON-encoded string of key/value pairs.
+
+The maximum size of a secret in Google Cloud Secret Manager is 64KB, if the secret store exceeds this size, saving the secret will fail. To get around this you can split your secrets and configuration across multiple `celerity/config` resources.
+
+If `replicate` is set to `true`, the secret store will be replicated across multiple regions in a way that is managed by Google Cloud through the [Automatic](https://cloud.google.com/secret-manager/docs/choosing-replication#automatic) replication policy.
+
+The `encryptionKeyId` field is not supported in Google Cloud Secret Manager, Google Cloud manages encryption keys for you.
+
+#### Rotation
+
+When the `rotation` field is set in the `celerity/config` resource, Celerity will automatically rotate secrets that are managed by Celerity.
+This is only applicable to secrets that are auto-populated by Celerity for links between handlers or application resource types and infrastructure resources.
+A google cloud function will be created to rotate secrets, which will be triggered by a Cloud Scheduler job to rotate the secrets in the store based on the `period` (in days) specified in the rotation configuration.
+This google cloud function will have permissions to update the specific infrastructure resources that the config store is linked to, such as an SQL database or a cache.
+
+### Azure
+
+🚀 **Planned for v1** - This target environment will be available in a future v0 evolution.
+
+In the Azure environment, secrets and configuration is stored with the [Azure Key Vault](https://docs.microsoft.com/en-us/azure/key-vault/general/overview) service.
+
+A secret store will be stored as a single secret in the Key Vault service as a JSON-encoded string of key/value pairs.
+
+The maximum size of a secret in Azure Key Vault is 25KB, if the secret store exceeds this size, saving the secret will fail. To get around this you can split your secrets and configuration across multiple `celerity/config` resources.
+
+If `replicate` is set to `true`, the secret store will be replicated across multiple regions in a way that is managed by Azure.
+
+The `encryptionKeyId` field is not supported in Azure Key Vault, Azure manages encryption keys for you.
+
+#### Rotation
+
+When the `rotation` field is set in the `celerity/config` resource, Celerity will automatically rotate secrets that are managed by Celerity.
+This is only applicable to secrets that are auto-populated by Celerity for links between handlers or application resource types and infrastructure resources.
+An azure function will be created to rotate secrets, which will be triggered by a Timer Trigger to rotate the secrets in the store based on the `period` (in days) specified in the rotation configuration.
+This azure function will have permissions to update the specific infrastructure resources that the config store is linked to, such as an SQL database or a cache.
+
+## App Deploy Configuration
+
+Configuration specific to a target environment can be defined for `celerity/config` resources in the [app deploy configuration](/docs/cli/app-deploy-configuration) file.
+
+This section lists the configuration options that can be set in the `deployTarget.config` object in the app deploy configuration file.
+
+### AWS Configuration Options
+
+✅ **Available in v0**
+
+#### aws.config.replicateRegions
+
+A comma-separated list of regions to replicate the secret and configuration store to.
+This is required if `replicate` is set to `true` in the `celerity/config` resource and the target environment is `aws` or `aws-serverless`.
+This value will be ignored if `replicate` is set to `false` or is not set.
+
+**Type**
+
+string
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**Example**
+
+```javascript
+{
+  "deployTarget": {
+    "name": "aws",
+    "appEnv": "production",
+    "config": {
+      "aws.config.replicateRegions": "us-east-1,us-west-2"
+    }
+  }
+}
+```
+
+#### aws.config.regionKMSKeys.\<region\>
+
+A mapping of region name to KMS key ARN where the region name must match one of the region names in the `aws.config.replicateRegions` field.
+One of these fields must be set for each region in the `aws.config.replicateRegions` field.
+This is required if `replicate` is set to `true` in the `celerity/config` resource.
+This value is ignored if `replicate` is set to `false` or is not set.
+
+**Type**
+
+string
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**Example**
+
+```javascript
+{
+  "deployTarget": {
+    "name": "aws",
+    "appEnv": "production",
+    "config": {
+      "aws.config.replicateRegions": "us-east-1,us-west-2",
+      "aws.config.regionKMSKeys.us-east-1": "arn:aws:kms:us-east-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab",
+      "aws.config.regionKMSKeys.us-west-2": "arn:aws:kms:us-west-2:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab"
+    }
+  }
+}
+```

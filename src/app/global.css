@@ -1,0 +1,72 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+
+html,
+html.dark {
+  --color-fd-primary: var(--ui-color);
+  scroll-behavior: smooth !important;
+}
+
+.headless {
+  --color-fd-primary: var(--headless-color);
+}
+
+:root {
+  --headless-color: #4c2ee5;
+  --ui-color: #4c2ee5;
+  --ui-highlight-bg-color: rgb(221, 220, 234);
+}
+
+.dark {
+  --headless-color: #a697f2;
+  --ui-color: #a697f2;
+  --ui-highlight-bg-color: rgb(60, 51, 115);
+}
+
+body {
+  overscroll-behavior-y: none;
+  background-color: var(--color-fd-background);
+}
+
+.prose
+  :where(a:not([data-card])):not(
+    :where([class~="not-prose"], [class~="not-prose"] *)
+  ) {
+  color: var(--color-fd-primary);
+  text-decoration: none;
+}
+
+@keyframes circuit_1 {
+  0% {
+    transform: translateY(-20px);
+  }
+
+  100% {
+    transform: translateY(100px);
+  }
+}
+
+@keyframes circuit_1_x_energy {
+  0%,
+  46% {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  47%,
+  70% {
+    opacity: 100%;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(212px);
+  }
+}
+
+.search-highlight em {
+  color: var(--color-fd-primary);
+  font-style: normal;
+  background-color: var(--ui-highlight-bg-color);
+  padding: 0 2px;
+  border-radius: 2px;
+}

@@ -1,0 +1,10 @@
+{
+  "title": "Applications",
+  "pages": [
+    "index",
+    "architectures",
+    "resources",
+    "compute-configuration",
+    "monitoring"
+  ]
+}

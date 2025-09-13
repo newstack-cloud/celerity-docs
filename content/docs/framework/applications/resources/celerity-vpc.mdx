@@ -1,0 +1,253 @@
+---
+title: Celerity VPC
+description: Celerity resource type for VPCs
+---
+
+**`celerity/vpc`**
+
+**Spec Version:** `v2025-10-01-draft`  
+**Ecosystem Compatibility:** v0 (Current) / v1 (Preview)
+
+**blueprint transform:** `celerity-2025-10-01-draft`
+
+<Callout title="Ecosystem Compatibility" type="info">
+- **v0 (Current)**: AWS only, supporting Amazon VPCs.
+- **v1 (Preview)**: Multi-cloud, supporting Amazon VPCs, Google Cloud VPCs and Azure VNets.
+
+Read more about Celerity versions [here](/docs/framework/versions).
+</Callout>
+
+The `celerity/vpc` resource type defines a virtual private cloud in which Celerity applications, databases and caches can be placed.
+
+## Specification
+
+The specification is the structure of the resource definition that comes under the `spec` field of the resource in a blueprint.
+The rest of this section lists fields that are available to configure the `celerity/vpc` resource followed by examples of different configurations for the resource and how the VPC behaves in target environments along with additional documentation.
+
+<Callout title="Feature Availability" type="info">
+- ✅ **Available in v0** - Features currently supported
+- 🔄 **Planned for v0** - Features coming in future v0 evolution
+- 🚀 **Planned for v1** - Features coming in v1 release
+</Callout>
+
+### name (required)
+
+A unique name for the VPC that will be used to identify the VPC in the target environment.
+This will be used as a resource tag in target environments that support resource tagging for networking resources.
+
+**type**
+
+string
+
+### preset
+
+The preset of the VPC that determines the configuration of the VPC resources in the target environment.
+
+This can be one of the following values:
+- `standard`: A multi-AZ VPC with a public and private subnet in 3 availability zones (6 subnets in total).
+- `public`: A multi-AZ VPC with a public subnet in 3 availability zones.
+- `isolated`: A multi-AZ VPC with a private subnet in 3 availability zones.
+- `light`: A VPC with a public and private subnet in a single availability zone.
+- `light-public`: A VPC with a public subnet in a single availability zone.
+
+For target environments that supports Dual-stack VPCs for Ipv4 and Ipv6 traffic, all presets will be configured to support both Ipv4 and Ipv6 traffic.
+
+✅ **Available in v0**
+
+**allowed values**
+
+`standard` | `public` | `isolated` | `light` | `light-public`
+
+**default value**
+
+`standard`
+
+**type**
+
+string
+
+## Annotations
+
+There are no annotations required for linking other resources to a `celerity/vpc` resource or modifying the behaviour of a VPC resource.
+
+`linkSelector.byLabel` can be used to target VPCs from other resource types.
+
+## Outputs
+
+Outputs are computed values that are accessible via the `{resourceName}.spec.*` field accessor in a blueprint substitution.
+For example, if the resource name is `myVpc`, the output would be accessible via `${myVpc.spec.id}`.
+
+### id
+
+The ID of the created VPC in the target environment.
+
+**type**
+
+string
+
+**examples**
+
+`vpc-1234567890` (AWS VPC)
+
+`projects/my-project/global/networks/my-vpc` (Google Cloud VPC)
+
+`my-vnet` (Azure VNet)
+
+## Linked From
+
+VPC resources can not be linked to from other resources.
+
+## Links To
+
+### `celerity/api`
+
+When a VPC resource links to a `celerity/api` resource, the VPC will be used to place the API in the target environment when the API is deployed as a containerised application.
+
+🚀 **Planned for v1** - A VPC resource will be able to link to `celerity/api` resources when containerised deployments are supported, this will likely be available in a future v0 evolution.
+
+[Read more about Celerity APIs](/docs/framework/applications/resources/celerity-api)
+
+### `celerity/handler`
+
+When a VPC resource links to a `celerity/handler` resource, the VPC will be used to place the handler in the target environment when the handler is deployed as a part of a FaaS application.
+A link between a VPC and handler will have no effect on handlers in a containerised application.
+
+✅ **Available in v0**
+
+[Read more about Celerity handlers](/docs/framework/applications/resources/celerity-handler)
+
+### `celerity/consumer`
+
+When a VPC resource links to a `celerity/consumer` resource, the VPC will be used to place the consumer in the target environment when the consumer is deployed as a containerised application.
+
+🚀 **Planned for v1** - A VPC resource will be able to link to `celerity/consumer` resources when containerised deployments are supported, this will likely be available in a future v0 evolution.
+
+[Read more about Celerity consumers](/docs/framework/applications/resources/celerity-consumer)
+
+### `celerity/schedule`
+
+When a VPC resource links to a `celerity/schedule` resource, the VPC will be used to place the schedule application component in the target environment when the schedule is deployed as a containerised application.
+
+🚀 **Planned for v1** - A VPC resource will be able to link to `celerity/schedule` resources when containerised deployments are supported, this will likely be available in a future v0 evolution.
+
+[Read more about Celerity schedules](/docs/framework/applications/resources/celerity-schedule)
+
+### `celerity/workflow`
+
+When a VPC resource links to a `celerity/workflow` resource, the VPC will be used to place the workflow application component in the target environment when the workflow is deployed as a containerised application.
+
+🚀 **Planned for v1** - A VPC resource will be able to link to `celerity/workflow` resources when containerised deployments and workflows are supported, this will likely be available in a future v0 evolution.
+
+[Read more about Celerity workflows](/docs/framework/applications/resources/celerity-workflow)
+
+### `celerity/cache`
+
+When a VPC resource links to a `celerity/cache` resource, the VPC will be used to place the cache instance or cluster in the target environment.
+
+🚀 **Planned for v1** - A VPC resource will be able to link to `celerity/cache` resources when caches are supported in a future v0 evolution.
+
+[Read more about Celerity caches](/docs/framework/applications/resources/celerity-cache)
+
+### `celerity/sqlDatabase`
+
+When a VPC resource links to a `celerity/sqlDatabase` resource, the VPC will be used to place the SQL database instance or cluster in the target environment.
+
+🚀 **Planned for v1** - A VPC resource will be able to link to `celerity/sqlDatabase` resources when SQL databases are supported in a future v0 evolution.
+
+[Read more about Celerity SQL databases](/docs/framework/applications/resources/celerity-sql-database)
+
+## Examples
+
+### Create a Standard VPC
+
+```yaml
+version: 2025-05-12
+transform: celerity-2025-10-01-draft
+resources:
+    myVpc:
+        type: "celerity/vpc"
+        spec:
+            name: "my-vpc"
+            preset: "standard"
+```
+
+## Target Environments
+
+### Celerity::1
+
+VPCs are not provisioned in the Celerity::1 development environment.
+
+### AWS
+
+✅ **Available in v0**
+
+Celerity VPCs are provisioned in AWS using the EC2 VPCs and associated networking resources. The Celerity VPC presets map to configurations of subnets, routing and access controls required for resources such as applications, databases and caches to be placed in the VPC.
+
+### Google Cloud
+
+🚀 **Planned for v1** - The Google Cloud deployment target is planned for v1, it may become available in a future v0 evolution.
+
+Celerity VPCs are provisioned in Google Cloud using the VPC resource type in `custom` mode along with associated networking resources. The Celerity VPC presets map to configurations of subnets, routing and access controls required for resources such as applications, databases and caches to be placed in the VPC.
+
+### Azure
+
+🚀 **Planned for v1** - The Azure deployment target is planned for v1, it may become available in a future v0 evolution.
+
+Celerity VPCs are provisioned in Azure using VNets and associated networking resources. The Celerity VPC presets map to configurations of subnets, routing and access controls required for resources such as applications, databases and caches to be placed in the VNet.
+
+## App Deploy Configuration
+
+Configuration specific to a target environment can be defined for `celerity/vpc` resources in the [app deploy configuration](/docs/cli/app-deploy-configuration) file.
+
+This section lists the configuration options that can be set in the `deployTarget.config` object in the app deploy configuration file.
+
+### AWS Configuration Options
+
+✅ **Available in v0**
+
+#### aws.vpc.cidrBlock
+
+The CIDR block for the IPv4 range to use for the VPC.
+
+**type**
+
+string
+
+**default value**
+
+`10.0.0.0/16`
+
+#### aws.vpc.enableDNSSupport
+
+When set to `true`, DNS support will be enabled for the VPC.
+For more information, see [DNS attributes in your VPC.](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-dns.html#vpc-dns-support)
+
+**type**
+
+boolean
+
+**default value**
+
+`true`
+
+#### aws.vpc.enableDNSHostnames
+
+Indicates whether the instances launched in the VPC get DNS hostnames.
+If enabled, instances in the VPC get DNS hostnames; otherwise, they do not.
+This is disabled by default for nondefault VPCs. You will want to enable DNS hostnames if you intend to use VPC endpoints to connect to AWS services using the public host names that SDKs use to connect to the services by default.
+
+**type**
+
+boolean
+
+**default value**
+
+`false`
+
+### Google Cloud Configuration Options
+
+TODO: Add Google Cloud configuration options for VPCs.
+
+### Azure Configuration Options
+
+TODO: Add Azure configuration options for VPCs.

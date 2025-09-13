@@ -1,0 +1,19 @@
+{
+  "title": "Resources",
+  "pages": [
+    "celerity-api",
+    "celerity-bucket",
+    "celerity-cache",
+    "celerity-config",
+    "celerity-consumer",
+    "celerity-datastore",
+    "celerity-handler",
+    "celerity-handler-config",
+    "celerity-queue",
+    "celerity-schedule",
+    "celerity-sql-database",
+    "celerity-topic",
+    "celerity-vpc",
+    "celerity-workflow"
+  ]
+}

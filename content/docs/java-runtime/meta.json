@@ -1,0 +1,6 @@
+{
+  "title": "Java Runtime & SDK",
+  "description": "The Java runtime and SDK for Celerity applications",
+  "icon": "Coffee",
+  "root": true
+}

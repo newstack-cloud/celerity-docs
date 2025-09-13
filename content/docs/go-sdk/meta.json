@@ -1,0 +1,6 @@
+{
+  "title": "Go SDK",
+  "description": "The Go SDK for Celerity applications",
+  "icon": "Code",
+  "root": true
+}

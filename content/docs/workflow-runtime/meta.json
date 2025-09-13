@@ -1,0 +1,6 @@
+{
+  "title": "Workflow Runtime",
+  "description": "The Workflow runtime for Celerity applications",
+  "icon": "Workflow",
+  "root": true
+}

@@ -1,0 +1,19 @@
+{
+  "title": "Framework",
+  "description": "Framework documentation",
+  "icon": "Building",
+  "root": true,
+  "pages": [
+    "---Introduction---",
+    "index",
+    "overview",
+    "---Setup---",
+    "installing-celerity",
+    "---Roadmap---",
+    "versions",
+    "---Core Concepts---",
+    "applications",
+    "runtime",
+    "auth"
+  ]
+}

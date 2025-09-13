@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+
+Host: https://celerityframework.io
+
+Sitemap: https://celerityframework.io/sitemap.xml

@@ -1,0 +1,6 @@
+{
+  "title": "Node.js Runtime & SDK",
+  "description": "The Node.js runtime and SDK for Celerity applications",
+  "icon": "Hexagon",
+  "root": true
+}

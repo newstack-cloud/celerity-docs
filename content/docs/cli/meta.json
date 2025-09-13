@@ -1,0 +1,12 @@
+{
+  "title": "Celerity CLI",
+  "description": "The CLI tool to manage Celerity applications",
+  "icon": "Terminal",
+  "root": true,
+  "pages": [
+    "getting-started",
+    "configuration",
+    "reference",
+    "app-deploy-configuration"
+  ]
+}

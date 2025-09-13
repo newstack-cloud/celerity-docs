@@ -1,0 +1,6 @@
+{
+  "title": "C#/.NET Runtime & SDK",
+  "description": "The C#/.NET runtime and SDK for Celerity applications",
+  "icon": "Code",
+  "root": true
+}

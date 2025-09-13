@@ -1,0 +1,590 @@
+---
+title: Celerity Datastore
+description: Celerity resource type for NoSQL data stores
+---
+
+**`celerity/datastore`**
+
+**Spec Version:** `v2025-10-01-draft`  
+**Ecosystem Compatibility:** v0 (Current) / v1 (Preview)
+
+**blueprint transform:** `celerity-2025-10-01-draft`
+
+<Callout title="Ecosystem Compatibility" type="info">
+- **v0 (Current)**: AWS only, supporting Amazon DynamoDB.
+- **v1 (Preview)**: Multi-cloud, supporting Amazon DynamoDB, Google Cloud Datastore and Azure Cosmos DB.
+
+Read more about Celerity versions [here](/docs/framework/versions).
+</Callout>
+
+The `celerity/datastore` resource type defines a NoSQL data store (or table) for a Celerity application.
+
+For Celerity applications, using a NoSQL data store instead of a SQL database will provide a number of benefits such as:
+
+- **Flexibility**: NoSQL data stores are designed to be flexible and can handle unstructured data. _See [Structure and Data Pipelines](#structure-and-data-pipelines) for reasons why you might want to apply a schema for a NoSQL data store._
+- **Scalability**: NoSQL data stores are designed to be scalable and can handle large amounts of data without having to manage scaling infrastructure like with most SQL database deployments.
+- **Performance**: NoSQL data stores are designed to be performant and can handle high throughput without the need to fine-tune database configurations.
+- **Cost**: NoSQL data stores are often cheaper than SQL databases, even with improvements in managed SQL database services reducing friction to deploy and scale, NoSQL data stores will still be cheaper to use in a lot of cases.
+- **Maintenance**: NoSQL data stores are often easier to maintain than SQL databases, especially for deployments to cloud environments.
+
+## Specification
+
+The specification is the structure of the resource definition that comes under the `spec` field of the resource in a blueprint.
+The rest of this section lists fields that are available to configure the `celerity/datastore` resource followed by examples of different configurations for the resource and how the data store behaves in target environments along with additional documentation.
+
+<Callout title="Feature Availability" type="info">
+- ✅ **Available in v0** - Features currently supported
+- 🔄 **Planned for v0** - Features coming in future v0 evolution
+- 🚀 **Planned for v1** - Features coming in v1 release
+</Callout>
+
+### name
+
+A unique name to use for the data store.
+If a name is not provided, a unique name will be generated for based on the blueprint that the data store is defined in.
+This will map to a table, collection or namespace in the target environment.
+
+**type**
+
+string
+
+### keys (required)
+
+A definition of the primary and sort keys for the data store.
+For target environments that do not support composite keys, sort keys will be combined with the primary key to create additional composite indexes.
+
+✅ **Available in v0**
+
+**type**
+
+[dataStoreKeys](#datastorekeys)
+
+### schema
+
+A schema to apply to the data store. This is optional, however, it should be considered essential for providing a single source of truth for the structure of the data that can be used by consumers of the data such as data teams that build data pipelines and internal systems (in your company) that make use of the data.
+
+✅ **Available in v0**
+
+**type**
+
+[dataStoreSchema](#datastoreschema)
+
+### indexes
+
+A list of indexes to apply to the data store.
+
+✅ **Available in v0**
+
+**type**
+
+array[[dataStoreIndex](#datastoreindex)]
+
+
+### timeToLive
+
+Time to live configuration for items in the data store.
+
+<Callout title="Warning" type="warning">
+TTL functionality is only supported for some target environments.
+Google Cloud Datastore, for example, does not have native support for item expiration.
+</Callout>
+
+✅ **Available in v0**
+
+**type**
+
+[dataStoreTimeToLive](#datastoretimetolive)
+
+## Annotations
+
+There are no annotations required for linking other resources to a `celerity/datastore` resource or modifying the behaviour of a data store resource.
+
+`linkSelector.byLabel` can be used to target data stores from other resource types.
+
+## Outputs
+
+Outputs are computed values that are accessible via the `{resourceName}.spec.*` field accessor in a blueprint substitution.
+For example, if the resource name is `myDatastore`, the output would be accessible via `${myDatastore.spec.id}`.
+
+### id
+
+The ID of the created data store in the target environment.
+
+**type**
+
+string
+
+**examples**
+
+`arn:aws:dynamodb:us-east-1:123456789012:table/users` (AWS)
+
+`users` (Google Cloud)
+
+`my-account/my-database/users` (Azure)
+
+## Data Types
+
+### dataStoreKeys
+
+A definition of the keys that make up the primary and sort keys for the data store.
+Sort keys are only supported for target environments that support composite keys such as Amazon DynamoDB.
+
+<FieldsHeading />
+
+<FieldHeading fieldName="partitionKey (required)" />
+
+The partition key of the data store, this is the field that will be the unique identifier for each item in the data store.
+
+**field type**
+
+string
+
+___
+
+<FieldHeading fieldName="sortKey" />
+
+The sort key of the data store, this is the field that will be used to sort the items in the data store. This is only supported for target environments that support composite keys such as Amazon DynamoDB.
+
+**field type**
+
+string
+
+___
+
+### dataStoreSchema
+
+A schema to document the structure of the data in the data store.
+
+<FieldsHeading />
+
+<FieldHeading fieldName="required" />
+
+A list of the fields that are required for an item in the data store.
+
+**field type**
+
+array[string]
+
+___
+
+<FieldHeading fieldName="fields" />
+
+Schema definitions for the fields that make up an item in the data store.
+
+**field type**
+
+array[[dataStoreFieldSchema](#datastorefieldschema)]
+
+___
+
+### dataStoreFieldSchema
+
+Schema definition for a field in an item in the data store or in a nested object.
+
+<FieldsHeading />
+
+<FieldHeading fieldName="type" />
+
+The type of the field.
+
+**field type**
+
+string
+
+**allowed values**
+
+`string` | `number` | `boolean` | `object` | `array`
+
+___
+
+<FieldHeading fieldName="description" />
+
+A description of the field.
+
+**field type**
+
+string
+
+___
+
+<FieldHeading fieldName="nullable" />
+
+Whether the field can be null.
+
+**field type**
+
+boolean
+
+___
+
+<p style={{fontSize: '1.2em'}}><strong>fields</strong></p>
+
+Schema definitions for the fields that make up a nested object.
+This should only be set when the field schema type is `object`.
+
+**field type**
+
+array[[dataStoreFieldSchema](#datastorefieldschema)]
+
+___
+
+<FieldHeading fieldName="items" />
+
+Schema definitions for the items in an array.
+This should only be set when the field schema type is `array`.
+
+**field type**
+
+array[[dataStoreFieldSchema](#datastorefieldschema)]
+
+___
+
+### dataStoreIndex
+
+An index to apply to the data store to allow for efficient querying of the data store based on different combinations of fields.
+
+<FieldsHeading />
+
+<FieldHeading fieldName="name" />
+
+The name of the index.
+
+**field type**
+
+string
+___
+
+<FieldHeading fieldName="fields" />
+
+The fields to include in the index.
+
+The order of the fields can be important depending on the target envrionment.
+For example, when deploying to AWS (Amazon DynamoDB), the first field in the list will be used as the partition key and the second field will be used as the sort key.
+
+The number of fields in the index is limited based on the target environment, see the [Target Environments](#target-environments) section for more information.
+
+**field type**
+
+array[string]
+
+___
+
+### dataStoreTimeToLive
+
+Time to live configuration for items in the data store.
+
+<FieldsHeading />
+
+<FieldHeading fieldName="fieldName" />
+
+The field name to use for the time to live.
+Depending on the target environment, this will either be expected to be set as a unix timestamp or a number of seconds from the current time for when the item should expire.
+
+**field type**
+
+string
+
+___
+
+<FieldHeading fieldName="enabled" />
+
+Whether the time to live is enabled for the data store.
+
+**field type**
+
+boolean
+
+___
+
+## Linked From
+
+### `celerity/handler`
+
+A handler can link to a data store at runtime, linking a handler to a data store resource will automatically configure the handler to be able to use the data store with appropriate permissions, environment variables/secrets and configuration.
+
+✅ **Available in v0**
+
+[Read more about Celerity handlers](/docs/framework/applications/resources/celerity-handler)
+
+## Links To
+
+### `celerity/consumer`
+
+When a data store links out to a consumer, either a stream or pub/sub configuration will be created to allow the consumer to receive events from the data store.
+
+✅ **Available in v0**
+
+[Read more about Celerity consumers](/docs/framework/applications/resources/celerity-consumer)
+
+## Examples
+
+### Data Store with Schema and Indexes
+
+```yaml
+version: 2025-05-12
+transform: celerity-2025-10-01-draft
+resources:
+    userStore:
+        type: "celerity/datastore"
+        metadata:
+            displayName: "User Store"
+        spec:
+            name: "users"
+            keys:
+                partitionKey: "id"
+            schema:
+                required: ["id", "name", "email"]
+                fields:
+                    id:
+                        type: "string"
+                        description: "The ID of the user"
+                    name:
+                        type: "string"
+                        description: "The name of the user"
+                    email:
+                        type: "string"
+                        description: "The email of the user"
+                    lastLogin:
+                        type: "number"
+                        description: "The unix timestamp of the last login"
+                    isActive:
+                        type: "boolean"
+                        description: "Whether the user is active"
+                    roles:
+                        type: "array"
+                        description: "The roles of the user"
+                        items:
+                            type: "string"
+                            description: "The role of the user"
+            indexes:
+                - name: "emailNameIndex"
+                  fields: ["email", "name"]
+```
+
+## Target Environments
+
+### Celerity::1
+
+✅ **Available in v0**
+
+In the Celerity::1 local environment, data stores are backed by an [Apache Cassandra](https://cassandra.apache.org/) instance running on a container network or directly on the host for a local or CI machine. A single Cassandra instance is used for all data stores running in the Celerity::1 local environment.
+
+Sort keys defined for both the main table and indexes will be used as the clustering key in Cassandra which is used to sort data on a partition.
+
+### AWS
+
+✅ **Available in v0**
+
+In the AWS environment, data stores are backed by an [Amazon DynamoDB](https://aws.amazon.com/dynamodb/) table.
+
+There is a one-to-one mapping between the partition and sort keys defined for the data store (table) and indexes and the primary and sort keys in DynamoDB. For indexes, the first field in the `fields` list will be used as the partition key and the second field (if present) will be used as the sort key.
+
+Without any configuration, the underlying table will be created with the `PAY_PER_REQUEST` billing mode.
+
+The [app deploy configuration](#app-deploy-configuration) can be used to configure the data store with Amazon DynamoDB specific settings such as the read and write capacity units and types of indexes to create.
+
+### Google Cloud
+
+🚀 **Planned for v1** - This target environment will be available in a future v0 evolution.
+
+### Azure
+
+🚀 **Planned for v1** - This target environment will be available in a future v0 evolution.
+
+## App Deploy Configuration
+
+Configuration specific to a target environment can be defined for `celerity/datastore` resources in the [app deploy configuration](/docs/cli/app-deploy-configuration) file.
+
+This section lists the configuration options that can be set in the `deployTarget.config` object in the app deploy configuration file.
+
+### AWS Configuration Options
+
+✅ **Available in v0**
+
+#### aws.dynamodb.\<datastoreName\>.billingMode
+
+The billing mode to use for the DynamoDB table backing a specific data store. This can be set to `PAY_PER_REQUEST` or `PROVISIONED` and defaults to `PAY_PER_REQUEST`.
+`datastoreName` is the name (key) of the data store resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+string
+
+**allowed values**
+
+`PAY_PER_REQUEST` | `PROVISIONED`
+
+**default value**
+
+`PAY_PER_REQUEST`
+
+**examples**
+
+```javascript
+{
+    "deployTarget": {
+        "name": "aws",
+        "appEnv": "production",
+        "config": {
+            "aws.dynamodb.userStore.billingMode": "PROVISIONED"
+        }
+    }
+}
+```
+
+#### aws.dynamodb.\<datastoreName\>.readCapacityUnits
+
+The read capacity units to use for the DynamoDB table backing a specific data store. This is only available when the billing mode is set to `PROVISIONED`.
+`datastoreName` is the name (key) of the data store resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+number
+
+**examples**
+
+```javascript
+{
+    "deployTarget": {
+        "name": "aws",
+        "appEnv": "production",
+        "config": {
+            "aws.dynamodb.userStore.readCapacityUnits": 10
+        }
+    }
+}
+```
+
+#### aws.dynamodb.\<datastoreName\>.writeCapacityUnits
+
+The write capacity units to use for the DynamoDB table backing a specific data store. This is only available when the billing mode is set to `PROVISIONED`.
+`datastoreName` is the name (key) of the data store resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+number
+
+**examples**
+
+```javascript
+{
+    "deployTarget": {
+        "name": "aws",
+        "appEnv": "production",
+        "config": {
+            "aws.dynamodb.userStore.writeCapacityUnits": 10
+        }
+    }
+}
+```
+
+#### aws.dynamodb.\<datastoreName\>.maxReadRequestUnits
+
+The maximum number of read request units to use for the DynamoDB table backing a specific data store. This is only available when the billing mode is set to `PAY_PER_REQUEST`.
+`datastoreName` is the name (key) of the data store resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+number
+
+**examples**
+
+```javascript
+{
+    "deployTarget": {
+        "name": "aws",
+        "appEnv": "production",
+        "config": {
+            "aws.dynamodb.userStore.maxReadRequestUnits": 1000
+        }
+    }
+}
+```
+
+#### aws.dynamodb.\<datastoreName\>.maxWriteRequestUnits
+
+The maximum number of write request units to use for the DynamoDB table backing a specific data store. This is only available when the billing mode is set to `PAY_PER_REQUEST`.
+`datastoreName` is the name (key) of the data store resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+number
+
+**examples**
+
+```javascript
+{
+    "deployTarget": {
+        "name": "aws",
+        "appEnv": "production",
+        "config": {
+            "aws.dynamodb.userStore.maxWriteRequestUnits": 1000
+        }
+    }
+}
+```
+
+#### aws.dynamodb.\<datastoreName\>.replicaRegions
+
+The regions to replicate the table to, making the data store a DynamoDB global table. This is expected to be a comma separated list of region names.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+string
+
+**examples**
+
+```javascript
+{
+    "deployTarget": {
+        "name": "aws",
+        "appEnv": "production",
+        "config": {
+            "aws.dynamodb.userStore.replicaRegions": "us-east-1,us-east-2"
+        }
+    }
+}
+```
+
+### Google Cloud Configuration Options
+
+🚀 **Planned for v1** - The Google Cloud deployment targets are planned for v1, it may become available in a future v0 evolution.
+
+### Azure Configuration Options
+
+🚀 **Planned for v1** - The Azure deployment targets are planned for v1, it may become available in a future v0 evolution.
+
+## Structure and Data Pipelines
+
+Celerity provides a way to define schemas for NoSQL data stores to define and track the structure of the data in the data store.
+This is especially useful to provide a source of truth for data teams that need to know the structure of the data to feed into pipelines.
+
+NoSQL databases are often preferred for their flexibility and ability to handle unstructured data, however, when you are building systems for a company, there will come a point where you will want to make sense of the data to help your company make decisions based on how your customers are using your product. There are plenty of reasons other than flexibility of data to opt for NoSQL databases over SQL databases such as scalability, performance and cost.
+
+The key benefits of defining a schema for a NoSQL data store is to be able to provide a single source of truth for the structure of the data in the data store. Tools in the Celerity ecosystem that have a tight integration with Celerity applications will be able to use the schema to understand the intended structure of the data in the data store, identify drift where source code or the actual data in the data store does not match the schema, and provide a way to keep all parties that need to make use of the data in sync.
+
+Defining schemas for NoSQL data stores is not required. When experimenting, you may not yet know the shape of the data you will be storing, in which case you may not want to define a schema until further down the line.
