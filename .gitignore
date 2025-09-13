@@ -33,3 +33,5 @@ next-env.d.ts
 # Local documents to be used with AI tools for things like documentation
 # migration or routine tasks.
 local-*.md
+
+.yarn
