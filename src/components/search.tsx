@@ -47,8 +47,7 @@ export default function CustomSearchDialog(props: SharedProps) {
                 <SearchDialogFooter>
                     <div className="flex items-center gap-2">
                         <a
-                            href="https://algolia.com"
-                            rel="noreferrer noopener"
+                            href="https://www.algolia.com/?utm_medium=AOS-referral"
                             className="ms-auto text-xs text-fd-muted-foreground"
                         >
                             Search powered by Algolia

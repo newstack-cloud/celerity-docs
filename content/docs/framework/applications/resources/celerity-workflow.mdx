@@ -5,10 +5,10 @@ description: Celerity resource type for workflows
 
 **`celerity/workflow`**
 
-**Spec Version:** `v2025-10-01-draft`  
+**Spec Version:** `v2025-12-01-draft`  
 **Ecosystem Compatibility:** v1 (Preview)
 
-**blueprint transform:** `celerity-2025-10-01-draft`
+**blueprint transform:** `celerity-2025-12-01-draft`
 
 <Callout title="Ecosystem Compatibility" type="info">
 - **v1 (Preview)**: Multi-cloud with support for deployment as containerised applications as well as serverless workflow deployments.
@@ -893,7 +893,7 @@ A workflow can link to a `celerity/config` resource type to access secrets at ru
 
 ```yaml
 version: 2025-05-12
-transform: celerity-2025-10-01-draft
+transform: celerity-2025-12-01-draft
 resources:
     videoIngestWorkflow:
         type: "celerity/workflow"
@@ -982,7 +982,7 @@ resources:
 
 ```yaml
 version: 2025-05-12
-transform: celerity-2025-10-01-draft
+transform: celerity-2025-12-01-draft
 resources:
     docProcessingWorkflow:
         type: "celerity/workflow"
