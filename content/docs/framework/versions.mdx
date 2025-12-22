@@ -10,14 +10,14 @@ This section provides an overview of the versioning strategy for Celerity spanni
 ## Version Strategy
 
 ### v0 (Current) - Evolving Capabilities
-**Initial Release**: December 1st, 2025  
-**Evolution Period**: December 2025 - November 2026
+**Initial Release**: February 1st, 2026
+**Evolution Period**: February 2026 - January 2027
 
 v0 represents the initial release of Celerity with limited but functional capabilities that will continuously evolve until the release of v1.
 
 The current v0 release supports deploying Celerity applications to AWS serverless environments with application handlers running in AWS Lambda:
 
-#### Current v0 Components (December 2025)
+#### Current v0 Components (February 2026)
 - **Celerity CLI**: Full set of commands for starting projects along with the development and deployment lifecycle.
 - **Celerity Core Runtimes & SDKs**: Node.js and Python runtimes only, supporting HTTP APIs, WebSocket APIs, consumers and schedules. Workflows will not be supported in the initial v0 release.
 - **Celerity::1**: Local development environment resources that power the CLI's development environment commands. This will only support the resource types listed in the v0 resource types section.
@@ -25,7 +25,7 @@ The current v0 release supports deploying Celerity applications to AWS serverles
 - [**Bluelink Deploy Engine**](https://bluelink.dev/docs/overview): The engine that powers deployments of Celerity applications, initially supporting only a subset of AWS services that enable serverless deployments.
 - [**Bluelink Blueprint Language Server**](https://bluelink.dev/docs/overview): Diagnostics, validation and auto-complete support for blueprints used to define Celerity applications.
 
-#### Current v0 Resource Types (December 2025)
+#### Current v0 Resource Types (February 2026)
 - `celerity/api` - AWS API Gateway deployments and the Celerity runtime locally - HTTP and WebSocket APIs, full CORS support and authentication.
 - `celerity/handler` - AWS Lambda functions
 - `celerity/handlerConfig` - Helper type for shared handler configuration translating to AWS Lambda function configuration.
@@ -42,7 +42,7 @@ The current v0 release supports deploying Celerity applications to AWS serverles
 - **AWS only** (initially)
 
 ### v1 (Preview) - Full Capabilities
-**Target Release**: November 2026
+**Target Release**: January 2027
 
 v1 represents the full vision of Celerity with complete multi-cloud capabilities:
 
