@@ -10,8 +10,8 @@ This section provides an overview of the versioning strategy for Celerity spanni
 ## Version Strategy
 
 ### v0 (Current) - Evolving Capabilities
-**Initial Release**: February 1st, 2026
-**Evolution Period**: February 2026 - January 2027
+**Initial Release**: February 27th, 2026
+**Evolution Period**: February 2026 - February 2027
 
 v0 represents the initial release of Celerity with limited but functional capabilities that will continuously evolve until the release of v1.
 
@@ -42,7 +42,7 @@ The current v0 release supports deploying Celerity applications to AWS serverles
 - **AWS only** (initially)
 
 ### v1 (Preview) - Full Capabilities
-**Target Release**: January 2027
+**Target Release**: February 2027
 
 v1 represents the full vision of Celerity with complete multi-cloud capabilities:
 
@@ -148,15 +148,15 @@ v1 represents the full vision of Celerity with complete multi-cloud capabilities
 The Celerity-wide documentation uses a simple versioning approach:
 
 ### 1) Spec Version
-- **Format**: `vYYYY-MM-DD-draft` (e.g., `v2025-12-01-draft`)
+- **Format**: `vYYYY-MM-DD-draft` (e.g., `v2026-02-27-draft`)
 - **Purpose**: Single evolving specification for each resource type
 - **When to update**: When a stable resource specification changes
-- **Draft Status**: Will remain in draft until v1 release (November 2026)
+- **Draft Status**: Will remain in draft until v1 release (February 2027)
 - **Blueprint transform**: Matches the spec version
 
 ### 2) Ecosystem Compatibility
 - **v0**: Current capabilities (continuously evolving)
-- **v1**: Full planned capabilities (target: November 2026)
+- **v1**: Full planned capabilities (target: February 2027)
 - **Purpose**: Indicates which ecosystem features are available
 - **When to update**: As ecosystem components are implemented
 
@@ -164,15 +164,15 @@ The Celerity-wide documentation uses a simple versioning approach:
 ```markdown
 # `celerity/api`
 
-**Spec Version:** `v2025-12-01-draft`  
+**Spec Version:** `v2026-02-27-draft`  
 **Ecosystem Compatibility:** v0 (Current) / v1 (Preview)
 
-**blueprint transform:** `celerity-2025-12-01-draft`
+**blueprint transform:** `celerity-2026-02-27-draft`
 ```
 
 ### Simple Timeline
-1. **Current**: `v2025-12-01-draft` (single evolving spec)
-2. **v1 Release**: `v2026-11-01` (stable, no draft suffix)
+1. **Current**: `v2026-02-27-draft` (single evolving spec)
+2. **v1 Release**: `v2027-02-01` (stable, no draft suffix)
 
 This approach allows us to:
 - **Keep it simple** - Single evolving spec per resource type

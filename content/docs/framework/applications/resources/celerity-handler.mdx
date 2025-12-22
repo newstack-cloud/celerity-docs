@@ -5,10 +5,10 @@ description: Celerity Handler resource type
 
 **`celerity/handler`**
 
-**Spec Version:** `v2025-12-01-draft`  
+**Spec Version:** `v2026-02-27-draft`  
 **Ecosystem Compatibility:** v0 (Current) / v1 (Preview)
 
-**blueprint transform:** `celerity-2025-12-01-draft`
+**blueprint transform:** `celerity-2026-02-27-draft`
 
 <Callout title="Ecosystem Compatibility" type="info">
 - **v0 (Current)**: AWS only, supporting AWS Lambda functions.
@@ -565,8 +565,8 @@ For approach 1, see the [celerity/handlerConfig](/docs/framework/applications/re
 For approach 2, you would define a metadata section in the blueprint like this:
 
 ```yaml
-version: 2025-05-12
-transform: celerity-2025-12-01-draft
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
 resources:
    # ...
 metadata:
@@ -591,8 +591,8 @@ along with resource types that can be linked to the handler resource type to add
 ### Handlers for a HTTP API
 
 ```yaml
-version: 2025-05-12
-transform: celerity-2025-12-01-draft
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
 variables:
     # Variable definitions ...
 resources:
@@ -650,8 +650,8 @@ resources:
 ### Handlers for a WebSocket API
 
 ```yaml
-version: 2025-05-12
-transform: celerity-2025-12-01-draft
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
 variables:
     # Variable definitions ...
 resources:
@@ -707,8 +707,8 @@ resources:
 ### Handlers for a Message Queue
 
 ```yaml
-version: 2025-05-12
-transform: celerity-2025-12-01-draft
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
 variables:
     # Variable definitions ...
 resources:
@@ -759,8 +759,8 @@ resources:
 ### Handlers for a Pub/Sub System
 
 ```yaml
-version: 2025-05-12
-transform: celerity-2025-12-01-draft
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
 variables:
     # The order updates topic ID would be defined in a separate blueprint
     # following a standard practice in decoupling topics from applications
@@ -801,8 +801,8 @@ resources:
 ### Handlers for a Pub/Sub System with Routing
 
 ```yaml
-version: 2025-05-12
-transform: celerity-2025-12-01-draft
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
 variables:
     # The order events topic ID would be defined in a separate blueprint
     # following a standard practice in decoupling topics from applications
@@ -866,8 +866,8 @@ resources:
 ### Handlers for a Data Store Stream
 
 ```yaml
-version: 2025-05-12
-transform: celerity-2025-12-01-draft
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
 variables:
     # Variable definitions ...
 resources:
@@ -914,8 +914,8 @@ resources:
 ### Handlers for a Hybrid Application (Pub/Sub, HTTP, WebSocket)
 
 ```yaml
-version: 2025-05-12
-transform: celerity-2025-12-01-draft
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
 variables:
     # Variable definitions ...
 resources:
@@ -1030,8 +1030,8 @@ resources:
 ### Handlers for Scheduled Events
 
 ```yaml
-version: 2025-05-12
-transform: celerity-2025-12-01-draft
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
 resources:
     syncOrdersSchedule:
         type: "celerity/schedule"
@@ -1065,8 +1065,8 @@ resources:
 ### Handlers for Cloud Object Storage Events (External)
 
 ```yaml
-version: 2025-05-12
-transform: celerity-2025-12-01-draft
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
 variables:
     # Variable definitions ...
 resources:
@@ -1106,8 +1106,8 @@ resources:
 ### Handlers for Data Streams (External)
 
 ```yaml
-version: 2025-05-12
-transform: celerity-2025-12-01-draft
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
 variables:
     # Variable definitions ...
 resources:

@@ -6,10 +6,10 @@ description: The Celerity API resource type is used to define an HTTP API or a W
 
 **`celerity/api`**
 
-**Spec Version:** `v2025-12-01-draft`  
+**Spec Version:** `v2026-02-27-draft`  
 **Ecosystem Compatibility:** v0 (Current) / v1 (Preview)
 
-**blueprint transform:** `celerity-2025-12-01-draft`
+**blueprint transform:** `celerity-2026-02-27-draft`
 
 <Callout title="Ecosystem Compatibility" type="info">
 - **v0 (Current)**: AWS only, supporting AWS API Gateway and Lambda deployments.
@@ -838,8 +838,8 @@ An API can link to a `celerity/config` resource to access secrets and configurat
 ### HTTP API
 
 ```yaml
-version: 2025-05-12
-transform: celerity-2025-12-01-draft
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
 resources:
     ordersApi:
         type: "celerity/api"
@@ -888,8 +888,8 @@ resources:
 ### WebSocket API
 
 ```yaml
-version: 2025-05-12
-transform: celerity-2025-12-01-draft
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
 resources:
     orderStreamApi:
         type: "celerity/api"
@@ -928,8 +928,8 @@ resources:
 ### Hybrid API
 
 ```yaml
-version: 2025-05-12
-transform: celerity-2025-12-01-draft
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
 resources:
     ordersApi:
         type: "celerity/api"
