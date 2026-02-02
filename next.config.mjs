@@ -9,6 +9,7 @@ const config = {
   basePath: process.env.PAGES_BASE_PATH,
   trailingSlash: true,
   skipTrailingSlashRedirect: true,
+  images: { unoptimized: true },
 };
 
 export default withMDX(config);
