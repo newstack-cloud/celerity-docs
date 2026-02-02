@@ -255,15 +255,15 @@ For resource types that have an abstraction in the handlers SDK (e.g. `celerity/
 
 ## Target Environments
 
-### Celerity::1
+### Local Development
 
 ✅ **Available in v0**
 
-In the Celerity::1 local environment, secrets and configuration are stored as a key/value pair in a [valkey](https://github.com/valkey-io/valkey) instance running on a container network or directly on the host for a local or CI machine.
+In the local development environment, secrets and configuration are stored as a key/value pair in a [valkey](https://github.com/valkey-io/valkey) instance running on a container network or directly on the host for a local or CI machine.
 The value will be the JSON-encoded string holding all the secrets and configuration values for the application.
-In the Celerity local environment, the same valkey instance will be reused for config stores and cache resource types.
-Replication and encryption configuration will be ignored in the Celerity::1 environment.
-Rotation configuration will also be ignored in the Celerity::1 environment, secrets will not be rotated automatically.
+In the local development environment, the same valkey instance will be reused for config stores and cache resource types.
+Replication and encryption configuration will be ignored in the local development environment.
+Rotation configuration will also be ignored in the local development environment, secrets will not be rotated automatically.
 
 <Callout title="No encryption in local & CI environments" type="warning">
 Application secrets are not encrypted in local & CI environment, this would be the same situation if `.env` or configuration files were being used on the developer's machine.

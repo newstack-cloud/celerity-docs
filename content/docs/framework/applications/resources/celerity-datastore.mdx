@@ -363,11 +363,11 @@ resources:
 
 ## Target Environments
 
-### Celerity::1
+### Local Development
 
 ✅ **Available in v0**
 
-In the Celerity::1 local environment, data stores are backed by an [Apache Cassandra](https://cassandra.apache.org/) instance running on a container network or directly on the host for a local or CI machine. A single Cassandra instance is used for all data stores running in the Celerity::1 local environment.
+In the local development environment, data stores are backed by an [Apache Cassandra](https://cassandra.apache.org/) instance running on a container network or directly on the host for a local or CI machine. A single Cassandra instance is used for all data stores running in the local development environment.
 
 Sort keys defined for both the main table and indexes will be used as the clustering key in Cassandra which is used to sort data on a partition.
 

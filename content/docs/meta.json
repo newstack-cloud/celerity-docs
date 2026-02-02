@@ -2,7 +2,6 @@
   "pages": [
     "framework",
     "cli",
-    "celerity-one",
     "workflow-runtime",
     "node-runtime",
     "python-runtime",

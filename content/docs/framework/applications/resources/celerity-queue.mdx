@@ -234,13 +234,13 @@ resources:
 
 ## Target Environments
 
-### Celerity::1
+### Local Development
 
 ✅ **Available in v0**
 
-In the Celerity::1 local environment, a queue is implemented as a [stream](https://valkey.io/topics/streams-intro/) in Valkey. Using a stream allows for reliable message delivery that provides parity with the behaviour of cloud queue services. The consumer will treat the stream as a queue by keeping track of an ID for the last message processed, this ID is stored as a key/value pair in the same valkey instance. On initialisation, the consumer reads the last processed ID from valkey and starts consuming messages from the stream that have an ID greater than the last processed ID. The last processed ID is set after each message has been successfully processed by a handler in the consumer application.
+In the local development environment, a queue is implemented as a [stream](https://valkey.io/topics/streams-intro/) in Valkey. Using a stream allows for reliable message delivery that provides parity with the behaviour of cloud queue services. The consumer will treat the stream as a queue by keeping track of an ID for the last message processed, this ID is stored as a key/value pair in the same valkey instance. On initialisation, the consumer reads the last processed ID from valkey and starts consuming messages from the stream that have an ID greater than the last processed ID. The last processed ID is set after each message has been successfully processed by a handler in the consumer application.
 
-A consumer of the queue will receive messages in the order they were aded to the stream, configuring FIFO (first in, first out) is not supported in the Celerity::1 local environment.
+A consumer of the queue will receive messages in the order they were aded to the stream, configuring FIFO (first in, first out) is not supported in the local development environment.
 
 A visibility timeout (or lock duration) is implemented by using a Valkey list to store the IDs of messages that are currently being processed by a given consumer, where the consumer has an ID that is used to form the key for the list.
 

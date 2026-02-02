@@ -44,7 +44,6 @@ The Celerity docs site is made up of sections for different components of the fr
 The following components are independently versioned:
 
 - CLI
-- Celerity::1
 - Workflow Runtime
 - Node.js Runtime/SDK
 - Python Runtime/SDK

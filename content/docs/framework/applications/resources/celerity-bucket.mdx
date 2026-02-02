@@ -838,17 +838,17 @@ Only Amazon S3 is supported in the current iteration of Celerity v0.
 
 ## Target Environments
 
-### Celerity::1
+### Local Development
 
 ✅ **Available in v0**
 
-In the Celerity::1 local environment, object storage is provided by a [minio](https://min.io/) instance running on a container network on the local or CI machine.
-Replication and encryption configuration will be ignored in the Celerity::1 environment.
+In the local development environment, object storage is provided by a [minio](https://min.io/) instance running on a container network on the local or CI machine.
+Replication and encryption configuration will be ignored in the local development environment.
 
 Bucket notifications are published from the minio instance to a [valkey](https://github.com/valkey-io/valkey) queue on the local or CI machine using the [Redis bucket notification](https://min.io/docs/minio/linux/administration/monitoring/publish-events-to-redis.html) support in minio. The runtime will poll the queue for notifications and trigger handlers in response to bucket events.
 
 <Callout title="Note" type="info">
-[valkey](https://github.com/valkey-io/valkey) is also used as the `celerity/queue` and `celerity/topic` implementation in Celerity::1, so the same behaviour is mostly reused for bucket notifications.
+[valkey](https://github.com/valkey-io/valkey) is also used as the `celerity/queue` and `celerity/topic` implementation in the local development environment, so the same behaviour is mostly reused for bucket notifications.
 </Callout>
 
 <Callout title="No encryption in local & CI environments" type="warning">

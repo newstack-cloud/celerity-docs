@@ -1197,13 +1197,13 @@ Celerity will map OS-only runtimes (`os.*`) to custom handlers in Azure Function
 
 ## Target Environments
 
-### Celerity::1
+### Local Development
 
 ✅ **Available in v0**
 
-In the Celerity::1 local environment, handlers are loaded into the Celerity runtime in a single process.
+In the local development environment, handlers are loaded into the Celerity runtime in a single process.
 Depending on links and configuration, the handler will be wired up to the appropriate HTTP route, WebSocket route, event source, stream or scheduled trigger.
-In Celerity::1, event sources and datastore streams will flow through Valkey, either as a message sent directly to a stream consumed by the Celerity runtime or to a pub/sub channel in Valkey that the Celerity runtime will be subscribed to indirectly through a stream. Events to trigger handlers are configured through the [`celerity/consumer`](/docs/framework/applications/celerity-consumer#celerity1) resource type.
+In the local development environment, event sources and datastore streams will flow through Valkey, either as a message sent directly to a stream consumed by the Celerity runtime or to a pub/sub channel in Valkey that the Celerity runtime will be subscribed to indirectly through a stream. Events to trigger handlers are configured through the [`celerity/consumer`](/docs/framework/applications/celerity-consumer#local-development) resource type.
 
 ### AWS
 

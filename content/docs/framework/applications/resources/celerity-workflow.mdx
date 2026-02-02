@@ -2109,9 +2109,9 @@ The following environments support string matching:
 
 ## Target Environments
 
-### Celerity::1
+### Local Development
 
-In the Celerity::1 local environment, a workflow is deployed as a containerised version of the Celerity workflow runtime in a local container orchestrator.
+In the local development environment, a workflow is deployed as a containerised version of the Celerity workflow runtime in a local container orchestrator.
 The workflow API will be exposed to the host machine on a configurable port, allowing manually testing your workflow application and enabling other applications to interact with the workflow API.
 In the local environment, the runtime is backed by an [Apache Cassandra](https://cassandra.apache.org/_/index.html) NoSQL database for storing workflow execution state.
 Links from VPCs to APIs are ignored for this environment as the workflow is deployed to a local container network on a developer or CI machine.

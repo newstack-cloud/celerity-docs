@@ -157,14 +157,14 @@ resources:
 
 ## Target Environments
 
-### Celerity::1
+### Local Development
 
 ✅ **Available in v0**
 
-In the Celerity::1 local environment, a topic is implemented as a channel as a part of the [valkey pub/sub](https://valkey.io/topics/pubsub/) functionality.
+In the local development environment, a topic is implemented as a channel as a part of the [valkey pub/sub](https://valkey.io/topics/pubsub/) functionality.
 
 A subscriber to the topic will receive messages published to the topic in the order they were published,
-configuring FIFO (first in, first out) behaviour is not supported in the Celerity::1 local environment.
+configuring FIFO (first in, first out) behaviour is not supported in the local development environment.
 
 Valkey pub/sub provides at-most-once delivery semantics, where messages may be lost if the subscriber is not available when the message is published. When linking a `celerity/topic` with a `celerity/consumer` or `celerity/workflow`, a queue component will be created under the hood, providing stronger guarantees of message delivery; queues generated for `celerity/consumer` and `celerity/workflow` applications are implemented using [streams](https://valkey.io/topics/streams-intro/) that provide a reliable append-only log data structure.
 
