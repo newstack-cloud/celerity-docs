@@ -292,6 +292,18 @@ This is only supported for HTTP handlers, WebSockets are authenticated at the co
 string
 ___
 
+<FieldHeading fieldName="celerity.handler.public" />
+
+Marks the handler as public, opting it out of authentication even when a default guard is configured for the linked `celerity/api` resource.
+This is only supported for HTTP handlers, WebSockets are authenticated at the connection level.
+
+✅ **Available in v0**
+
+**type**
+
+boolean
+___
+
 <FieldHeading fieldName="celerity.handler.guard.custom" />
 
 The name of the custom auth guard that should use this handler to validate incoming requests or messages.
