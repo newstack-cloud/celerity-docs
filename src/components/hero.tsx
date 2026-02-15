@@ -22,7 +22,7 @@ export default function Hero() {
                 <div className="mx-auto max-w-2xl py-24 sm:py-48 lg:py-56">
                     <div className="hidden sm:mb-8 sm:flex sm:justify-center">
                         <div className="relative rounded-full px-3 py-1 text-sm/6 text-gray-600 ring-1 ring-gray-900/10 hover:ring-gray-900/20 dark:text-gray-400 dark:ring-white/10 dark:hover:ring-white/20">
-                            Celerity v0 is coming in February 2026.{' '}
+                            Celerity v0 is coming in March 2026.{' '}
                             <Link href="/docs/framework/versions" className="font-semibold text-indigo-600 dark:text-indigo-400">
                                 <span aria-hidden="true" className="absolute inset-0" />
                                 Read more <span aria-hidden="true">&rarr;</span>

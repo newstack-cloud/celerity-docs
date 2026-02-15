@@ -367,9 +367,15 @@ resources:
 
 ✅ **Available in v0**
 
-In the local development environment, data stores are backed by an [Apache Cassandra](https://cassandra.apache.org/) instance running on a container network or directly on the host for a local or CI machine. A single Cassandra instance is used for all data stores running in the local development environment.
+In the local development environment, data stores are backed by a cloud-specific emulator that matches the deploy target configured in [`app.deploy.jsonc`](/docs/cli/app-deploy-configuration). This ensures that cloud-specific query patterns and APIs work correctly during local development.
 
-Sort keys defined for both the main table and indexes will be used as the clustering key in Cassandra which is used to sort data on a partition.
+| Deploy Target | Local Emulator | Notes |
+|---|---|---|
+| `aws` / `aws-serverless` | [Amazon DynamoDB Local](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html) | Full DynamoDB API compatibility including queries, GSIs, and streams |
+| `gcloud` / `gcloud-serverless` | _Planned for v1_ | |
+| `azure` / `azure-serverless` | _Planned for v1_ | |
+
+A single emulator instance is shared across all data stores in the local development environment. Key schema (partition keys, sort keys, and indexes) defined in the blueprint is used to create the local tables automatically.
 
 ### AWS
 

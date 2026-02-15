@@ -333,16 +333,27 @@ ___
 
 <FieldHeading fieldName="authGuard (conditionally required)" />
 
-The name of the auth guard in the API's auth guard map to use for every new WebSocket connection established by clients.
+The name of the auth guard (or ordered list of guards) in the API's auth guard map to use for every new WebSocket connection established by clients.
 This is required when the `authStrategy` field is set.
+
+When multiple guards are specified as an array, they execute in order and all must pass.
+Claims from all passing guards are accumulated and namespaced by guard name.
 
 **field type**
 
-string
+string | array[string]
 
 **examples**
 
-`jwt`
+```yaml
+# Single guard
+authGuard: "jwt"
+
+# Ordered guard chain
+authGuard:
+  - "jwt"
+  - "rbac"
+```
 
 ___
 
@@ -551,13 +562,30 @@ ___
 
 <FieldHeading fieldName="defaultGuard" />
 
-The identifier of the guard that should be used as the default guard for the API.
-This should only be set when you want to use the same guard for all endpoints of the API.
+The identifier of the guard (or ordered list of guards) that should be used as the default for the API.
+This should only be set when you want to use the same guard(s) for all endpoints of the API.
 Individual handlers can opt out by setting the `celerity.handler.public` annotation to `true`.
+
+When multiple guards are specified as an array, they execute in order and all must pass.
+If any guard fails, the request is rejected immediately with that guard's error response.
+Claims from all passing guards are accumulated and namespaced by guard name in `request.auth`
+(e.g. `{ "jwt": { ... }, "rbac": { ... } }`).
 
 **field type**
 
-string
+string | array[string]
+
+**examples**
+
+```yaml
+# Single guard
+defaultGuard: "jwt"
+
+# Ordered guard chain
+defaultGuard:
+  - "jwt"
+  - "rbac"
+```
 
 ___
 

@@ -10,21 +10,21 @@ This section provides an overview of the versioning strategy for Celerity spanni
 ## Version Strategy
 
 ### v0 (Current) - Evolving Capabilities
-**Initial Release**: February 27th, 2026
-**Evolution Period**: February 2026 - February 2027
+**Initial Release**: March 31st, 2026
+**Evolution Period**: March 2026 - March 2027
 
 v0 represents the initial release of Celerity with limited but functional capabilities that will continuously evolve until the release of v1.
 
 The current v0 release supports deploying Celerity applications to AWS serverless environments with application handlers running in AWS Lambda:
 
-#### Current v0 Components (February 2026)
+#### Current v0 Components (March 2026)
 - **Celerity CLI**: Full set of commands for starting projects along with the development and deployment lifecycle.
 - **Celerity Core Runtimes & SDKs**: Node.js and Python runtimes only, supporting HTTP APIs, WebSocket APIs, consumers and schedules. Workflows will not be supported in the initial v0 release.
 - **Client SDK for WebSocket APIs**: Client SDKs for browsers, Node.js and Python to interact with WebSocket APIs adhering to the [WebSocket Runtime Protocol](/docs/runtime/websocket-runtime-protocol), that are also compatible with AWS API Gateway v2 WebSocket APIs.
 - [**Bluelink Deploy Engine**](https://bluelink.dev/docs/overview): The engine that powers deployments of Celerity applications, initially supporting only a subset of AWS services that enable serverless deployments.
 - [**Bluelink Blueprint Language Server**](https://bluelink.dev/docs/overview): Diagnostics, validation and auto-complete support for blueprints used to define Celerity applications.
 
-#### Current v0 Resource Types (February 2026)
+#### Current v0 Resource Types (March 2026)
 - `celerity/api` - AWS API Gateway deployments and the Celerity runtime locally - HTTP and WebSocket APIs, full CORS support and authentication.
 - `celerity/handler` - AWS Lambda functions
 - `celerity/handlerConfig` - Helper type for shared handler configuration translating to AWS Lambda function configuration.
@@ -41,7 +41,7 @@ The current v0 release supports deploying Celerity applications to AWS serverles
 - **AWS only** (initially)
 
 ### v1 (Preview) - Full Capabilities
-**Target Release**: February 2027
+**Target Release**: March 2027
 
 v1 represents the full vision of Celerity with complete multi-cloud capabilities:
 
@@ -149,12 +149,12 @@ The Celerity-wide documentation uses a simple versioning approach:
 - **Format**: `vYYYY-MM-DD-draft` (e.g., `v2026-02-27-draft`)
 - **Purpose**: Single evolving specification for each resource type
 - **When to update**: When a stable resource specification changes
-- **Draft Status**: Will remain in draft until v1 release (February 2027)
+- **Draft Status**: Will remain in draft until v1 release (March 2027)
 - **Blueprint transform**: Matches the spec version
 
 ### 2) Ecosystem Compatibility
 - **v0**: Current capabilities (continuously evolving)
-- **v1**: Full planned capabilities (target: February 2027)
+- **v1**: Full planned capabilities (target: March 2027)
 - **Purpose**: Indicates which ecosystem features are available
 - **When to update**: As ecosystem components are implemented
 

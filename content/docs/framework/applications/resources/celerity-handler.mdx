@@ -281,15 +281,22 @@ ___
 
 <FieldHeading fieldName="celerity.handler.guard.protectedBy" />
 
-Enables the handler to use a specified guard for incoming requests.
-The guard must be defined in the linked `celerity/api` resource.
+Enables the handler to use a specified guard (or comma-separated ordered list of guards) for incoming requests.
+The guard(s) must be defined in the linked `celerity/api` resource.
 This is only supported for HTTP handlers, WebSockets are authenticated at the connection level.
+
+When multiple guards are specified, they execute in order and all must pass.
+Claims from all passing guards are accumulated and namespaced by guard name in `request.auth`.
 
 ✅ **Available in v0**
 
 **type**
 
 string
+
+**examples**
+
+`"jwt"` | `"jwt,rbac"`
 ___
 
 <FieldHeading fieldName="celerity.handler.public" />
