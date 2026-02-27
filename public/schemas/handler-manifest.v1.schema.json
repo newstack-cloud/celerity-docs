@@ -1,0 +1,226 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://celerityframework.io/schemas/handler-manifest.v1.schema.json",
+  "title": "Celerity Handler Manifest",
+  "description": "Output schema for Celerity language-specific extractor tools. Describes all handlers discovered in a Celerity application module via language-specific metadata scanning. Consumed by the Celerity CLI to merge with blueprint infrastructure configuration.",
+  "type": "object",
+  "required": ["version", "handlers", "functionHandlers", "guardHandlers", "dependencyGraph"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": "1.0.0",
+      "description": "Schema version. Consumers should check this field to ensure compatibility."
+    },
+    "handlers": {
+      "type": "array",
+      "description": "Class-based handlers discovered from annotated controller or consumer classes.",
+      "items": { "$ref": "#/$defs/ClassHandlerEntry" }
+    },
+    "functionHandlers": {
+      "type": "array",
+      "description": "Function-based handlers registered via framework-provided handler registration functions.",
+      "items": { "$ref": "#/$defs/FunctionHandlerEntry" }
+    },
+    "guardHandlers": {
+      "type": "array",
+      "description": "Guard handlers discovered from annotated guard classes or guard registration functions.",
+      "items": { "$ref": "#/$defs/GuardHandlerEntry" }
+    },
+    "dependencyGraph": { "$ref": "#/$defs/DependencyGraph" }
+  },
+  "$defs": {
+    "AnnotationValue": {
+      "description": "Annotation values are serialized as strings, string arrays, or booleans. Complex objects are JSON-stringified into a string.",
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        { "type": "boolean" }
+      ]
+    },
+    "Annotations": {
+      "type": "object",
+      "description": "Key-value annotations using the 'celerity.handler.*' namespace. Well-known keys:\n- celerity.handler.http (boolean) — true if this is an HTTP handler\n- celerity.handler.http.method (string) — HTTP method (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS)\n- celerity.handler.http.path (string) — full route path using {param} format\n- celerity.handler.websocket (boolean) — true if this is a WebSocket handler\n- celerity.handler.websocket.route (string) — WebSocket route path\n- celerity.handler.websocket.eventType (string) — WebSocket event type (connect, message, disconnect)\n- celerity.handler.consumer (boolean) — true if this is a consumer handler\n- celerity.handler.consumer.sourceId (string) — consumer source identifier\n- celerity.handler.consumer.route (string) — consumer route path\n- celerity.handler.schedule (boolean) — true if this is a schedule handler\n- celerity.handler.schedule.scheduleId (string) — schedule identifier\n- celerity.handler.schedule.expression (string) — schedule expression (e.g. rate(1 day), cron(...))\n- celerity.handler.custom (boolean) — true if this is a custom/invocable handler\n- celerity.handler.custom.name (string) — custom handler name\n- celerity.handler.guard.protectedBy (string[]) — guard names protecting this handler\n- celerity.handler.guard.custom (string) — custom guard name from guard annotations\n- celerity.handler.public (boolean) — true if handler opts out of guards\n- celerity.handler.metadata.* (any annotation value) — user-defined metadata annotations",
+      "additionalProperties": { "$ref": "#/$defs/AnnotationValue" }
+    },
+    "ClassHandlerSpec": {
+      "type": "object",
+      "description": "Deployment specification for a class-based handler.",
+      "required": ["handlerName", "codeLocation", "handler"],
+      "additionalProperties": false,
+      "properties": {
+        "handlerName": {
+          "type": "string",
+          "description": "Unique handler identifier. Format: ClassName-methodName (e.g. 'OrdersHandler-getOrder')."
+        },
+        "codeLocation": {
+          "type": "string",
+          "description": "Relative directory path from project root, prefixed with './' (e.g. './src/handlers')."
+        },
+        "handler": {
+          "type": "string",
+          "description": "Fully qualified handler function reference. Format: moduleBaseName.ClassName.methodName (e.g. 'app.module.OrdersHandler.getOrder')."
+        },
+        "timeout": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Handler timeout in seconds. Optional — omitted when not explicitly configured."
+        }
+      }
+    },
+    "FunctionHandlerSpec": {
+      "type": "object",
+      "description": "Deployment specification for a function-based handler.",
+      "required": ["handlerName", "codeLocation", "handler"],
+      "additionalProperties": false,
+      "properties": {
+        "handlerName": {
+          "type": "string",
+          "description": "Handler identifier derived from the export name."
+        },
+        "codeLocation": {
+          "type": "string",
+          "description": "Relative directory path from project root, prefixed with './' (e.g. './src')."
+        },
+        "handler": {
+          "type": "string",
+          "description": "Fully qualified handler function reference. Format: moduleBaseName.exportName (e.g. 'app.module.getOrder')."
+        }
+      }
+    },
+    "ClassHandlerEntry": {
+      "type": "object",
+      "description": "A single handler method discovered from an annotated controller or consumer class.",
+      "required": ["resourceName", "className", "methodName", "sourceFile", "handlerType", "annotations", "spec"],
+      "additionalProperties": false,
+      "properties": {
+        "resourceName": {
+          "type": "string",
+          "description": "Blueprint resource name. Format: camelCase(className)_methodName (e.g. 'ordersHandler_getOrder')."
+        },
+        "className": {
+          "type": "string",
+          "description": "Name of the controller class (e.g. 'OrdersHandler')."
+        },
+        "methodName": {
+          "type": "string",
+          "description": "Name of the handler method (e.g. 'getOrder')."
+        },
+        "sourceFile": {
+          "type": "string",
+          "description": "Absolute path to the source file containing the handler."
+        },
+        "handlerType": {
+          "type": "string",
+          "enum": ["http", "websocket", "consumer", "schedule", "custom"],
+          "description": "The type of handler, derived from the handler's annotations."
+        },
+        "annotations": { "$ref": "#/$defs/Annotations" },
+        "spec": { "$ref": "#/$defs/ClassHandlerSpec" }
+      }
+    },
+    "FunctionHandlerEntry": {
+      "type": "object",
+      "description": "A function-based handler registered via a framework-provided handler registration function.",
+      "required": ["resourceName", "exportName", "sourceFile", "handlerType", "spec"],
+      "additionalProperties": false,
+      "properties": {
+        "resourceName": {
+          "type": "string",
+          "description": "Blueprint resource name derived from the export name."
+        },
+        "exportName": {
+          "type": "string",
+          "description": "The named export used to register this handler."
+        },
+        "sourceFile": {
+          "type": "string",
+          "description": "Absolute path to the source file containing the handler."
+        },
+        "handlerType": {
+          "type": "string",
+          "enum": ["http", "websocket", "consumer", "schedule", "custom"],
+          "description": "The type of handler."
+        },
+        "annotations": { "$ref": "#/$defs/Annotations" },
+        "spec": { "$ref": "#/$defs/FunctionHandlerSpec" }
+      }
+    },
+    "GuardHandlerEntry": {
+      "type": "object",
+      "description": "A guard handler discovered from an annotated guard class or a guard registration function.",
+      "required": ["resourceName", "guardName", "sourceFile", "guardType", "annotations", "spec"],
+      "additionalProperties": false,
+      "properties": {
+        "resourceName": {
+          "type": "string",
+          "description": "Blueprint resource name for the guard."
+        },
+        "guardName": {
+          "type": "string",
+          "description": "The guard name as declared via the guard annotation or registration function."
+        },
+        "sourceFile": {
+          "type": "string",
+          "description": "Absolute path to the source file containing the guard."
+        },
+        "guardType": {
+          "type": "string",
+          "enum": ["class", "function"],
+          "description": "Whether this guard was defined as a class or a function."
+        },
+        "className": {
+          "type": "string",
+          "description": "Name of the guard class. Present for class-based guards only."
+        },
+        "exportName": {
+          "type": "string",
+          "description": "The named export used to register this guard. Present for function-based guards only."
+        },
+        "annotations": { "$ref": "#/$defs/Annotations" },
+        "spec": { "$ref": "#/$defs/ClassHandlerSpec" }
+      }
+    },
+    "DependencyNode": {
+      "type": "object",
+      "description": "A provider or controller in the DI dependency graph.",
+      "required": ["token", "tokenType", "providerType", "dependencies"],
+      "additionalProperties": false,
+      "properties": {
+        "token": {
+          "type": "string",
+          "description": "Serialized DI token. Class name for class tokens, raw string for string tokens, description for symbol tokens."
+        },
+        "tokenType": {
+          "type": "string",
+          "enum": ["class", "string", "symbol"],
+          "description": "The kind of DI token."
+        },
+        "providerType": {
+          "type": "string",
+          "enum": ["class", "factory", "value"],
+          "description": "How this provider is registered (useClass, useFactory, or useValue)."
+        },
+        "dependencies": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Serialized tokens of direct dependencies. Derived from constructor params (class) or inject array (factory)."
+        }
+      }
+    },
+    "DependencyGraph": {
+      "type": "object",
+      "description": "Full service dependency graph extracted from module metadata. Includes all providers and controllers with their DI dependencies.",
+      "required": ["nodes"],
+      "additionalProperties": false,
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/DependencyNode" }
+        }
+      }
+    }
+  }
+}

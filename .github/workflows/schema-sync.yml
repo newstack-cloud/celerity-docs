@@ -1,0 +1,43 @@
+name: Schema Sync Check
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "public/schemas/**"
+  pull_request:
+    paths:
+      - "public/schemas/**"
+  # Weekly check to catch upstream schema changes
+  schedule:
+    - cron: "0 9 * * 1" # Monday 9:00 UTC
+
+jobs:
+  check-schema-sync:
+    name: Check schema files are in sync with upstream
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compare handler manifest schema with upstream
+        run: |
+          upstream_url="https://raw.githubusercontent.com/newstack-cloud/celerity-node-sdk/main/packages/cli/schemas/handler-manifest.v1.schema.json"
+          local_path="public/schemas/handler-manifest.v1.schema.json"
+
+          echo "Fetching upstream schema from Node SDK repo..."
+          curl -sSf "$upstream_url" -o /tmp/upstream-schema.json
+
+          echo "Comparing with local copy..."
+          if diff -q "$local_path" /tmp/upstream-schema.json > /dev/null 2>&1; then
+            echo "Schemas are in sync."
+          else
+            echo "::error::Schema drift detected! Local schema differs from upstream."
+            echo ""
+            echo "Diff (local vs upstream):"
+            diff --unified "$local_path" /tmp/upstream-schema.json || true
+            echo ""
+            echo "To fix: copy the latest schema from the Node SDK repo:"
+            echo "  cp <node-sdk>/packages/cli/schemas/handler-manifest.v1.schema.json public/schemas/"
+            exit 1
+          fi
