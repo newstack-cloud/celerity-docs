@@ -744,7 +744,7 @@ For FaaS-based target environments, the handlers configured for the consumer wil
 
 When a bucket is linked to a workflow, a workflow execution will be triggered when an event occurs in the bucket, such as an object being created, deleted, or updated. For FaaS-based target environments, the notification will be used to trigger an execution of the cloud provider's workflow service (e.g. AWS Step Functions). For non-FaaS target environments, an intermediary serverless function will be triggered by the bucket event to start the workflow execution by calling the API of your workflow application provided by the Celerity Workflow Runtime.
 
-🚀 **Planned for v1** - Support for workflows is planned for v1, they may become available in a future v0 evolution.
+✅ **Available in v0** - Bucket to workflow links are available in v0 for AWS serverless (Step Functions) and local development environments.
 
 [Read more about Celerity Workflows](/docs/framework/applications/resources/celerity-workflow)
 

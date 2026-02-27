@@ -386,7 +386,7 @@ ___
 The unique name of the state that the handler will be used to execute in the workflow.
 The state in the workflow must be of the `executeStep` type.
 
-🚀 **Planned for v1** - This annotation will be applicable when workflow applications are supported, it may become available in a future v0 evolution.
+✅ **Available in v0** - This annotation is applicable for workflow applications deployed to AWS serverless (Step Functions) and local development environments.
 
 **type**
 
@@ -463,7 +463,7 @@ When a handler is linked to a consumer, it will be used to process messages rece
 
 When a handler is linked to a workflow, it will be used to execute a step in the workflow. The configuration defined in the handler annotations determines the behaviour of the handler in respect to the workflow.
 
-🚀 **Planned for v1** - This link will be applicable when workflow applications are supported, it may become available in a future v0 evolution.
+✅ **Available in v0** - This link is applicable for workflow applications deployed to AWS serverless (Step Functions) and local development environments.
 
 [Read more about Celerity workflows](/docs/framework/applications/resources/celerity-workflow)
 
@@ -557,7 +557,7 @@ you can also grab the populated configuration directly and interact directly wit
 For example, you can use the AWS Step Functions SDK to trigger a workflow in AWS Step Functions but this will not translate to Google Cloud Workflows, Azure Logic Apps or the Celerity Workflow runtime.
 </Callout>
 
-🚀 **Planned for v1** - This link will be applicable when workflow applications are supported, it may become available in a future v0 evolution.
+✅ **Available in v0** - This link is applicable for workflow applications deployed to AWS serverless (Step Functions) and local development environments.
 
 [Read more about Celerity workflows](/docs/framework/applications/resources/celerity-workflow)
 
@@ -1176,13 +1176,14 @@ The Celerity runtime is used when you deploy your handlers to a containerised en
 
 You can choose from the following options for the Celerity runtime:
 
- Runtime         | Runtime ID   | Operating System     | Status              |
----------------- | ------------ | -------------------- | ------------------- |
- Node.js 22      | nodejs22.x   | Debian 12 (bookworm) | Actively maintained |
- .NET 8          | dotnet8.x    | Debian 12 (bookworm) | Actively maintained |
- Python 3.13     | python3.13.x | Debian 12 (bookworm) | Actively maintained |
- Java 21         | java21.x     | Debian 12 (bookworm) | Actively maintained |
- OS-only Runtime | os.deb2025   | Debian 12 (bookworm) | Actively maintained |
+| Runtime | Runtime ID | Operating System | Lifecycle Phase |
+|---------|------------|------------------|-----------------|
+| Node.js 22 | nodejs22.x | Debian 13 (trixie) | Active |
+| Python 3.13 | python3.13.x | Debian 13 (trixie) | Active |
+
+_Support for additional runtimes will come in the lead up to the v1 release in 2027._
+
+For full details on runtime support timelines, deprecation policy, and lifecycle phases, see the [Runtime Lifecycle & Support Policy](/docs/framework/runtime/lifecycle).
 
 <Callout title="Celerity runtimes for current v0" type="info">
 The Celerity runtime is only used for development environments for the current v0 release of Celerity.
@@ -1192,11 +1193,13 @@ The Celerity runtime is only used for development environments for the current v
 
 The AWS Lambda runtime is used when you deploy your handlers to AWS Lambda.
 You can choose from the [supported runtimes](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html#runtimes-supported) for AWS lambda.
+See the [Runtime Lifecycle & Support Policy](/docs/framework/runtime/lifecycle#aws-lambda) for how Celerity tracks AWS Lambda runtime deprecations.
 
 ### Google Cloud Functions Runtime
 
 The Google Cloud Functions runtime is used when you deploy your handlers to Google Cloud Functions.
 You can choose from the [supported runtimes](https://cloud.google.com/functions/docs/concepts/execution-environment#runtimes) for Google Cloud Functions.
+See the [Runtime Lifecycle & Support Policy](/docs/framework/runtime/lifecycle#google-cloud-functions) for how Celerity tracks Google Cloud Functions runtime deprecations.
 
 <Callout title="Warning" type="warning">
 Google Cloud Functions do not support OS-only runtimes where pre-compiled binaries are used for handlers.
@@ -1207,6 +1210,7 @@ The only supported language in Google Cloud Functions that is compiled in other 
 
 The Azure Functions runtime is used when you deploy your handlers to Azure Functions.
 You can choose from the [supported runtimes](https://docs.microsoft.com/en-us/azure/azure-functions/supported-languages) for Azure Functions.
+See the [Runtime Lifecycle & Support Policy](/docs/framework/runtime/lifecycle#azure-functions) for how Celerity tracks Azure Functions runtime deprecations.
 
 <Callout title="Note" type="info">
 Azure Functions do not support OS-only runtimes where pre-compiled binaries are used for handlers in the same way as the Celerity runtime and AWS Lambda.

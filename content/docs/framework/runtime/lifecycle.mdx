@@ -1,0 +1,135 @@
+---
+title: Runtime Lifecycle & Support Policy
+description: Lifecycle phases, support timelines, and deprecation policy for Celerity runtimes
+---
+
+Celerity maintains container-based runtimes for running handlers in containerised and local development environments. These runtimes are tied to upstream language versions and follow a formal lifecycle with defined support windows.
+
+For cloud provider serverless runtimes (AWS Lambda, Google Cloud Functions, Azure Functions), the lifecycle is managed by the respective cloud provider. See [Cloud Provider Runtimes](#cloud-provider-runtimes) for details.
+
+## Lifecycle Phases
+
+Every Celerity runtime moves through the following phases:
+
+| Phase | Description | What You Get | Duration |
+|-------|-------------|--------------|----------|
+| **Active** | Recommended for production use | Bug fixes, security patches, runtime updates | Until upstream leaves primary support AND a newer version is available in Celerity |
+| **Security-Only** | Still supported, nearing end of life | Security patches only | Until upstream approaches or reaches EOL |
+| **Deprecated** | Scheduled for removal | Critical security patches (best-effort), CLI warnings | 6 months minimum |
+| **End of Life** | No longer available | No patches, no support, CLI errors on build | N/A |
+
+### Active
+
+A runtime in the Active phase is the recommended version for production use. It receives bug fixes, security patches, and runtime updates as they become available upstream.
+
+A runtime remains Active as long as it is the latest supported version of its language in Celerity, even if the upstream version has moved to a maintenance or extended support phase. It transitions to Security-Only when Celerity adds support for a newer version of the same language.
+
+### Security-Only
+
+A runtime in the Security-Only phase continues to receive security patches but no new features or non-critical bug fixes. Applications running on a Security-Only runtime will continue to work, but you should plan your migration to the Active runtime for that language.
+
+A runtime enters Security-Only when Celerity adopts a newer version of the same language. It remains in this phase until the upstream version approaches or reaches its end of life for security fixes.
+
+### Deprecated
+
+A runtime in the Deprecated phase is scheduled for removal. It receives critical security patches on a best-effort basis only.
+
+<Callout title="CLI warnings during deprecation" type="warning">
+When a runtime enters the Deprecated phase, the Celerity CLI will emit warnings during build and deploy operations. Warnings include the End of Life date and the recommended migration target. You should migrate your handlers to a supported runtime version before the End of Life date.
+</Callout>
+
+A runtime enters the Deprecated phase when the upstream version is in its final 12 months of security support or has already reached end of life. The Deprecated phase lasts a minimum of 6 months to give you time to migrate.
+
+### End of Life
+
+A runtime that has reached End of Life is no longer available. Runtime images are no longer published or updated. Existing deployments will continue to run but will receive no further patches.
+
+The Celerity CLI will emit errors (not just warnings) when attempting to build or deploy with an End of Life runtime.
+
+## Current Runtime Support
+
+| Runtime | Runtime ID | OS | Celerity Phase | Upstream Status | Security-Only Begins | Celerity EOL |
+|---------|------------|-----|----------------|-----------------|----------------------|--------------|
+| Node.js 22 | nodejs22.x | Debian 13 (trixie) | Active | Maintenance LTS (until Apr 2027) | When Node.js 24+ runtime is added to Celerity | Oct 2027 |
+| Python 3.13 | python3.13.x | Debian 13 (trixie) | Active | Full Support (until ~Oct 2026), Security fixes (until Oct 2029) | When Python 3.14+ runtime is added to Celerity | Apr 2030 |
+
+<Callout title="How Celerity dates are derived" type="info">
+Celerity's Active phase ends when a newer version of the same language is adopted by Celerity. The Security-Only phase aligns with the upstream language version's end of life for security fixes. Celerity then provides a minimum 6-month Deprecated window before reaching End of Life.
+</Callout>
+
+<Callout title="Node.js 22 lifecycle note" type="info">
+Node.js 22 entered upstream Maintenance LTS in October 2025, before the Celerity v0 release. Since it remains the only supported Node.js version in Celerity, it is classified as Active within the Celerity lifecycle. It will transition to Security-Only when Celerity adds support for Node.js 24 or a later LTS version.
+</Callout>
+
+## Adoption Policy for New Runtimes
+
+### New versions of supported languages
+
+Celerity aims to add support for new LTS or stable versions of already-supported languages (Node.js, Python) within 3 months of the upstream version entering its Active LTS or Full Support phase.
+
+When a new version is added:
+- The new runtime enters the Active phase.
+- The previous version transitions to Security-Only.
+- This page and the [handler runtime table](/docs/framework/applications/resources/celerity-handler#celerity-runtime) are updated with revised lifecycle dates.
+- An announcement is made in release notes.
+
+### New languages
+
+New language runtimes (Go, Java, C#) are planned for the v1 release (target: March 2027). New languages will enter the Active phase upon their initial Celerity release and will follow the same lifecycle policy defined on this page.
+
+See the [Celerity versions](/docs/framework/versions) page for the full roadmap.
+
+## Deprecation Protocol
+
+When a runtime approaches end of life, the following steps are carried out:
+
+1. **Announcement** (6+ months before EOL): The runtime is moved to the Deprecated phase. An announcement is published in release notes and this page is updated with the EOL date.
+2. **CLI warnings**: The Celerity CLI displays deprecation warnings when building or deploying applications that use the Deprecated runtime. Warnings include the EOL date and the recommended migration target.
+3. **Migration guide**: A migration guide is published detailing the steps to move handlers to the replacement runtime version.
+4. **End of Life**: After the EOL date, the runtime images are no longer published or updated. The Celerity CLI emits errors when attempting to build with an EOL runtime.
+
+### Deprecation Triggers
+
+| Trigger | Transition |
+|---------|-----------|
+| Upstream language version leaves primary support AND a newer version is available in Celerity | Active → Security-Only |
+| Upstream language version is in its final 12 months of security support, or has reached EOL | Security-Only → Deprecated |
+| 6 months have elapsed since entering the Deprecated phase, or upstream has fully ceased all support | Deprecated → End of Life |
+
+## Cloud Provider Runtimes
+
+When deploying handlers to cloud provider serverless platforms, the runtime lifecycle is governed by the respective cloud provider. Celerity does not control these runtimes and cannot extend their support beyond what the provider offers.
+
+Celerity tracks cloud provider runtime deprecations. When a provider deprecates a runtime version, Celerity will update documentation and emit CLI warnings accordingly.
+
+### AWS Lambda
+
+You can choose from the [supported runtimes](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html#runtimes-supported) for AWS Lambda. When AWS deprecates a Lambda runtime, Celerity will emit CLI warnings for applications using that runtime and update this documentation.
+
+### Google Cloud Functions
+
+You can choose from the [supported runtimes](https://cloud.google.com/functions/docs/concepts/execution-environment#runtimes) for Google Cloud Functions. When Google deprecates a Cloud Functions runtime, Celerity will emit CLI warnings for applications using that runtime and update this documentation.
+
+<Callout title="Warning" type="warning">
+Google Cloud Functions do not support OS-only runtimes where pre-compiled binaries are used for handlers. The only supported language in Google Cloud Functions that is compiled in other environments is Go.
+</Callout>
+
+### Azure Functions
+
+You can choose from the [supported runtimes](https://docs.microsoft.com/en-us/azure/azure-functions/supported-languages) for Azure Functions. When Azure deprecates a Functions runtime, Celerity will emit CLI warnings for applications using that runtime and update this documentation.
+
+<Callout title="Note" type="info">
+Azure Functions do not support OS-only runtimes where pre-compiled binaries are used for handlers in the same way as the Celerity runtime and AWS Lambda. Azure functions do support custom handlers that are compiled light-weight HTTP servers that run in the Azure Functions runtime environment. Celerity will map OS-only runtimes (`os.*`) to custom handlers in Azure Functions.
+</Callout>
+
+## Future Runtime Roadmap
+
+| Language | Target Celerity Version | Expected Language Version | Status |
+|----------|------------------------|--------------------------|--------|
+| Node.js 24 | v0 evolution | Node.js 24 LTS | 🔄 Planned for v0 |
+| Python 3.14 | v0 evolution | Python 3.14 | 🔄 Planned for v0 |
+| Go | v1 (March 2027) | TBD | 🚀 Planned for v1 |
+| Java | v1 (March 2027) | TBD | 🚀 Planned for v1 |
+| C# | v1 (March 2027) | TBD | 🚀 Planned for v1 |
+
+_Lifecycle dates for planned runtimes will be published when the runtimes are released. Each will follow the same lifecycle policy defined on this page._

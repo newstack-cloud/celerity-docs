@@ -38,6 +38,26 @@ The expected format follows the Amazon EventBridge cron and rate expression synt
 
 string
 
+### input (optional)
+
+A static JSON value that is delivered to the schedule handler on every trigger.
+This can be used to pass configuration data, task identifiers, or any context that
+the handler needs to determine what work to perform.
+
+**type**
+
+object | string | number | boolean | array | null
+
+**examples**
+
+```yaml
+spec:
+    schedule: "rate(1 hour)"
+    input:
+        task: "cleanup-old-records"
+        batchSize: 100
+```
+
 ## Annotations
 
 Annotations define additional metadata that can determine the behaviour of the resource in relation to other resources in the blueprint or to add behaviour to a resource that is not in its spec.
@@ -183,6 +203,9 @@ resources:
                 application: "jobs"
         spec:
             schedule: "rate(1 hour)"
+            input:
+                task: "cleanup-old-records"
+                batchSize: 100
 ```
 
 ## Target Environments
@@ -426,6 +449,7 @@ The following is a table of `celerity/schedule` configuration fields and how the
 Celerity Schedule      | AWS EventBridge                                          | Google Cloud Scheduler       | Azure Function Trigger
 ---------------------- | -------------------------------------------------------- | ---------------------------- | ------------------------------------
 schedule               | schedule - [cron and rate expressions](https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-scheduled-rule-pattern.html#eb-cron-expressions)                                              | schedule - [cron expression](https://cloud.google.com/scheduler/docs/configuring/cron-job-schedules)                        | schedule - [NCRONTAB expression](https://github.com/atifaziz/NCrontab)
+input                  | Delivered in the message body to the handler              | Delivered in the message body to the handler | Delivered in the message body to the handler
 
 
 [^1]: Examples of Serverless event-driven flows include [Amazon Event Bridge triggerring AWS Lambda Functions](https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-run-lambda-schedule.html), [Google Cloud Scheduler with Pub/Sub and Google Cloud Functions](https://cloud.google.com/scheduler/docs/tut-gcf-pub-sub), and [Timer triggers for Azure Functions](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-timer?tabs=python-v2%2Cisolated-process%2Cnodejs-v4&pivots=programming-language-javascript).

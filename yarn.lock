@@ -877,10 +877,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@next/env@npm:15.5.7":
-  version: 15.5.7
-  resolution: "@next/env@npm:15.5.7"
-  checksum: 10c0/f92d99e5fa3516c6b7699abafd9bd813f5c1889dd257ab098f1b71f93137f5e4f49792e22f6dddf8a59efcb134e8e84277c983ff88607b2a42aac651bfde78ea
+"@next/env@npm:15.5.10":
+  version: 15.5.10
+  resolution: "@next/env@npm:15.5.10"
+  checksum: 10c0/fb26c299ff388a3a0b2d14379616e3e59fe7960002e5aa67be4d195a377b9803fb93dd90067a5eb7d889d6f437aff091171701eec0e8d201666160269dda4e95
   languageName: node
   linkType: hard
 
@@ -2795,7 +2795,7 @@ __metadata:
     fumadocs-mdx: "npm:11.9.0"
     fumadocs-ui: "npm:15.7.11"
     lucide-react: "npm:^0.543.0"
-    next: "npm:15.5.7"
+    next: "npm:15.5.10"
     next-validate-link: "npm:^1.6.0"
     postcss: "npm:^8.5.6"
     react: "npm:^19.1.1"
@@ -5844,11 +5844,11 @@ __metadata:
   languageName: node
   linkType: hard
 
-"next@npm:15.5.7":
-  version: 15.5.7
-  resolution: "next@npm:15.5.7"
+"next@npm:15.5.10":
+  version: 15.5.10
+  resolution: "next@npm:15.5.10"
   dependencies:
-    "@next/env": "npm:15.5.7"
+    "@next/env": "npm:15.5.10"
     "@next/swc-darwin-arm64": "npm:15.5.7"
     "@next/swc-darwin-x64": "npm:15.5.7"
     "@next/swc-linux-arm64-gnu": "npm:15.5.7"
@@ -5899,7 +5899,7 @@ __metadata:
       optional: true
   bin:
     next: dist/bin/next
-  checksum: 10c0/baf5b9f42416c478702b3894479b3d7862bc4abf18afe0e43b7fc7ed35567b8dc6cb76cd94906505bab9013cb8d0f3370cdc0451c01ec15ae5a638d37b5ba7c7
+  checksum: 10c0/ebf358cfc13e856ac2d60f6b1eb166560c541796d3422d6719712c0e8038626407f6075cb0d2805d9d6392404a5b0e63e501515982d78d7e934b721ea9753b17
   languageName: node
   linkType: hard
 

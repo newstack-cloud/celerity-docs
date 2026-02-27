@@ -1,4 +1,4 @@
 {
   "title": "Runtime",
-  "pages": ["index", "scalable-websockets", "websocket-runtime-protocol"]
+  "pages": ["index", "lifecycle", "scalable-websockets", "websocket-runtime-protocol"]
 }

@@ -6,17 +6,18 @@ description: Celerity resource type for workflows
 **`celerity/workflow`**
 
 **Spec Version:** `v2026-02-27-draft`  
-**Ecosystem Compatibility:** v1 (Preview)
+**Ecosystem Compatibility:** v0 (Current) / v1 (Preview)
 
 **blueprint transform:** `celerity-2026-02-27-draft`
 
 <Callout title="Ecosystem Compatibility" type="info">
-- **v1 (Preview)**: Multi-cloud with support for deployment as containerised applications as well as serverless workflow deployments.
+- **v0 (Current)**: AWS serverless (Step Functions) and local development with the Celerity workflow runtime. Node.js and Python runtimes only.
+- **v1 (Preview)**: Multi-cloud with support for deployment as containerised applications as well as serverless workflow deployments across all cloud providers and all language runtimes.
 
 Read more about Celerity versions [here](/docs/framework/versions).
 </Callout>
 
-🚀 **Planned for v1** - Support for workflow applications is planned for v1, they may become available in a future v0 evolution.
+✅ **Available in v0** - Workflow support is available in v0 for local development and AWS serverless (Step Functions) deployments with Node.js and Python runtimes. Full multi-cloud and containerised deployment support is planned for v1.
 
 The `celerity/workflow` resource type is used to define a workflow that orchestrates the execution of multiple handlers in a blueprint as a series of steps.
 
@@ -126,7 +127,7 @@ string
 
 ### state
 
-#### FIELDS
+<FieldsHeading />
 
 ___
 
@@ -427,7 +428,7 @@ ___
 
 ### decisionRule
 
-#### FIELDS
+<FieldsHeading />
 
 ___
 
@@ -491,7 +492,7 @@ ___
 
 ### condition
 
-#### FIELDS
+<FieldsHeading />
 
 ___
 
@@ -555,7 +556,7 @@ ___
 
 ### parallelBranch
 
-#### FIELDS
+<FieldsHeading />
 ___
 
 <FieldHeading fieldName="startAt (required)" />
@@ -592,7 +593,7 @@ mapping[string, [state](#state)]
 
 ### waitConfiguration
 
-#### FIELDS
+<FieldsHeading />
 
 ___
 
@@ -642,7 +643,7 @@ ___
 
 ### failureConfiguration
 
-#### FIELDS
+<FieldsHeading />
 
 ___
 
@@ -683,7 +684,7 @@ ___
 
 ### retryConfiguration
 
-#### FIELDS
+<FieldsHeading />
 
 ___
 
@@ -782,7 +783,7 @@ ___
 
 ### catchConfiguration
 
-#### FIELDS
+<FieldsHeading />
 
 ___
 
@@ -2111,12 +2112,16 @@ The following environments support string matching:
 
 ### Local Development
 
+✅ **Available in v0**
+
 In the local development environment, a workflow is deployed as a containerised version of the Celerity workflow runtime in a local container orchestrator.
 The workflow API will be exposed to the host machine on a configurable port, allowing manually testing your workflow application and enabling other applications to interact with the workflow API.
-In the local environment, the runtime is backed by an [Apache Cassandra](https://cassandra.apache.org/_/index.html) NoSQL database for storing workflow execution state.
+In the local environment, the runtime is backed by a [SQLite](https://www.sqlite.org/) database for storing workflow execution state.
 Links from VPCs to APIs are ignored for this environment as the workflow is deployed to a local container network on a developer or CI machine.
 
 ### AWS
+
+🚀 **Planned for v1** - This target environment will be available in a future v0 evolution.
 
 In the AWS environment, workflows are deployed as a containerised version of the Celerity workflow runtime.
 
@@ -2203,12 +2208,16 @@ A sidecar [ADOT collector](https://aws-otel.github.io/docs/getting-started/colle
 
 ### AWS Serverless
 
+✅ **Available in v0**
+
 In the AWS Serverless environment, workflows are deployed to AWS Step Functions with AWS Lambda for the handlers.
 
 When tracing is enabled for handlers, an [ADOT lambda layer](https://aws-otel.github.io/docs/getting-started/lambda) is bundled with and configured to instrument each handler to collect traces and metrics.
 AWS Step Functions traces are collected in AWS X-Ray, Step Functions specific traces can be collected in to tools like Grafana with plugins that use AWS X-Ray as a data source.
 
 ### Google Cloud
+
+🚀 **Planned for v1** - This target environment will be available in a future v0 evolution.
 
 In the Google Cloud environment, workflows are deployed as a containerised version of the Celerity workflow runtime.
 
@@ -2271,18 +2280,22 @@ The [OpenTelemetry Operator](https://cloud.google.com/blog/topics/developers-pra
 
 ### Google Cloud Serverless
 
+🚀 **Planned for v1** - This target environment will be available in a future v0 evolution.
+
 In the Google Cloud Serverless environment, workflows are deployed as Google Cloud Workflows with Google Cloud Functions for the handlers.
 
 For tracing, the built-in Google Cloud metrics and tracing offerings will be used to collect traces and metrics for the handlers. Traces and metrics can be collected into tools like Grafana with plugins that use Google Cloud Trace as a data source. Logs and metrics are captured out of the box for the Cloud Workflows and will be collected in Google Cloud Logging and Monitoring. You can export logs and metrics to other tools like Grafana with plugins that use Google Cloud Logging and Monitoring as a data source.
 
 ### Azure
 
+🚀 **Planned for v1** - This target environment will be available in a future v0 evolution.
+
 In the Azure environment, workflows are deployed as a containerised version of the Celerity workflow runtime.
 
 Workflows can be deployed to [Azure Container Apps](https://azure.microsoft.com/en-us/products/container-apps/) or [Azure Kubernetes Service (AKS)](https://azure.microsoft.com/en-us/products/kubernetes-service) using [deploy configuration](/docs/framework/applications/compute-configuration#azure-configuration-options) for the Azure target environment.
 
 The workflow runtime requires persistence for storing workflow execution state, this is provided by Azure Cosmos DB resources that are created when the workflow is deployed.
-The workflow runtime uses the [Cassandra API for Cosmos DB](https://learn.microsoft.com/en-us/azure/cosmos-db/cassandra/introduction).
+The workflow runtime uses the [NoSQL API for Cosmos DB](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/).
 
 <Callout title="Note" type="info">
 Cosmos DB was chosen as the persistence layer for the workflow runtime in Azure environments as it provides a scalable and highly available NoSQL database that is more than sufficient for the requirements of the workflow runtime.
@@ -2339,6 +2352,8 @@ Memory and CPU resources allocated to the workflow pod can be defined in the dep
 The [OpenTelemetry Operator](https://opentelemetry.io/docs/kubernetes/operator/) is used to configure a sidecar collector container for the workflow application to collect traces and metrics. Traces will always be collected for workflow executions, however, they are only collected for handlers when tracing is enabled for the handler.
 
 ### Azure Serverless
+
+🚀 **Planned for v1** - This target environment will be available in a future v0 evolution.
 
 In the Azure Serverless environment, workflows are deployed as Azure Logic Apps with Azure Functions for the handlers.
 
