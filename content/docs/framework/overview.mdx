@@ -58,7 +58,7 @@ The SQL database building block ([`celerity/sql-database`](/docs/framework/appli
 
 ### NoSQL Database
 
-The NoSQL database building block ([`celerity/datastore`](/docs/framework/applications/resources/celerity-datastore)) is used to define a NoSQL database that can be used to store unstructured data. This includes support for multiple providers such as AWS DynamoDB, Azure Cosmos DB and GCP Datastore.
+The NoSQL database building block ([`celerity/datastore`](/docs/framework/applications/resources/celerity-datastore)) is used to define a NoSQL database that can be used to store unstructured data. This includes support for multiple providers such as AWS DynamoDB, Azure Cosmos DB and GCP Firestore. Celerity provides [built-in schema management](/docs/framework/applications/nosql-datastore-schema-management) for NoSQL datastores — including schema-as-code, type generation, schema contracts and data team exports — bridging the gap where NoSQL databases have no database-level schema to introspect.
 
 [Read more about Celerity NoSQL Databases](/docs/framework/applications/resources/celerity-datastore).
 
@@ -132,8 +132,8 @@ The Celerity SDKs are a set of libraries for all the languages that Celerity sup
 
 The SDKs allow you to build your application handlers in a way that is idiomatic to your language of choice and provide a convenient way to interact with your application's infrastructure dependencies such as queues, databases and storage buckets.
 
-<Callout title="Warning" type="warning">
-With databases, the SDKs will provide ways to run simple queries and CRUD operations against the database. Generally, it's better to use tried and tested SQL libraries, specific database clients or ORMs if you prefer where the Celerity SDKs are used to source connection details.
+<Callout title="Database and Cache SDKs" type="info">
+For **SQL databases**, the SDKs provide a credentials provider that abstracts connection configuration sourcing, plus an optional [knex.js](https://knexjs.org/) connection factory with managed connection pooling. You bring your own SQL library or ORM — the SDK handles connection lifecycle, not queries. For **NoSQL datastores**, the SDKs provide a cloud-agnostic interface for common CRUD operations. For **caches**, the SDKs provide a thin abstraction (`get`/`set`/`delete`/`ttl`) over Redis, with a credentials provider available for direct Redis client access when you need the full Redis API.
 </Callout>
 
 Celerity provides SDKs for the following languages:

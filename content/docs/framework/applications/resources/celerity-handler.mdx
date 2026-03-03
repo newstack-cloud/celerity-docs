@@ -386,7 +386,7 @@ ___
 The unique name of the state that the handler will be used to execute in the workflow.
 The state in the workflow must be of the `executeStep` type.
 
-✅ **Available in v0** - This annotation is applicable for workflow applications deployed to AWS serverless (Step Functions) and local development environments.
+🚀 **Planned for v1** - This annotation is applicable for workflow applications deployed to AWS serverless (Step Functions) and local development environments.
 
 **type**
 
@@ -463,7 +463,7 @@ When a handler is linked to a consumer, it will be used to process messages rece
 
 When a handler is linked to a workflow, it will be used to execute a step in the workflow. The configuration defined in the handler annotations determines the behaviour of the handler in respect to the workflow.
 
-✅ **Available in v0** - This link is applicable for workflow applications deployed to AWS serverless (Step Functions) and local development environments.
+🚀 **Planned for v1** - This link is applicable for workflow applications deployed to AWS serverless (Step Functions) and local development environments.
 
 [Read more about Celerity workflows](/docs/framework/applications/resources/celerity-workflow)
 
@@ -516,7 +516,9 @@ When a handler links out to a NoSQL data store, it will be configured with permi
 
 When a handler links out to an SQL database, it will be configured with permissions and environment variables that enable the handler to interact with the data store. If a secret store is associated with the handler or the application that it is a part of, the SQL database configuration will be added to the secret store instead of environment variables. You can use guides and templates to get an intuition for how to source the configuration and interact with SQL databases using SDKs or libraries for the SQL database service for the chosen target environment.
 
-🚀 **Planned for v1** - This link will be applicable when SQL databases are supported, it may become available in a future v0 evolution.
+✅ **Available in v0**
+
+The Celerity SDK provides a credentials provider (`getSqlDatabaseConnectionConfig`) for use with any SQL library and an optional knex.js connection factory (`createKnexClient`) with managed connection pooling. For AWS serverless deployments, RDS Proxy is automatically provisioned to handle connection pooling for Lambda functions.
 
 [Read more about Celerity SQL databases](/docs/framework/applications/resources/celerity-sql-database)
 
@@ -543,7 +545,9 @@ Redis 7.2.4 was the last open-source version of Redis before the Redis Labs lice
 Celerity supports cache services that are compatible with the Redis 7.2.4 API.
 </Callout>
 
-🚀 **Planned for v1** - This link will be applicable when cache services are supported, it may become available in a future v0 evolution.
+✅ **Available in v0**
+
+The Celerity SDK provides a thin cache abstraction (`createCacheClient`) with `get`, `set`, `delete` and `ttl` operations, as well as a credentials provider for direct Redis client access.
 
 [Read more about Celerity caches](/docs/framework/applications/resources/celerity-cache)
 
@@ -557,7 +561,7 @@ you can also grab the populated configuration directly and interact directly wit
 For example, you can use the AWS Step Functions SDK to trigger a workflow in AWS Step Functions but this will not translate to Google Cloud Workflows, Azure Logic Apps or the Celerity Workflow runtime.
 </Callout>
 
-✅ **Available in v0** - This link is applicable for workflow applications deployed to AWS serverless (Step Functions) and local development environments.
+🚀 **Planned for v1** - This link is applicable for workflow applications deployed to AWS serverless (Step Functions) and local development environments.
 
 [Read more about Celerity workflows](/docs/framework/applications/resources/celerity-workflow)
 
@@ -1260,7 +1264,7 @@ Google Cloud Pub/Sub will be wired up directly to the application in the runtime
 🚀 **Planned for v1** - This target environment will be available in a future v0 evolution.
 
 In the Google Cloud Serverless environment, handlers are deployed as Google Cloud Functions.
-Depending on the links and configuration, the handler will be wired up to the appropriate HTTP route, event source, stream or scheduled trigger. HTTP handlers will be wired up to Google Cloud API Gateway, event sources such as Google Cloud Pub/Sub, Google Cloud Storage and Google Cloud Datastore will be wired up to the Cloud Function directly. For scheduled triggers, Cloud Scheduler and Pub/Sub will be combined to trigger the function. For queues, Google Cloud Pub/Sub topics will be configured as triggers for the Cloud Function. For workflows, Google Cloud Workflows will be configured to trigger the Cloud Function as a step in the workflow.
+Depending on the links and configuration, the handler will be wired up to the appropriate HTTP route, event source, stream or scheduled trigger. HTTP handlers will be wired up to Google Cloud API Gateway, event sources such as Google Cloud Pub/Sub, Google Cloud Storage and Google Cloud Firestore will be wired up to the Cloud Function directly. For scheduled triggers, Cloud Scheduler and Pub/Sub will be combined to trigger the function. For queues, Google Cloud Pub/Sub topics will be configured as triggers for the Cloud Function. For workflows, Google Cloud Workflows will be configured to trigger the Cloud Function as a step in the workflow.
 
 <Callout title="Warning" type="warning">
 Google Cloud Serverless does not support WebSocket APIs, meaning handlers linked from WebSocket APIs can not be deployed to Google Cloud Functions.

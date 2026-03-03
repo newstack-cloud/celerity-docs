@@ -6,18 +6,17 @@ description: Celerity resource type for workflows
 **`celerity/workflow`**
 
 **Spec Version:** `v2026-02-27-draft`  
-**Ecosystem Compatibility:** v0 (Current) / v1 (Preview)
+**Ecosystem Compatibility:** v1 (Preview)
 
 **blueprint transform:** `celerity-2026-02-27-draft`
 
 <Callout title="Ecosystem Compatibility" type="info">
-- **v0 (Current)**: AWS serverless (Step Functions) and local development with the Celerity workflow runtime. Node.js and Python runtimes only.
 - **v1 (Preview)**: Multi-cloud with support for deployment as containerised applications as well as serverless workflow deployments across all cloud providers and all language runtimes.
 
 Read more about Celerity versions [here](/docs/framework/versions).
 </Callout>
 
-✅ **Available in v0** - Workflow support is available in v0 for local development and AWS serverless (Step Functions) deployments with Node.js and Python runtimes. Full multi-cloud and containerised deployment support is planned for v1.
+🚀 **Planned for v1** - Workflow support is planned for v1 with multi-cloud and containerised deployment support across all cloud providers and all language runtimes.
 
 The `celerity/workflow` resource type is used to define a workflow that orchestrates the execution of multiple handlers in a blueprint as a series of steps.
 
@@ -2112,7 +2111,7 @@ The following environments support string matching:
 
 ### Local Development
 
-✅ **Available in v0**
+🚀 **Planned for v1**
 
 In the local development environment, a workflow is deployed as a containerised version of the Celerity workflow runtime in a local container orchestrator.
 The workflow API will be exposed to the host machine on a configurable port, allowing manually testing your workflow application and enabling other applications to interact with the workflow API.
@@ -2208,7 +2207,7 @@ A sidecar [ADOT collector](https://aws-otel.github.io/docs/getting-started/colle
 
 ### AWS Serverless
 
-✅ **Available in v0**
+🚀 **Planned for v1**
 
 In the AWS Serverless environment, workflows are deployed to AWS Step Functions with AWS Lambda for the handlers.
 
@@ -2223,10 +2222,10 @@ In the Google Cloud environment, workflows are deployed as a containerised versi
 
 Workflows can be deployed to [Cloud Run](https://cloud.google.com/run), as well as [Google Kubernetes Engine (GKE)](https://cloud.google.com/kubernetes-engine) in [Autopilot](https://cloud.google.com/kubernetes-engine/docs/concepts/autopilot-overview) or [Standard](https://cloud.google.com/kubernetes-engine/docs/how-to/creating-a-regional-cluster) mode using [deploy configuration](/docs/framework/applications/compute-configuration#google-cloud-configuration-options) for the Google Cloud target environment.
 
-The workflow runtime requires persistence for storing workflow execution state, this is provided by a set of Cloud Datastore entities that are created when the workflow is deployed.
+The workflow runtime requires persistence for storing workflow execution state, this is provided by a set of Firestore documents that are created when the workflow is deployed.
 
 <Callout title="Note" type="info">
-Cloud Datastore was chosen as the persistence layer for the workflow runtime in Google Cloud environments as it provides a scalable and highly available NoSQL database that is more than sufficient for the requirements of the workflow runtime.
+Firestore was chosen as the persistence layer for the workflow runtime in Google Cloud environments as it provides a scalable and highly available NoSQL database that is more than sufficient for the requirements of the workflow runtime.
 This also removes the need to manage a relational database cluster for each workflow-based application that is deployed.
 </Callout>
 

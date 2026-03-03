@@ -434,7 +434,7 @@ ___
 ### dbStreamConfiguration
 
 Configuration for a database stream event trigger that the consumer will respond to.
-This supports NoSQL database streams/events such as DynamoDB Streams, Google Cloud Datastore, and Azure Cosmos DB based where the selected service is based on the target environment.
+This supports NoSQL database streams/events such as DynamoDB Streams, Google Cloud Firestore, and Azure Cosmos DB based where the selected service is based on the target environment.
 
 You can find more information about the configuration mappings for database streams in the [configuration mappings](#serverless-database-streams) section. You can also dive into how DB streams work with containerised and custom server environments [here](/docs/applications/architectures#events---cloud-service-events)
 
@@ -968,14 +968,14 @@ For Google Cloud Pub/Sub, the DLQ is implemented as a dead letter topic that is 
 ### Serverless Database Streams
 
 The following is a table of database stream configuration fields and how they map to different target environments when the Celerity application is deployed as a Serverless stream flow[^2].
-Google Cloud Datastore event triggers aren't actually stream-based, but comes under database streams as is the closest analogue to DynamoDB Streams and Azure Cosmos DB Triggers.
+Google Cloud Firestore event triggers aren't actually stream-based, but comes under database streams as is the closest analogue to DynamoDB Streams and Azure Cosmos DB Triggers.
 
 <table>
     <thead>
         <tr>
             <th>Celerity Handler Events</th>
             <th>DynamoDB Stream Event Source for AWS Lambda</th>
-            <th>Google Cloud Datastore Trigger for Cloud Functions</th>
+            <th>Google Cloud Firestore Trigger for Cloud Functions</th>
             <th>Azure Cosmos DB Trigger for Azure Functions</th>
         </tr>
     </thead>
@@ -989,7 +989,7 @@ Google Cloud Datastore event triggers aren't actually stream-based, but comes un
         <tr>
             <td>dbStreamId</td>
             <td>eventSourceArn</td>
-            <td>`{database}(:{namespace})?` (Maps to event filters)</td>
+            <td>`{database}(:{collectionGroup})?` (Maps to event filters)</td>
             <td>`{databaseName}:{collectionName}`</td>
         </tr>
         <tr>
@@ -1122,5 +1122,5 @@ The default value is `10` for production app environments and `5` for developmen
 ```
 
 [^1]: Examples of Serverless event-driven flows include [Amazon SQS Queues triggerring AWS Lambda Functions](https://docs.aws.amazon.com/lambda/latest/dg/with-sqs.html), [Google Cloud Pub/Sub triggering Google Cloud Functions](https://cloud.google.com/functions/docs/calling/pubsub), and [Azure Queue Storage triggering Azure Functions](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-storage-queue-trigger?tabs=python-v2%2Cisolated-process%2Cnodejs-v4%2Cextensionv5&pivots=programming-language-typescript).
-[^2]: Examples of Serverless stream flows include [Amazon DynamoDB Streams and AWS Lambda](https://docs.aws.amazon.com/lambda/latest/dg/with-ddb.html), [Google Cloud Datastore triggering Google Cloud Functions](https://cloud.google.com/datastore/docs/extend-with-functions-2nd-gen) and [Azure Cosmos DB Streams triggering Azure Functions](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-cosmosdb?toc=%2Fazure%2Fcosmos-db%2Ftoc.json&bc=%2Fazure%2Fcosmos-db%2Fbreadcrumb%2Ftoc.json&tabs=csharp).
+[^2]: Examples of Serverless stream flows include [Amazon DynamoDB Streams and AWS Lambda](https://docs.aws.amazon.com/lambda/latest/dg/with-ddb.html), [Google Cloud Firestore triggering Google Cloud Functions](https://cloud.google.com/functions/docs/calling/cloud-firestore) and [Azure Cosmos DB Streams triggering Azure Functions](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-cosmosdb?toc=%2Fazure%2Fcosmos-db%2Ftoc.json&bc=%2Fazure%2Fcosmos-db%2Fbreadcrumb%2Ftoc.json&tabs=csharp).
 [^3]: Examples of Serverless stream flows include [Amazon Kinesis Streams and AWS Lambda](https://docs.aws.amazon.com/lambda/latest/dg/with-kinesis.html) and [Azure Event Hubs triggering Azure Functions](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-event-hubs?tabs=csharp).

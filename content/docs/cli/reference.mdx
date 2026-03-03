@@ -33,7 +33,7 @@ Relative paths are expected to be relative to the current working directory.
 The path to the app deploy configuration file that contains blueprint variable overrides and configuration for the target environment for a Celerity application.
 This file is expected to be in the JSON with Commas and Comments format described in the [App Deploy Configuration](/docs/cli/app-deploy-configuration) doc.
 
-This file is used by the `app build`, `stage-changes`, `deploy`, `destroy` and `validate` commands.
+This file is used by the `stage-changes`, `deploy`, `destroy` and `validate` commands.
 
 ### `--connect-protocol`
 
@@ -131,17 +131,13 @@ This means that when `--check-deploy-config` is set, the CLI will validate the c
 
 ## `destroy`
 
-## `app`
-
-This is the command category for managing Celerity applications.
-
-### `init`
+## `init`
 
 This command initialises a new Celerity application project.
 It will take you through a series of prompts to create a new application project.
 You can provide command line options to skip parts of the interactive process of setting up a new application project.
 
-#### `--language`
+### `--language`
 
 **Environment Variable**: `CELERITY_CLI_INIT_LANGUAGE`
 
@@ -151,9 +147,14 @@ You can provide command line options to skip parts of the interactive process of
 
 The language or framework to use for a new Celerity project.
 
-### `start`
+## `dev`
 
-### `build`
+This is the command category for local development of Celerity applications.
+
+### `run`
+
+Start a Celerity application in the local development environment.
+This will set up all the required infrastructure locally (database containers, cache instances, queue emulators, etc.) and start the application runtime with your handlers.
 
 ### `test`
 
@@ -161,60 +162,192 @@ Run tests for a Celerity application.
 This will set up an isolated environment that sets up and tears down test fixtures for local development.
 The underlying test runner will depend on the language used for the application.
 
-## `plugins`
+## `schema`
 
-This is the command category for managing deploy engine plugins installed on the machine
-that the CLI is running on.
+This is the command category for managing SQL database and NoSQL datastore schemas in Celerity applications.
 
-<Callout title="Note">
-You can only manage plugins from the CLI for the machine that you call the CLI commands on.
-These plugins will only be available when running commands such as `deploy` or `destroy`
-against an instance of the deploy engine running on the same machine.
-This is the default behaviour if a custom host is not specified for the deploy engine.
-</Callout>
+See the [SQL Database Schema Management](/docs/framework/applications/sql-database-schema-management) guide for SQL databases and the [NoSQL Datastore Schema Management](/docs/framework/applications/nosql-datastore-schema-management) guide for NoSQL datastores.
 
-### `list`
+### `diff`
 
-Lists all the plugins that are installed on the machine that the CLI is running on.
+Show the migration plan and contract impact for pending schema changes without applying them. This compares the schema YAML (desired state) against the current deployed state and generates the changes that would be applied.
 
-#### `--type`
+The output includes:
+- **SQL databases**: Auto-generated DDL statements from the schema diff, pending escape hatch SQL scripts
+- **NoSQL datastores**: Field-level changes (added, removed, type changed), pending escape hatch data scripts. No DDL is generated — field changes are application-layer only.
+- Contract impact analysis (which contracts would be satisfied or broken)
+- Warnings for ambiguous or destructive changes
 
-**Environment Variable**: `CELERITY_CLI_PLUGINS_LIST_TYPE`
-
-**Configuration Key**: `type`
-
-**Allowed Values**: `provider` | `transformer` | `all`
-
-**Default Value**: `all`
-
-The type of plugins to list.
-
-### `install`
-
-Installs one or more plugins on the machine that the CLI is running on.
-This command takes one or more plugin IDs as arguments.
-
-An example of installing a single plugin:
 ```bash
-celerity plugins install celerity/aws
+celerity schema diff
 ```
 
-An example of installing multiple plugins:
+#### `--env`
+
+**Environment Variable**: `CELERITY_CLI_SCHEMA_ENV`
+
+**Configuration Key**: `schemaEnv`
+
+**Type**: `string`
+
+The target environment to diff against. When specified, the current state is read from the deployed schema state for that environment.
+
+### `apply`
+
+Apply schema changes outside of a full deployment.
+
+- **SQL databases**: Executes the auto-generated DDL and escape hatch SQL scripts against the target database.
+- **NoSQL datastores**: Updates the schema state only — no database connection is made. Field-level changes are enforced at the application layer via SDK validation and generated types, not via database operations. Escape hatch data scripts are NOT auto-executed (they may take hours for large datasets).
+
 ```bash
-celerity plugins install celerity/aws celerity/azure registry.customhost.com/celerity/gcp
+celerity schema apply
 ```
 
-Plugins that exist in the celerity framework registry do not need the full URL with the host name,
-only plugins stored in a custom registry need the full URL.
-For example, the plugin ID `celerity/aws` will be resolved to `registry.celerityframework.io/celerity/aws`.
+#### `--env`
 
-The Celerity CLI only supports sourcing plugins from a custom registry if it has been added to the
-allowed registries, you can create a PR or contact the Celerity team to get a custom registry
-verified and added to the list of allowed registries.
+**Environment Variable**: `CELERITY_CLI_SCHEMA_APPLY_ENV`
 
-As plugin IDs are globally unique, the CLI does not differentiate between provider and transformer plugins
-for the sake of installation.
+**Configuration Key**: `schemaApplyEnv`
 
-### `uninstall`
+**Type**: `string`
+
+The target environment to apply migrations to.
+
+#### `--auto-approve`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+Skip the interactive confirmation prompt and apply migrations immediately. Use with caution.
+
+### `validate`
+
+Validate schema files, blueprint references and contracts for both SQL databases and NoSQL datastores:
+
+- Schema YAML files parse correctly
+- **SQL databases**: Foreign keys reference valid tables and columns; escape hatch SQL files parse as valid SQL for the target engine
+- **NoSQL datastores**: Field types are valid (`string`, `number`, `boolean`, `object`, `array`); nested `fields`/`items` match their parent type; `required` fields exist in the `fields` map
+- Handlers linked to a `celerity/sqlDatabase` or `celerity/datastore` have the resource in their label scope
+- Schema contracts are evaluated against pending changes — exits with a non-zero exit code if any `blocking` contracts are affected, prints warnings for `notify` contracts (if a `schema-contracts.yaml` file exists and deployed state is available)
+- Generated types are up-to-date with the schema (when `--check-codegen` is set)
+
+```bash
+celerity schema validate
+```
+
+#### `--check-codegen`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+Check that generated type files are up-to-date with the current schema. If generated types are stale, validation will fail.
+
+### `export`
+
+Export the schema in different formats for documentation, pipeline integration or visualisation.
+
+```bash
+celerity schema export --format sql
+celerity schema export --format markdown
+celerity schema export --format json-schema
+celerity schema export --format mermaid
+```
+
+#### `--format`
+
+**Type**: `string`
+
+**Allowed Values**: `sql` | `markdown` | `json-schema` | `mermaid` | `avro`
+
+The output format for the schema export.
+
+| Format | SQL Databases | NoSQL Datastores | Description |
+|---|---|---|---|
+| `sql` | ✅ | — | SQL CREATE TABLE statements (DDL) |
+| `markdown` | ✅ | ✅ | Human-readable documentation with table/field descriptions and metadata |
+| `json-schema` | ✅ | ✅ | Machine-readable JSON Schema for pipeline tool integration |
+| `mermaid` | ✅ | — | Entity-relationship diagram in Mermaid syntax |
+| `avro` | — | ✅ | Apache Avro schema for data pipeline integration |
+
+#### `--out`
+
+**Type**: `string`
+
+The output file path. If not specified, output is written to stdout.
+
+### `codegen`
+
+Generate type-safe code from schema definitions. For SQL databases, produces types representing table rows and column name constants. For NoSQL datastores, produces item types with optional (`?`) and nullable (`| null`) semantics reflecting the `required` list and `nullable` flags in the schema.
+
+```bash
+celerity schema codegen --lang typescript --out ./src/generated/
+celerity schema codegen --lang python --out ./src/generated/
+```
+
+#### `--lang`
+
+**Type**: `string`
+
+**Allowed Values**: `typescript` | `python` | `go` | `java` | `csharp`
+
+The target language for code generation. Go, Java and C# support is planned for v1.
+
+| Language | Output | Status |
+|---|---|---|
+| `typescript` | Interfaces, column constants, table name constants | ✅ Available in v0 |
+| `python` | TypedDict classes | ✅ Available in v0 |
+| `go` | Struct types | 🚀 Planned for v1 |
+| `java` | Record classes | 🚀 Planned for v1 |
+| `csharp` | Record types | 🚀 Planned for v1 |
+
+#### `--out`
+
+**Type**: `string`
+
+The output directory for generated files. Required.
+
+### `show`
+
+Show the currently deployed schema for a database or datastore resource in a given environment. Reads from the deployed schema state.
+
+```bash
+celerity schema show ordersDb --env production
+celerity schema show userStore --env production
+```
+
+The first positional argument is the name of the `celerity/sqlDatabase` or `celerity/datastore` resource in the blueprint.
+
+#### `--env`
+
+**Environment Variable**: `CELERITY_CLI_SCHEMA_SHOW_ENV`
+
+**Configuration Key**: `schemaShowEnv`
+
+**Type**: `string`
+
+The target environment to show the schema for. Required.
+
+### `history`
+
+Show the change history for a database or datastore resource in a given environment. Displays what changed, when, and which schema updates were applied.
+
+```bash
+celerity schema history ordersDb --env production
+celerity schema history userStore --env production
+```
+
+The first positional argument is the name of the `celerity/sqlDatabase` or `celerity/datastore` resource in the blueprint.
+
+#### `--env`
+
+**Environment Variable**: `CELERITY_CLI_SCHEMA_HISTORY_ENV`
+
+**Configuration Key**: `schemaHistoryEnv`
+
+**Type**: `string`
+
+The target environment to show history for. Required.
 
 ## `version`

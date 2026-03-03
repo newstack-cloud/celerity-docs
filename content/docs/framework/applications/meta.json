@@ -4,6 +4,8 @@
     "index",
     "architectures",
     "resources",
+    "sql-database-schema-management",
+    "nosql-datastore-schema-management",
     "compute-configuration",
     "monitoring"
   ]

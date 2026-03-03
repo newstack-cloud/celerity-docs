@@ -19,6 +19,13 @@ Read more about Celerity versions [here](/docs/framework/versions).
 
 The `celerity/topic` resource type is used to define a topic that can be used to publish and subscribe to messages for a Celerity application. Topics are typically used in event-driven architectures to be used between applications for asynchronous communication and to allow applications to respond to infrastructure events (e.g. database changes, file uploads, etc.).
 
+For Celerity applications, using a topic provides:
+
+- **Asynchronous communication**: Decouple producers and consumers so they can scale independently and operate at different speeds.
+- **Fan-out messaging**: Publish a single message to a topic and have it delivered to multiple subscribers simultaneously.
+- **Event-driven architectures**: React to events such as database changes, file uploads or user actions without polling.
+- **Cross-application integration**: Share events between separate Celerity applications using the exported topic ID as the source for a `celerity/consumer`.
+
 ## Specification
 
 The specification is the structure of the resource definition that comes under the `spec` field of the resource in a blueprint.
@@ -35,7 +42,7 @@ The rest of this section lists fields that are available to configure the `celer
 The unique name of the topic. 
 If a name is not provided, a unique name will be generated for the topic based on the blueprint that the topic is defined in.
 
-Depending on the target environment, if `fifo` is set to `true`, the name must end with `.fifo` to indicate that the topic is a FIFO (first in, first out) topic.
+In AWS, if `fifo` is set to `true`, the name must end with `.fifo` to indicate that the topic is a FIFO (first in, first out) topic. Other target environments do not require a naming suffix for FIFO topics.
 
 <Callout title="Warning" type="warning">
 Depending on the target environment, when you specify a name, you may not be able to perform updates that require replacing the topic, if you need to replace the topic, you may need to specify a new name.
@@ -49,7 +56,7 @@ string
 
 If set to `true`, the topic will be configured as a FIFO (first in, first out) topic. This means that messages published to the topic will be delivered to subscribers in the order they were published.
 
-Message ordering is a subscription-level feature in some target environments (e.g. Google Cloud Pub/Sub), so this field will not always have an effect on the topic as a standalone resource but will be used when linking the topic to a queue, consumer or workflow resource.
+Message ordering is a subscription-level feature in some target environments (e.g. Google Cloud Pub/Sub), so this field will not always have an effect on the topic as a standalone resource but will be used when linking the topic to a queue or consumer resource.
 
 ✅ **Available in v0**
 
@@ -57,7 +64,7 @@ Message ordering is a subscription-level feature in some target environments (e.
 
 boolean
 
-**default**
+**default value**
 
 `false`
 
@@ -106,11 +113,15 @@ string
 
 `my-topic` (Azure)
 
+## Data Types
+
+The `celerity/topic` resource type does not define custom data types in the blueprint specification. Messages published to topics are serialised as JSON payloads.
+
 ## Linked From
 
 ### `celerity/handler`
 
-When a handler links out to a topic, it will be configured with permissions and environment variables that enable the handler to publish messages to the topic. If a `celerity/config` resource is associated with the handler or the application that it is a part of, the topic configuration will be added to the config/secret store instead of environment variables. You can use guides and templates to get an intuition for how to source the configuration and interact with pub/sub topic services using the handlers SDK.
+When a handler links to a topic, it will be configured with permissions and environment variables that enable the handler to publish messages to the topic. If a `celerity/config` resource is associated with the handler or the application that it is a part of, the topic configuration will be added to the config/secret store instead of environment variables. The Celerity SDK provides a [topic abstraction](#sdk-operations) for publishing messages.
 
 <Callout title="Opting out of the handlers SDK for topics" type="warning">
 You don't have to use the handlers SDK abstraction for topics,
@@ -123,7 +134,7 @@ you can also grab the populated configuration directly and interact directly wit
 
 ### `celerity/queue`
 
-When a queue links out to a topic, messages received by the queue will be published to the topic. Intermediary serverless functions (if necessary) will be provisioned to enable message forwarding from the queue to the topic. This can be useful if a queue is used as the endpoint of a specific task that should be published to a topic for further processing or to send out notifications. 
+When a queue links to a topic, messages received by the queue will be published to the topic. Intermediary serverless functions (if necessary) will be provisioned to enable message forwarding from the queue to the topic. This can be useful if a queue is used as the endpoint of a specific task that should be published to a topic for further processing or to send out notifications. 
 
 ✅ **Available in v0**
 
@@ -137,22 +148,83 @@ As topics are typically used to allow asynchronous message passing for decoupled
 
 ## Examples
 
+### Minimal Topic
+
+```yaml
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
+resources:
+    orderEventsTopic:
+        type: "celerity/topic"
+        metadata:
+            displayName: "Order Events Topic"
+        spec:
+            name: "order-events"
+```
+
+### Topic with Handler Link
+
+```yaml
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
+resources:
+    orderEventsTopic:
+        type: "celerity/topic"
+        metadata:
+            displayName: "Order Events Topic"
+            labels:
+                application: "orders"
+        spec:
+            name: "order-events"
+
+    createOrderHandler:
+        type: "celerity/handler"
+        metadata:
+            displayName: "Create Order"
+            labels:
+                application: "orders"
+            annotations:
+                celerity.handler.http: true
+                celerity.handler.http.method: "POST"
+                celerity.handler.http.path: "/orders"
+        linkSelector:
+            byLabel:
+                application: "orders"
+        spec:
+            handler: "handlers.createOrder"
+            runtime: "nodejs22.x"
+
+    api:
+        type: "celerity/api"
+        metadata:
+            displayName: "API"
+            labels:
+                application: "orders"
+        linkSelector:
+            byLabel:
+                application: "orders"
+        spec:
+            type: "http"
+```
+
+### FIFO Topic with Encryption
+
 ```yaml
 version: 2025-11-02
 transform: celerity-2026-02-27-draft
 variables:
-  encryptionKeyId:
-    type: string
-    description: "The ID of the encryption key to use for encrypting messages at rest."
+    encryptionKeyId:
+        type: string
+        description: "The ID of the encryption key to use for encrypting messages at rest."
 resources:
-  orderEventsTopic:
-    type: "celerity/bucket"
-    metadata:
-      displayName: Order Events Topic
-    spec:
-      name: "OrderEventsTopic.fifo"
-      fifo: true
-      encryptionKeyId: "${variables.encryptionKeyId}"
+    orderEventsTopic:
+        type: "celerity/topic"
+        metadata:
+            displayName: "Order Events Topic"
+        spec:
+            name: "OrderEventsTopic.fifo"
+            fifo: true
+            encryptionKeyId: "${variables.encryptionKeyId}"
 ```
 
 ## Target Environments
@@ -161,17 +233,23 @@ resources:
 
 ✅ **Available in v0**
 
-In the local development environment, a topic is implemented as a channel as a part of the [valkey pub/sub](https://valkey.io/topics/pubsub/) functionality.
+In the local development environment, a topic is implemented as a channel as a part of the [Valkey pub/sub](https://valkey.io/topics/pubsub/) functionality.
 
 A subscriber to the topic will receive messages published to the topic in the order they were published,
 configuring FIFO (first in, first out) behaviour is not supported in the local development environment.
 
-Valkey pub/sub provides at-most-once delivery semantics, where messages may be lost if the subscriber is not available when the message is published. When linking a `celerity/topic` with a `celerity/consumer` or `celerity/workflow`, a queue component will be created under the hood, providing stronger guarantees of message delivery; queues generated for `celerity/consumer` and `celerity/workflow` applications are implemented using [streams](https://valkey.io/topics/streams-intro/) that provide a reliable append-only log data structure.
+Valkey pub/sub provides at-most-once delivery semantics, where messages may be lost if the subscriber is not available when the message is published. When linking a `celerity/topic` with a `celerity/consumer`, a queue component will be created under the hood, providing stronger guarantees of message delivery; queues generated for `celerity/consumer` applications are implemented using [streams](https://valkey.io/topics/streams-intro/) that provide a reliable append-only log data structure. Linking a `celerity/topic` with a `celerity/workflow` will also create a queue component (🚀 planned for v1).
 
-A single instance of a valkey server is shared across the `celerity/topic`, `celerity/queue` and `celerity/cache` resource types in a Celerity application.
+A single instance of a Valkey server is shared across the `celerity/topic`, `celerity/queue` and `celerity/cache` resource types in a Celerity application.
+
+| Deploy Target | Local Emulator | Notes |
+|---|---|---|
+| `aws` / `aws-serverless` | [Valkey](https://valkey.io/) pub/sub | Shared Valkey instance with queues and caches |
+| `gcloud` / `gcloud-serverless` | [Valkey](https://valkey.io/) pub/sub | _Planned for v1_ |
+| `azure` / `azure-serverless` | [Valkey](https://valkey.io/) pub/sub | _Planned for v1_ |
 
 <Callout title="No encryption in local & CI environments" type="warning">
-Topic messages are not encrypted at rest in local & CI environment, the `encryptionKeyId` field is not used.
+Topic messages are not encrypted at rest in local & CI environments, the `encryptionKeyId` field is not used.
 </Callout>
 
 ### AWS
@@ -187,7 +265,7 @@ For FIFO topics, a message retention period of 7 days is set by default, this ca
 
 Delivery status logging is disabled by default, but can be enabled and configured in the [`app deploy configuration`](#app-deploy-configuration) file.
 
-When linking a `celerity/topic` to a `celerity/consumer` or `celerity/workflow` application resource type, an SQS queue will be created to receive messages from the topic and will be wired up to the consumer or workflow application. This allows for reliable and scalable message delivery.
+When linking a `celerity/topic` to a `celerity/consumer` application resource type, an SQS queue will be created to receive messages from the topic and will be wired up to the consumer application. This allows for reliable and scalable message delivery. Linking to a `celerity/workflow` is also supported (🚀 planned for v1).
 
 <Callout title="FIFO topics and deduplication" type="warning">
 Content-based deduplication is not supported for FIFO topics in the AWS environment, this is because other cloud provider implementations of FIFO (or message ordering) do not support content-based deduplication. Requiring ID/Key-based deduplication also means that the implementation of an application that uses a FIFO topic and the Celerity handlers SDK will be consistent across cloud providers.
@@ -206,7 +284,7 @@ When `fifo` is set to `true`, the [message ordering](https://cloud.google.com/pu
 
 Message retention can be configured for topics regardless of whether they use message ordering or not, the default retention period is 7 days. This can be configured in the [`app deploy configuration`](#app-deploy-configuration) file.
 
-When linking a `celerity/topic` to a `celerity/consumer` or `celerity/workflow` application resource type, a subscription will be created to receive messages from the topic and will be wired up to the consumer or workflow application.
+When linking a `celerity/topic` to a `celerity/consumer` application resource type, a subscription will be created to receive messages from the topic and will be wired up to the consumer application. Linking to a `celerity/workflow` is also supported (🚀 planned for v1).
 
 ### Azure
 
@@ -219,9 +297,9 @@ For Celerity applications that consume messages from the topic, the trace contex
 
 When `fifo` is set to `true`, a service bus queue will be created using [message sessions](https://learn.microsoft.com/en-us/azure/service-bus-messaging/message-sessions) to ensure that messages are delivered in the order they were published. A session ID must be provided when publishing messages to the topic to ensure that messages are delivered in the order they were published.
 
-There is no built-in message retention support for Azure Service Bus topics, once a message has been successfully delivered to each subscriber, it will be removed from the queue wired up to the topic on behalf of the consumer or workflow application.
+There is no built-in message retention support for Azure Service Bus topics, once a message has been successfully delivered to each subscriber, it will be removed from the queue wired up to the topic on behalf of the consumer application.
 
-When linking a `celerity/topic` to a `celerity/consumer` or `celerity/workflow` application resource type, a Service Bus Queue will be created to subscribe to messages from the topic and will be wired up to the consumer or workflow application. Message sessions will be configured if the topic is configured as FIFO.
+When linking a `celerity/topic` to a `celerity/consumer` application resource type, a Service Bus Queue will be created to subscribe to messages from the topic and will be wired up to the consumer application. Linking to a `celerity/workflow` is also supported (🚀 planned for v1). Message sessions will be configured if the topic is configured as FIFO.
 
 <Callout title="Azure service tiers and message sessions" type="warning">
 Message sessions are only supported in the Standard and Premium service tiers of Azure Service Bus.
@@ -243,7 +321,7 @@ This section lists the configuration options that can be set in the `deployTarge
 The message retention period for SNS FIFO topics in AWS, in days.
 This can be a period ranging from 1 to 365 days.
 
-**Type**
+**type**
 
 integer
 
@@ -251,19 +329,19 @@ integer
 
 `aws`, `aws-serverless`
 
-**Default Value**
+**default value**
 
 `7`
 
-**Minimum Value**
+**minimum value**
 
 `1`
 
-**Maximum Value**
+**maximum value**
 
 `365`
 
-**Example**
+**examples**
 
 ```javascript
 {
@@ -283,7 +361,7 @@ The message retention period for a specific SNS topic in AWS, in days.
 This can be a period ranging from 1 to 365 days.
 `<topic>` is the name (key) of the topic resource in the blueprint, not the topic name in AWS.
 
-**Type**
+**type**
 
 integer
 
@@ -291,19 +369,19 @@ integer
 
 `aws`, `aws-serverless`
 
-**Default Value**
+**default value**
 
 `7`
 
-**Minimum Value**
+**minimum value**
 
 `1`
 
-**Maximum Value**
+**maximum value**
 
 `365`
 
-**Example**
+**examples**
 
 ```javascript
 {
@@ -321,7 +399,7 @@ integer
 
 The IAM role ARN to be used when logging failed message deliveries in Amazon CloudWatch.
 
-**Type**
+**type**
 
 string
 
@@ -329,7 +407,7 @@ string
 
 `aws`, `aws-serverless`
 
-**Example**
+**examples**
 
 ```javascript
 {
@@ -349,7 +427,7 @@ The IAM role ARN to be used when logging failed message deliveries in Amazon Clo
 for a specific SNS topic in AWS.
 `<topic>` is the name (key) of the topic resource in the blueprint, not the topic name in AWS.
 
-**Type**
+**type**
 
 string
 
@@ -357,7 +435,7 @@ string
 
 `aws`, `aws-serverless`
 
-**Example**
+**examples**
 
 ```javascript
 {
@@ -375,7 +453,7 @@ string
 
 Indicates one of the supported protocols for Amazon SNS topics.
 
-**Type**
+**type**
 
 string
 
@@ -383,11 +461,11 @@ string
 
 `aws`, `aws-serverless`
 
-**Allowed Values**
+**allowed values**
 
 `http` | `https` | `sqs` | `lambda` | `firehose` | `application`
 
-**Example**
+**examples**
 
 ```javascript
 {
@@ -406,7 +484,7 @@ string
 Indicates one of the supported protocols for a specific Amazon SNS topic.
 `<topic>` is the name (key) of the topic resource in the blueprint, not the topic name in AWS.
 
-**Type**
+**type**
 
 string
 
@@ -414,11 +492,11 @@ string
 
 `aws`, `aws-serverless`
 
-**Allowed Values**
+**allowed values**
 
 `http` | `https` | `sqs` | `lambda` | `firehose` | `application`
 
-**Example**
+**examples**
 
 ```javascript
 {
@@ -436,7 +514,7 @@ string
 
 The IAM role ARN to be used when logging successful message deliveries in Amazon CloudWatch.
 
-**Type**
+**type**
 
 string
 
@@ -444,7 +522,7 @@ string
 
 `aws`, `aws-serverless`
 
-**Example**
+**examples**
 
 ```javascript
 {
@@ -464,7 +542,7 @@ The IAM role ARN to be used when logging successful message deliveries in Amazon
 for a specific SNS topic in AWS.
 `<topic>` is the name (key) of the topic resource in the blueprint, not the topic name in AWS.
 
-**Type**
+**type**
 
 string
 
@@ -472,7 +550,7 @@ string
 
 `aws`, `aws-serverless`
 
-**Example**
+**examples**
 
 ```javascript
 {
@@ -490,7 +568,7 @@ string
 
 The percentage of successful message deliveries to be logged in Amazon CloudWatch.
 
-**Type**
+**type**
 
 integer
 
@@ -498,15 +576,15 @@ integer
 
 `aws`, `aws-serverless`
 
-**Minimum Value**
+**minimum value**
 
 `0`
 
-**Maximum Value**
+**maximum value**
 
 `100`
 
-**Example**
+**examples**
 
 ```javascript
 {
@@ -526,7 +604,7 @@ The percentage of successful message deliveries to be logged in Amazon CloudWatc
 for a specific SNS topic in AWS.
 `<topic>` is the name (key) of the topic resource in the blueprint, not the topic name in AWS.
 
-**Type**
+**type**
 
 integer
 
@@ -534,15 +612,15 @@ integer
 
 `aws`, `aws-serverless`
 
-**Minimum Value**
+**minimum value**
 
 `0`
 
-**Maximum Value**
+**maximum value**
 
 `100`
 
-**Example**
+**examples**
 
 ```javascript
 {
@@ -565,7 +643,7 @@ integer
 The message retention period for Google Cloud Pub/Sub topics.
 You can disable message retention by setting this property to `disabled`.
 
-**Type**
+**type**
 
 string
 
@@ -573,19 +651,19 @@ string
 
 `gcloud`, `gcloud-serverless`
 
-**Default Value**
+**default value**
 
 `7d`
 
-**Minimum Value**
+**minimum value**
 
 `10m`
 
-**Maximum Value**
+**maximum value**
 
 `31d`
 
-**Example**
+**examples**
 
 ```javascript
 {
@@ -606,7 +684,7 @@ The message retention period for a specific Google Cloud Pub/Sub topic.
 
 You can disable message retention by setting this property to `disabled`.
 
-**Type**
+**type**
 
 string
 
@@ -614,19 +692,19 @@ string
 
 `gcloud`, `gcloud-serverless`
 
-**Default Value**
+**default value**
 
 `7d`
 
-**Minimum Value**
+**minimum value**
 
 `10m`
 
-**Maximum Value**
+**maximum value**
 
 `31d`
 
-**Example**
+**examples**
 
 ```javascript
 {
@@ -639,3 +717,17 @@ string
   }
 }
 ```
+
+## SDK Operations
+
+The Celerity SDKs provide a topic abstraction for publishing messages. The abstraction handles connection setup, serialisation and tracing context propagation transparently across target environments.
+
+For language-specific SDK documentation, see [Node.js Topic SDK](/docs/node-runtime/topic) and [Python Topic SDK](/docs/python-runtime/topic).
+
+### Core Operations
+
+- **`publish(message, options?)`** — Publish a message to the topic. The message is serialised as JSON. `options.deduplicationId` specifies a unique ID for FIFO deduplication. `options.groupId` specifies the message group for FIFO ordering.
+
+### Credentials Provider
+
+The credentials provider returns connection details for creating your own pub/sub client. This gives you access to the full capabilities of the underlying messaging service (message attributes, batch publishing, etc.) but means your application code may need changes if you switch target environments.

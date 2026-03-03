@@ -5,18 +5,920 @@ description: Celerity resource type for SQL databases
 
 **`celerity/sqlDatabase`**
 
-**Spec Version:** `v2026-02-27-draft`  
-**Ecosystem Compatibility:** v1 (Preview)
+**Spec Version:** `v2026-02-27-draft`
+**Ecosystem Compatibility:** v0 (Current) / v1 (Preview)
 
 **blueprint transform:** `celerity-2026-02-27-draft`
 
 <Callout title="Ecosystem Compatibility" type="info">
-- **v1 (Preview)**: Multi-cloud deployments with support for MySQL and Postgres databases.
+- **v0 (Current)**: AWS only, supporting Amazon RDS and Aurora Serverless v2 for PostgreSQL with built-in schema management.
+- **v1 (Preview)**: Multi-cloud, supporting Amazon RDS/Aurora, Google Cloud SQL and Azure SQL Database for PostgreSQL and MySQL.
 
 Read more about Celerity versions [here](/docs/framework/versions).
 </Callout>
 
-🚀 **Planned for v1** - Support for SQL databases is planned for v1, they may become available in a future v0 evolution.
+The `celerity/sqlDatabase` resource type defines a SQL database for a Celerity application. Celerity manages both the database infrastructure (provisioning, networking, access control) and the database schema (migrations, validation, exports) as a unified concern.
 
-The `celerity/sqlDatabase` resource type defines a SQL database for a Celerity application.
-A Celerity database supports MySQL and Postgres databases.
+For Celerity applications, using a SQL database provides:
+
+- **Relational data modelling**: SQL databases are well suited for data with complex relationships, constraints and referential integrity requirements.
+- **ACID transactions**: SQL databases provide strong transactional guarantees that are essential for financial, ordering and other business-critical data.
+- **Rich querying**: SQL provides a powerful, standardised query language for complex joins, aggregations and analytical queries.
+- **Schema management**: Celerity provides [built-in schema management](/docs/framework/applications/sql-database-schema-management) that tracks your database schema as code, handles migrations and provides a single source of truth for both development and data teams.
+
+## Specification
+
+The specification is the structure of the resource definition that comes under the `spec` field of the resource in a blueprint.
+The rest of this section lists fields that are available to configure the `celerity/sqlDatabase` resource followed by examples of different configurations for the resource and how the database behaves in target environments along with additional documentation.
+
+<Callout title="Feature Availability" type="info">
+- ✅ **Available in v0** - Features currently supported
+- 🔄 **Planned for v0** - Features coming in future v0 evolution
+- 🚀 **Planned for v1** - Features coming in v1 release
+</Callout>
+
+### engine (required)
+
+The SQL engine to use for the database. This determines the SQL dialect for schema management, DDL generation and escape hatch SQL validation.
+
+✅ **Available in v0** (PostgreSQL only)
+
+**type**
+
+string
+
+**allowed values**
+
+`postgres` | `mysql`
+
+| Value | Status |
+|---|---|
+| `postgres` | ✅ Available in v0 |
+| `mysql` | 🚀 Planned for v1 |
+
+### name
+
+A unique name for the database. If a name is not provided, a unique name will be generated based on the blueprint that the database is defined in.
+
+✅ **Available in v0**
+
+**type**
+
+string
+
+### schemaPath
+
+The path to a YAML schema definition file, relative to the blueprint file. When provided, Celerity manages the database schema through its [built-in schema management](/docs/framework/applications/sql-database-schema-management) system.
+
+The schema file defines the desired state of the database (tables, columns, indexes, constraints, extensions) in a declarative YAML format. Celerity's migration engine computes the difference between the current and desired state and generates the appropriate DDL to transition the database.
+
+✅ **Available in v0**
+
+**type**
+
+string
+
+**examples**
+
+`./schemas/orders.yaml`
+
+### migrationsPath
+
+The path to a directory containing escape hatch SQL files, relative to the blueprint file. These are versioned SQL scripts for operations that cannot be expressed in the schema YAML (data backfills, custom functions, triggers, complex multi-step alterations).
+
+Scripts follow the naming convention `V<number>__<description>.sql` and are executed in version order after auto-generated DDL changes.
+
+See [Escape Hatch SQL](/docs/framework/applications/sql-database-schema-management#escape-hatch-sql) for details.
+
+✅ **Available in v0**
+
+**type**
+
+string
+
+**examples**
+
+`./sql/orders-db`
+
+### readReplicas
+
+Whether to provision read replicas for the database. Read replicas provide horizontal read scaling by offloading read queries to replica instances.
+
+When enabled, the default SQL client automatically routes read operations to replicas and write operations to the primary instance. Developers using the credentials provider will receive separate primary and read endpoint configuration.
+
+The number of replicas, their placement and instance sizing are configured per-provider in the [app deploy configuration](#app-deploy-configuration).
+
+✅ **Available in v0**
+
+**type**
+
+boolean
+
+**default value**
+
+`false`
+
+## Annotations
+
+### celerity.sqlDatabase.allowDestructive
+
+When set to `true`, allows destructive schema changes (dropping tables, dropping columns) during deployment. Without this annotation, destructive changes will be blocked and the deployment will fail with a warning.
+
+This annotation is a safety mechanism to prevent accidental data loss. It should only be set when you explicitly intend to remove tables or columns.
+
+✅ **Available in v0**
+
+**type**
+
+boolean
+
+**default value**
+
+`false`
+
+## Outputs
+
+Outputs are computed values that are accessible via the `{resourceName}.spec.*` field accessor in a blueprint substitution.
+For example, if the resource name is `ordersDb`, the output would be accessible via `${ordersDb.spec.id}`.
+
+### id
+
+The ID of the created database in the target environment.
+
+✅ **Available in v0**
+
+**type**
+
+string
+
+**examples**
+
+`arn:aws:rds:us-east-1:123456789012:db:orders` (AWS)
+
+`projects/my-project/instances/orders` (Google Cloud)
+
+`my-server/orders` (Azure)
+
+### host
+
+The primary hostname or endpoint for the database, used for write operations and read operations when read replicas are not enabled. In serverless environments, this may be a connection proxy endpoint.
+
+✅ **Available in v0**
+
+**type**
+
+string
+
+### readHost
+
+The hostname or endpoint for read replica connections. Only present when `readReplicas` is enabled. This is the load-balanced reader endpoint provided by the cloud provider.
+
+When read replicas are not enabled, this output is not available — use `host` for all connections.
+
+✅ **Available in v0**
+
+**type**
+
+string
+
+### port
+
+The port number for the database connection.
+
+✅ **Available in v0**
+
+**type**
+
+number
+
+**default value**
+
+`5432` (PostgreSQL), `3306` (MySQL)
+
+### databaseName
+
+The name of the database.
+
+✅ **Available in v0**
+
+**type**
+
+string
+
+## Data Types
+
+The `celerity/sqlDatabase` resource type does not define custom data types in the blueprint specification. Database schemas are defined externally in [schema YAML files](/docs/framework/applications/sql-database-schema-management#schema-definition-format) referenced by the `schemaPath` field, using engine-native column types (e.g. `varchar(255)`, `integer`, `jsonb`, `timestamptz` for PostgreSQL).
+
+## Linked From
+
+### `celerity/handler`
+
+When a handler links to an SQL database, the handler will be configured with permissions and environment variables (or secret store entries) that enable it to connect to the database. The Celerity SDK provides a [credentials provider and optional connection factory](#sdk-operations) to simplify database access.
+
+For AWS serverless deployments, an RDS Proxy is automatically provisioned to manage connection pooling for Lambda functions, preventing connection exhaustion across concurrent invocations.
+
+✅ **Available in v0**
+
+[Read more about Celerity handlers](/docs/framework/applications/resources/celerity-handler)
+
+### `celerity/vpc`
+
+When a VPC links to an SQL database, the database will be placed within the VPC's private subnets. SQL databases require VPC placement for secure network access.
+
+✅ **Available in v0**
+
+[Read more about Celerity VPCs](/docs/framework/applications/resources/celerity-vpc)
+
+## Links To
+
+The `celerity/sqlDatabase` resource type does not link to other resources.
+
+## Examples
+
+### Minimal SQL Database
+
+```yaml
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
+resources:
+    ordersDb:
+        type: "celerity/sqlDatabase"
+        metadata:
+            displayName: "Orders Database"
+        spec:
+            engine: "postgres"
+            name: "orders"
+```
+
+### SQL Database with Schema Management
+
+```yaml
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
+resources:
+    ordersDb:
+        type: "celerity/sqlDatabase"
+        metadata:
+            displayName: "Orders Database"
+            labels:
+                application: "orders"
+        spec:
+            engine: "postgres"
+            name: "orders"
+            schemaPath: "./schemas/orders.yaml"
+            migrationsPath: "./sql/orders-db"
+```
+
+### SQL Database with Handler and VPC Links
+
+```yaml
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
+resources:
+    ordersVpc:
+        type: "celerity/vpc"
+        metadata:
+            displayName: "Orders VPC"
+            labels:
+                application: "orders"
+        linkSelector:
+            byLabel:
+                application: "orders"
+        spec:
+            preset: "standard"
+
+    ordersDb:
+        type: "celerity/sqlDatabase"
+        metadata:
+            displayName: "Orders Database"
+            labels:
+                application: "orders"
+        spec:
+            engine: "postgres"
+            name: "orders"
+            schemaPath: "./schemas/orders.yaml"
+            migrationsPath: "./sql/orders-db"
+
+    getOrderHandler:
+        type: "celerity/handler"
+        metadata:
+            displayName: "Get Order"
+            labels:
+                application: "orders"
+            annotations:
+                celerity.handler.http: true
+                celerity.handler.http.method: "GET"
+                celerity.handler.http.path: "/orders/{id}"
+        linkSelector:
+            byLabel:
+                application: "orders"
+        spec:
+            handler: "handlers.getOrder"
+            runtime: "nodejs22.x"
+
+    ordersApi:
+        type: "celerity/api"
+        metadata:
+            displayName: "Orders API"
+            labels:
+                application: "orders"
+        linkSelector:
+            byLabel:
+                application: "orders"
+        spec:
+            type: "http"
+            domain:
+                domainName: "api.example.com"
+                basePaths:
+                    - "/orders"
+```
+
+### SQL Database with Read Replicas
+
+```yaml
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
+resources:
+    ordersDb:
+        type: "celerity/sqlDatabase"
+        metadata:
+            displayName: "Orders Database"
+            labels:
+                application: "orders"
+        spec:
+            engine: "postgres"
+            name: "orders"
+            schemaPath: "./schemas/orders.yaml"
+            readReplicas: true
+```
+
+## Target Environments
+
+### Local Development
+
+✅ **Available in v0**
+
+When running `celerity dev run`, Celerity starts a local PostgreSQL container and manages the database lifecycle automatically:
+
+1. A PostgreSQL container is started (matching the `engine` in the spec)
+2. The full schema is applied from the schema YAML file
+3. Escape hatch SQL scripts are executed in version order
+4. Connection environment variables are injected into your handlers
+
+Local development is ephemeral by default — the database is recreated each time `celerity dev run` starts. For persistent local development (keeping data between restarts), you can opt in via the CLI configuration.
+
+When running `celerity dev test`, an isolated database instance is created per test suite with the schema applied from scratch, test fixtures loaded, and the database torn down after tests complete.
+
+### AWS
+
+✅ **Available in v0**
+
+SQL databases are provisioned in AWS using [Amazon RDS](https://aws.amazon.com/rds/) for PostgreSQL by default. Alternatively, [Aurora Serverless v2](#aws-aurora-serverless-v2-configuration-options) can be enabled in the deploy config for auto-scaling compute capacity.
+
+**Connection Pooling (automatic for Lambda handlers)**
+
+When a Lambda handler links to an SQL database, Celerity automatically manages connection pooling appropriate to the deployment model. For standalone RDS instances, an [Amazon RDS Proxy](https://aws.amazon.com/rds/proxy/) is provisioned to pool connections across concurrent Lambda invocations, preventing connection exhaustion. For Aurora Serverless v2, the cluster's built-in connection management is used instead. In both cases, the pooled endpoint is used as the connection host, transparent to your application code.
+
+**Networking**
+
+SQL databases are placed within the VPC's private subnets when linked to a `celerity/vpc` resource. Security groups are configured to allow traffic from Lambda functions (or ECS/EKS tasks in container deployments) to the database port.
+
+**Schema Management**
+
+During `celerity deploy`, the deploy pipeline includes a schema migration phase:
+1. Infrastructure is deployed (RDS instance created/updated)
+2. The database is verified as reachable
+3. The schema migration engine computes and applies changes
+4. Handler resources are deployed with connection configuration
+
+See [Schema Management](/docs/framework/applications/sql-database-schema-management) for the full deploy pipeline.
+
+The [app deploy configuration](#app-deploy-configuration) can be used to configure the database with Amazon RDS specific settings such as instance class, storage allocation and backup retention.
+
+**Read Replicas**
+
+When `readReplicas` is enabled, Celerity provisions Amazon RDS read replicas for horizontal read scaling. Same-region replicas default to 1 and can be configured via `aws.rds.<dbName>.readReplicas.count` in the deploy config. A single RDS reader endpoint is exposed, which load-balances read connections across all available replicas. The reader endpoint is surfaced as the `readHost` output and through the SDK credentials provider.
+
+For cross-region read scaling, `aws.rds.<dbName>.readReplicas.regions` provisions one replica per listed region in addition to the same-region replicas. Cross-region replicas use asynchronous replication and are useful for reducing read latency for globally distributed applications.
+
+Read replicas are independent of the `multiAz` setting, which protects the **primary** instance with a synchronous standby for automatic failover. A typical production configuration might enable both: `multiAz` for primary high availability and `readReplicas` for read scaling.
+
+**Aurora Serverless v2**
+
+When `aws.aurora.<dbName>.enabled` is set to `true` in the deploy config, Celerity provisions an [Aurora Serverless v2](https://aws.amazon.com/rds/aurora/serverless/) cluster instead of a standalone RDS instance. Aurora Serverless v2 automatically scales compute capacity between the configured minimum and maximum ACUs based on demand — there are no instance classes to manage.
+
+Aurora Serverless v2 is inherently multi-AZ; the cluster automatically spans multiple availability zones without additional configuration. Storage is managed by Aurora's distributed storage layer, which automatically scales up to 128 TiB.
+
+When `readReplicas` is enabled with Aurora, Celerity provisions Aurora reader instances within the cluster. Reader instances share the same storage volume as the writer (no replication lag for storage) and can be configured with independent ACU ranges via `aws.aurora.<dbName>.reader.minACU` and `aws.aurora.<dbName>.reader.maxACU`. For cross-region read scaling, `aws.rds.<dbName>.readReplicas.regions` provisions replicas via Aurora Global Database.
+
+### Google Cloud
+
+🚀 **Planned for v1** - The Google Cloud deployment target is planned for v1, it may become available in a future v0 evolution.
+
+SQL databases will be provisioned using [Google Cloud SQL](https://cloud.google.com/sql) for PostgreSQL and MySQL.
+
+### Azure
+
+🚀 **Planned for v1** - The Azure deployment target is planned for v1, it may become available in a future v0 evolution.
+
+SQL databases will be provisioned using [Azure Database](https://azure.microsoft.com/en-us/products/azure-sql/) for PostgreSQL and MySQL.
+
+## App Deploy Configuration
+
+Configuration specific to a target environment can be defined for `celerity/sqlDatabase` resources in the [app deploy configuration](/docs/cli/app-deploy-configuration) file.
+
+This section lists the configuration options that can be set in the `deployTarget.config` object in the app deploy configuration file.
+
+### AWS Configuration Options
+
+✅ **Available in v0**
+
+#### aws.rds.\<dbName\>.instanceClass
+
+The RDS instance class to use for the database. This determines the compute and memory capacity of the database instance. Not applicable when [Aurora Serverless v2](#aws-aurora-serverless-v2-configuration-options) is enabled — use ACU configuration instead.
+`dbName` is the name (key) of the SQL database resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+string
+
+**default value**
+
+`db.t3.micro`
+
+**examples**
+
+```javascript
+{
+    "deployTarget": {
+        "name": "aws-serverless",
+        "appEnv": "production",
+        "config": {
+            "aws.rds.ordersDb.instanceClass": "db.r6g.large"
+        }
+    }
+}
+```
+
+#### aws.rds.\<dbName\>.allocatedStorage
+
+The amount of storage in GB to allocate for the database instance. Not applicable when [Aurora Serverless v2](#aws-aurora-serverless-v2-configuration-options) is enabled — Aurora automatically manages storage.
+`dbName` is the name (key) of the SQL database resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+number
+
+**default value**
+
+`20`
+
+**examples**
+
+```javascript
+{
+    "deployTarget": {
+        "name": "aws-serverless",
+        "appEnv": "production",
+        "config": {
+            "aws.rds.ordersDb.allocatedStorage": 100
+        }
+    }
+}
+```
+
+#### aws.rds.\<dbName\>.engineVersion
+
+The PostgreSQL engine version to use for the database instance.
+`dbName` is the name (key) of the SQL database resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+string
+
+**default value**
+
+`17`
+
+**examples**
+
+```javascript
+{
+    "deployTarget": {
+        "name": "aws-serverless",
+        "appEnv": "production",
+        "config": {
+            "aws.rds.ordersDb.engineVersion": "16.4"
+        }
+    }
+}
+```
+
+#### aws.rds.\<dbName\>.multiAz
+
+Whether to deploy the **primary** database instance across multiple availability zones for high availability. When enabled, AWS provisions a synchronous standby replica in a different AZ that automatically takes over if the primary fails. This is a high-availability mechanism — the standby does not serve read traffic. Not applicable when [Aurora Serverless v2](#aws-aurora-serverless-v2-configuration-options) is enabled — Aurora is inherently multi-AZ.
+
+Multi-AZ and `readReplicas` are complementary: multi-AZ protects the primary against AZ-level failures, while read replicas provide horizontal read scaling. When both are enabled, the primary is multi-AZ and read replicas are provisioned separately.
+
+`dbName` is the name (key) of the SQL database resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+boolean
+
+**default value**
+
+`false`
+
+**examples**
+
+```javascript
+{
+    "deployTarget": {
+        "name": "aws-serverless",
+        "appEnv": "production",
+        "config": {
+            "aws.rds.ordersDb.multiAz": true
+        }
+    }
+}
+```
+
+#### aws.rds.\<dbName\>.storageType
+
+The storage type to use for the database instance. Not applicable when [Aurora Serverless v2](#aws-aurora-serverless-v2-configuration-options) is enabled — Aurora uses its own distributed storage layer.
+`dbName` is the name (key) of the SQL database resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+string
+
+**allowed values**
+
+`gp2` | `gp3` | `io1` | `io2`
+
+**default value**
+
+`gp3`
+
+**examples**
+
+```javascript
+{
+    "deployTarget": {
+        "name": "aws-serverless",
+        "appEnv": "production",
+        "config": {
+            "aws.rds.ordersDb.storageType": "io1"
+        }
+    }
+}
+```
+
+#### aws.rds.\<dbName\>.backupRetentionPeriod
+
+The number of days to retain automated backups of the database instance.
+`dbName` is the name (key) of the SQL database resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+number
+
+**default value**
+
+`7`
+
+**examples**
+
+```javascript
+{
+    "deployTarget": {
+        "name": "aws-serverless",
+        "appEnv": "production",
+        "config": {
+            "aws.rds.ordersDb.backupRetentionPeriod": 30
+        }
+    }
+}
+```
+
+#### aws.rds.\<dbName\>.readReplicas.count
+
+The number of read replicas to provision. Only applicable when `readReplicas` is enabled in the spec.
+`dbName` is the name (key) of the SQL database resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+number
+
+**default value**
+
+`1`
+
+**examples**
+
+```javascript
+{
+    "deployTarget": {
+        "name": "aws-serverless",
+        "appEnv": "production",
+        "config": {
+            "aws.rds.ordersDb.readReplicas.count": 3
+        }
+    }
+}
+```
+
+#### aws.rds.\<dbName\>.readReplicas.instanceClass
+
+The RDS instance class to use for read replica instances. If not specified, replicas use the same instance class as the primary. Not applicable when [Aurora Serverless v2](#aws-aurora-serverless-v2-configuration-options) is enabled — use `aws.aurora.<dbName>.reader.minACU` and `maxACU` instead.
+`dbName` is the name (key) of the SQL database resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+string
+
+**default value**
+
+Same as `aws.rds.<dbName>.instanceClass`
+
+#### aws.rds.\<dbName\>.readReplicas.storageType
+
+The storage type to use for read replica instances. If not specified, replicas use the same storage type as the primary. Not applicable when [Aurora Serverless v2](#aws-aurora-serverless-v2-configuration-options) is enabled — Aurora readers share the cluster storage volume.
+`dbName` is the name (key) of the SQL database resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+string
+
+**allowed values**
+
+`gp2` | `gp3` | `io1` | `io2`
+
+**default value**
+
+Same as `aws.rds.<dbName>.storageType`
+
+#### aws.rds.\<dbName\>.readReplicas.regions
+
+A list of AWS regions in which to provision cross-region read replicas. One replica is created per region listed. Cross-region replicas are in addition to the same-region replicas specified by `readReplicas.count`.
+`dbName` is the name (key) of the SQL database resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+string[]
+
+**default value**
+
+`[]` (no cross-region replicas)
+
+**examples**
+
+The following example configures a production database with multi-AZ for primary high availability, 2 same-region read replicas for read scaling, and cross-region replicas in Europe and Asia Pacific:
+
+```javascript
+{
+    "deployTarget": {
+        "name": "aws-serverless",
+        "appEnv": "production",
+        "config": {
+            "aws.rds.ordersDb.multiAz": true,
+            "aws.rds.ordersDb.readReplicas.count": 2,
+            "aws.rds.ordersDb.readReplicas.regions": ["eu-west-1", "ap-southeast-1"]
+        }
+    }
+}
+```
+
+### AWS Aurora Serverless v2 Configuration Options
+
+✅ **Available in v0**
+
+When Aurora Serverless v2 is enabled, the database is provisioned as an [Amazon Aurora Serverless v2](https://aws.amazon.com/rds/aurora/serverless/) cluster instead of a standalone RDS instance. Aurora Serverless v2 auto-scales compute capacity based on demand, making it well suited for serverless application deployments with variable or unpredictable workloads.
+
+<Callout title="Incompatible RDS Options" type="warn">
+The following `aws.rds.*` options are **not applicable** when Aurora Serverless v2 is enabled and will be ignored:
+- `aws.rds.<dbName>.instanceClass` — Aurora uses ACUs (Aurora Capacity Units) instead of instance classes
+- `aws.rds.<dbName>.allocatedStorage` — Aurora automatically manages storage
+- `aws.rds.<dbName>.storageType` — Aurora uses its own distributed storage layer
+- `aws.rds.<dbName>.multiAz` — Aurora Serverless v2 is inherently multi-AZ; the cluster automatically spans multiple availability zones
+- `aws.rds.<dbName>.readReplicas.instanceClass` — Aurora reader instances use ACUs, not instance classes
+- `aws.rds.<dbName>.readReplicas.storageType` — Aurora readers share the cluster storage volume
+
+The following `aws.rds.*` options **remain applicable**:
+- `aws.rds.<dbName>.engineVersion` — Aurora PostgreSQL version
+- `aws.rds.<dbName>.backupRetentionPeriod` — Backup retention period
+- `aws.rds.<dbName>.readReplicas.count` — Number of Aurora reader instances
+- `aws.rds.<dbName>.readReplicas.regions` — Cross-region replicas via Aurora Global Database
+</Callout>
+
+#### aws.aurora.\<dbName\>.enabled
+
+Whether to use Aurora Serverless v2 instead of a standalone RDS instance. When enabled, Celerity provisions an Aurora Serverless v2 cluster with auto-scaling compute capacity.
+`dbName` is the name (key) of the SQL database resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+boolean
+
+**default value**
+
+`false`
+
+#### aws.aurora.\<dbName\>.minACU
+
+The minimum Aurora Capacity Units (ACUs) for the writer instance. Each ACU provides approximately 2 GiB of memory. Aurora Serverless v2 scales down to this value during periods of low demand.
+`dbName` is the name (key) of the SQL database resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+number
+
+**allowed values**
+
+`0.5` to `128` (in increments of `0.5`)
+
+**default value**
+
+`0.5`
+
+#### aws.aurora.\<dbName\>.maxACU
+
+The maximum Aurora Capacity Units (ACUs) for the writer instance. Aurora Serverless v2 scales up to this value during periods of high demand.
+`dbName` is the name (key) of the SQL database resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+number
+
+**allowed values**
+
+`1` to `128` (in increments of `0.5`)
+
+**default value**
+
+`8`
+
+#### aws.aurora.\<dbName\>.reader.minACU
+
+The minimum ACUs for Aurora reader instances. Only applicable when `readReplicas` is enabled in the spec. If not specified, readers use the same minimum as the writer.
+`dbName` is the name (key) of the SQL database resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+number
+
+**allowed values**
+
+`0.5` to `128` (in increments of `0.5`)
+
+**default value**
+
+Same as `aws.aurora.<dbName>.minACU`
+
+#### aws.aurora.\<dbName\>.reader.maxACU
+
+The maximum ACUs for Aurora reader instances. Only applicable when `readReplicas` is enabled in the spec. If not specified, readers use the same maximum as the writer.
+`dbName` is the name (key) of the SQL database resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+number
+
+**allowed values**
+
+`1` to `128` (in increments of `0.5`)
+
+**default value**
+
+Same as `aws.aurora.<dbName>.maxACU`
+
+**examples**
+
+The following example configures an Aurora Serverless v2 database with read replicas, where the writer scales between 0.5 and 16 ACUs and readers scale between 0.5 and 8 ACUs:
+
+```javascript
+{
+    "deployTarget": {
+        "name": "aws-serverless",
+        "appEnv": "production",
+        "config": {
+            "aws.aurora.ordersDb.enabled": true,
+            "aws.aurora.ordersDb.minACU": 0.5,
+            "aws.aurora.ordersDb.maxACU": 16,
+            "aws.aurora.ordersDb.reader.minACU": 0.5,
+            "aws.aurora.ordersDb.reader.maxACU": 8,
+            "aws.rds.ordersDb.readReplicas.count": 2
+        }
+    }
+}
+```
+
+### Google Cloud Configuration Options
+
+🚀 **Planned for v1** - The Google Cloud deployment targets are planned for v1, they may become available in a future v0 evolution.
+
+### Azure Configuration Options
+
+🚀 **Planned for v1** - The Azure deployment targets are planned for v1, they may become available in a future v0 evolution.
+
+## SDK Operations
+
+The Celerity SDKs provide a pre-configured SQL client for each language runtime with connection pool management tuned for the current deployment target and credentials derived automatically from the environment. Developers can opt out and use the credentials provider to set up whichever library or ORM they prefer.
+
+For language-specific SDK documentation, see [Node.js SQL Database SDK](/docs/node-runtime/sql-database) and [Python SQL Database SDK](/docs/python-runtime/sql-database).
+
+### Default SQL Client
+
+Each language runtime ships with a default SQL client library, pre-configured with connection pooling appropriate to the deployment target — conservative for serverless environments and standard for containerised deployments. Credentials are derived by the SDK from the environment (config store, secrets, environment variables) with no manual setup required.
+
+When read replicas are enabled, the default SQL client automatically routes read queries to the read endpoint and write queries to the primary endpoint.
+
+### Credentials Provider
+
+Developers who prefer to use their own SQL library or ORM can use the credentials provider instead. It returns a structured connection configuration object abstracting away internal environment variable naming conventions and config store lookups.
+
+The configuration object contains:
+- **`host`** — Primary endpoint for write operations (and reads when replicas are not enabled)
+- **`readHost`** — Read replica endpoint (only present when `readReplicas` is enabled)
+- **`port`** — Database port
+- **`database`** — Database name
+- **`user`** — Database user
+- **`password`** — Database password
+- **`url`** — Full connection URL for the primary endpoint
+- **`readUrl`** — Full connection URL for the read endpoint (only present when `readReplicas` is enabled)
+
+## Schema Management
+
+Celerity provides a built-in schema management system for SQL databases that makes database schemas a first-class concern. Schema definitions are written in declarative YAML, and Celerity's migration engine handles the imperative transitions between states.
+
+Key capabilities include:
+- **Declarative schema definition** in YAML with engine-native column types
+- **Imperative migration engine** that generates safe DDL transitions
+- **Escape hatch SQL** for operations that cannot be auto-generated
+- **Schema validation and diff** before deployment
+- **Type generation** for TypeScript and Python from schema definitions
+- **Schema contracts** for cross-team dependency tracking
+- **Schema exports** in multiple formats (SQL DDL, markdown, JSON Schema, Mermaid ERD)
+
+[Read more about SQL Database Schema Management](/docs/framework/applications/sql-database-schema-management)

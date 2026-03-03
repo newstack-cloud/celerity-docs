@@ -1,0 +1,694 @@
+---
+title: SQL Database Schema Management
+description: Managing SQL database schemas with Celerity
+---
+
+Celerity makes database schemas a first-class concern, bridging the gap between development and data teams by providing a single source of truth for database structure. Instead of managing migrations separately from your application infrastructure, Celerity integrates schema management directly into the development and deployment lifecycle.
+
+<Callout title="NoSQL Datastores" type="info">
+This page covers schema management for SQL databases (`celerity/sqlDatabase`). For NoSQL data stores (`celerity/datastore`), see [NoSQL Datastore Schema Management](/docs/framework/applications/nosql-datastore-schema-management).
+</Callout>
+
+<Callout title="Feature Availability" type="info">
+- ✅ **Available in v0** - Features currently supported
+- 🔄 **Planned for v0** - Features coming in future v0 evolution
+- 🚀 **Planned for v1** - Features coming in v1 release
+</Callout>
+
+## How It Works
+
+Schema definitions are declarative YAML files that describe the desired state of your database. Celerity's migration engine computes the difference between the current state and the desired state, then generates an imperative sequence of SQL statements to transition the database safely.
+
+```
+Schema YAML (desired state) ──► Migration Engine ──► DDL Statements ──► Database
+                                      ▲
+                              Current state from
+                              previous deployment
+```
+
+This approach gives you the benefits of declarative schema definition (readable, diffable, version-controlled) with the safety of imperative migrations (ordered operations, data-aware transitions, escape hatches for complex cases).
+
+## Schema Definition Format
+
+### Project File Structure
+
+✅ **Available in v0**
+
+A typical Celerity project with schema management follows this structure:
+
+```
+my-app/
+├── .celerity/                       # Generated only (merged blueprint, compose, logs)
+├── app.blueprint.yaml               # Main blueprint — references schema files
+├── app.deploy.jsonc                  # Deploy target config
+├── config/
+│   ├── local/                       # Plaintext app config for local development
+│   └── test/                        # Plaintext app config for testing
+├── secrets/
+│   ├── local/                       # Secrets for local development
+│   └── test/                        # Secrets for testing
+├── seed/
+│   ├── local/                       # Seed data for local development
+│   └── test/                        # Seed data for testing
+├── schema-contracts.yaml            # Data team dependency contracts (optional)
+├── schemas/
+│   ├── orders.yaml                  # SQL schema for ordersDb resource
+│   ├── analytics.yaml               # SQL schema for analyticsDb resource
+│   └── user-store.yaml              # NoSQL schema for userStore resource (if applicable)
+├── sql/
+│   └── orders-db/                   # Escape hatch SQL (per SQL database resource)
+│       ├── V001__seed_lookup_data.sql
+│       └── V002__add_audit_trigger.sql
+├── scripts/
+│   └── user-store/                  # Escape hatch data scripts (per NoSQL datastore, if applicable)
+│       └── V001__backfill_status.py
+├── src/
+│   └── ...
+└── generated/                       # Optional: codegen output
+    └── ...
+```
+
+<Callout title="SQL and NoSQL schemas coexist" type="info">
+A single project can contain both SQL database and NoSQL datastore schema files. They share the same `schemas/` directory and the same `schema-contracts.yaml` file. See [NoSQL Datastore Schema Management](/docs/framework/applications/nosql-datastore-schema-management) for the NoSQL schema format.
+</Callout>
+
+The blueprint references schema files via the `schemaPath` field on `celerity/sqlDatabase` resources:
+
+```yaml
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
+
+resources:
+  ordersDb:
+    type: "celerity/sqlDatabase"
+    metadata:
+      displayName: "Orders Database"
+      labels:
+        application: "orders"
+    spec:
+      engine: "postgres"
+      name: "orders"
+      schemaPath: "./schemas/orders.yaml"
+      migrationsPath: "./sql/orders-db"
+```
+
+### Schema YAML Format
+
+✅ **Available in v0**
+
+Schema files define the desired state of a database using engine-native column types. One schema file per `celerity/sqlDatabase` resource. The example below uses PostgreSQL types and functions — a MySQL schema would use MySQL-native equivalents (e.g. `char(36)` instead of `uuid`, `json` instead of `jsonb`, `datetime` instead of `timestamptz`, `uuid()` instead of `gen_random_uuid()`).
+
+```yaml
+# schemas/orders.yaml
+tables:
+  customers:
+    description: "Customer accounts. One row per registered customer."
+    owner: "orders-team"
+    tags: ["pii", "core-entity"]
+    columns:
+      id:
+        type: "uuid"
+        primaryKey: true
+        default: "gen_random_uuid()"
+        description: "Unique customer identifier"
+      email:
+        type: "varchar(255)"
+        nullable: false
+        unique: true
+        description: "Customer email. Used for login and notifications."
+        classification: "pii"
+      name:
+        type: "varchar(255)"
+        nullable: false
+        description: "Display name"
+        classification: "pii"
+      tier:
+        type: "varchar(20)"
+        nullable: false
+        default: "'free'"
+        description: "Subscription tier. One of: free, pro, enterprise."
+      created_at:
+        type: "timestamptz"
+        nullable: false
+        default: "now()"
+        description: "Account creation timestamp (UTC)"
+    indexes:
+      - name: "idx_customers_email"
+        columns: ["email"]
+        unique: true
+      - name: "idx_customers_tier"
+        columns: ["tier"]
+
+  orders:
+    description: "Customer orders. Immutable after creation — updates go to order_events."
+    owner: "orders-team"
+    tags: ["financial", "core-entity"]
+    columns:
+      id:
+        type: "uuid"
+        primaryKey: true
+        default: "gen_random_uuid()"
+        description: "Unique order identifier"
+      customer_id:
+        type: "uuid"
+        nullable: false
+        description: "Purchasing customer"
+        references:
+          table: "customers"
+          column: "id"
+          onDelete: "cascade"
+      status:
+        type: "varchar(50)"
+        nullable: false
+        default: "'pending'"
+        description: "Order lifecycle status: pending → confirmed → shipped → delivered | cancelled"
+      total_cents:
+        type: "integer"
+        nullable: false
+        description: "Order total in USD cents. Always >= 0."
+        tags: ["financial-metric"]
+      line_items:
+        type: "jsonb"
+        nullable: false
+        default: "'[]'::jsonb"
+        description: "Array of {product_id, quantity, unit_price_cents}"
+      created_at:
+        type: "timestamptz"
+        nullable: false
+        default: "now()"
+      updated_at:
+        type: "timestamptz"
+        nullable: false
+        default: "now()"
+    indexes:
+      - name: "idx_orders_customer"
+        columns: ["customer_id"]
+      - name: "idx_orders_status_created"
+        columns: ["status", "created_at"]
+      - name: "idx_orders_line_items"
+        columns: ["line_items"]
+        type: "gin"
+    constraints:
+      - type: "check"
+        name: "chk_orders_total_positive"
+        expression: "total_cents >= 0"
+
+extensions:
+  - "uuid-ossp"
+```
+
+### Column Types
+
+Column types are **engine-native strings** — there is no abstraction across PostgreSQL and MySQL. The `engine` field in the blueprint locks the dialect, so you use the exact types your database supports.
+
+For PostgreSQL, common types include: `varchar(n)`, `text`, `integer`, `bigint`, `boolean`, `uuid`, `jsonb`, `timestamptz`, `numeric(p,s)`, `bytea`, `interval`, `cidr`, `inet`.
+
+For MySQL, common types include: `varchar(n)`, `text`, `int`, `bigint`, `boolean`, `char(36)`, `json`, `datetime`, `timestamp`, `decimal(p,s)`, `blob`, `enum(...)`, `set(...)`. 🚀 MySQL support is planned for v1.
+
+### Indexes
+
+Indexes are defined at the table level with a `name`, `columns` list and optional `type` and `unique` fields.
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | string | Index name (must be unique within the database) |
+| `columns` | array[string] | Columns included in the index |
+| `type` | string | Index type. Defaults to `btree`. PostgreSQL supports `btree`, `gin`, `gist`, `hash`. MySQL supports `btree`, `hash`, `fulltext`, `spatial`. |
+| `unique` | boolean | Whether the index enforces uniqueness. Defaults to `false`. |
+
+### Foreign Keys
+
+Foreign keys are defined inline on columns using the `references` field:
+
+```yaml
+customer_id:
+  type: "uuid"
+  nullable: false
+  references:
+    table: "customers"
+    column: "id"
+    onDelete: "cascade"   # cascade | restrict | set null | set default | no action
+```
+
+### Constraints
+
+Table-level constraints beyond foreign keys:
+
+```yaml
+constraints:
+  - type: "check"
+    name: "chk_orders_total_positive"
+    expression: "total_cents >= 0"
+```
+
+### Extensions
+
+Extensions that should be enabled in the database. This is primarily a PostgreSQL feature — PostgreSQL supports extensions like `uuid-ossp`, `pg_trgm`, `pgcrypto`, etc. MySQL does not have an equivalent extension system; this field is ignored for MySQL databases.
+
+```yaml
+# PostgreSQL example
+extensions:
+  - "uuid-ossp"
+  - "pg_trgm"
+```
+
+### Rich Metadata
+
+The following fields have no effect on DDL — they exist for documentation, data governance and tooling:
+
+| Field | Applies to | Description |
+|---|---|---|
+| `description` | Tables, Columns | Human-readable description of the table or column |
+| `owner` | Tables | Team or individual that owns the table |
+| `tags` | Tables, Columns | Arbitrary tags for categorisation (e.g. `pii`, `financial`, `core-entity`) |
+| `classification` | Columns | Data classification label (e.g. `pii`, `sensitive`, `public`) |
+
+These fields make the schema YAML self-documenting for data team consumption. They are included in [schema exports](/docs/cli/reference#export) and used by [schema contracts](#schema-contracts) for dependency tracking.
+
+## Migration Engine
+
+✅ **Available in v0** (PostgreSQL) · 🚀 MySQL support planned for v1
+
+### Declarative State, Imperative Transitions
+
+The schema YAML is declarative — it describes the desired end state. The migration engine computes the imperative transition from current state to desired state as an ordered sequence of DDL statements.
+
+**Example: making a column NOT NULL with a default**
+
+Schema change:
+```yaml
+# Before
+status:
+  type: "varchar(50)"
+  nullable: true
+
+# After
+status:
+  type: "varchar(50)"
+  nullable: false
+  default: "'active'"
+```
+
+Generated migration plan:
+```sql
+-- Step 1: Set default for new rows
+ALTER TABLE orders ALTER COLUMN status SET DEFAULT 'active';
+
+-- Step 2: Backfill existing NULL values
+UPDATE orders SET status = 'active' WHERE status IS NULL;
+
+-- Step 3: Apply NOT NULL constraint
+ALTER TABLE orders ALTER COLUMN status SET NOT NULL;
+```
+
+The migration engine knows common transition patterns and generates the correct imperative sequence automatically.
+
+### Transition Patterns
+
+| Transition | Generated Steps |
+|---|---|
+| Add nullable column | `ALTER TABLE ADD COLUMN` |
+| Add NOT NULL column with default | `ALTER TABLE ADD COLUMN ... DEFAULT ... NOT NULL` |
+| Make column NOT NULL (was nullable) | `UPDATE SET default WHERE NULL` → `ALTER SET NOT NULL` |
+| Make column nullable (was NOT NULL) | `ALTER DROP NOT NULL` |
+| Change column type (compatible) | `ALTER COLUMN TYPE ... USING` (PostgreSQL) / `MODIFY COLUMN` (MySQL) |
+| Change column type (incompatible) | **Warning** — requires escape hatch |
+| Add index | `CREATE INDEX CONCURRENTLY` (PostgreSQL) / `CREATE INDEX` (MySQL) |
+| Drop index | `DROP INDEX CONCURRENTLY` (PostgreSQL) / `DROP INDEX` (MySQL) |
+| Add foreign key | `ALTER TABLE ADD CONSTRAINT ... FOREIGN KEY` |
+| Add table | `CREATE TABLE` |
+| Drop table | Requires `celerity.sqlDatabase.allowDestructive: true` |
+| Drop column | Requires `celerity.sqlDatabase.allowDestructive: true` |
+| Rename column | **Warning** — requires escape hatch (ambiguous intent) |
+
+### Escape Hatch SQL
+
+✅ **Available in v0**
+
+Versioned SQL files for operations that cannot be expressed in the schema YAML. These live in the directory specified by `migrationsPath` on the `celerity/sqlDatabase` resource.
+
+#### File Naming Convention
+
+```
+V<number>__<description>.sql
+```
+
+Examples:
+- `V001__seed_lookup_data.sql`
+- `V002__add_audit_trigger.sql`
+- `V003__backfill_customer_names.sql`
+
+#### Execution Model
+
+1. Declarative schema changes (from YAML diff) run **first** — table creates, column adds, index changes
+2. Escape hatch scripts run **after**, in version order
+3. Each script is tracked by `name + content_hash` and runs only once
+4. Scripts are embedded into the resource spec by the transformer, so changes to scripts are detected during deployment
+
+#### Use Cases
+
+- Data backfills (`UPDATE orders SET tier = 'free' WHERE tier IS NULL`)
+- Custom functions or triggers that cannot be expressed in YAML
+- Extension setup beyond simple `CREATE EXTENSION`
+- Complex multi-step ALTER operations where ordering matters
+
+#### Two-Phase Migrations
+
+For cases where escape hatch SQL must run between auto-generated steps (e.g. backfill data before applying a NOT NULL constraint):
+
+1. First deploy: keep the column nullable in the schema YAML, deploy with the escape hatch script that backfills data
+2. Second deploy: change the column to NOT NULL in the schema YAML
+
+This is explicit and safe — each deploy is a complete, valid transition.
+
+### Safety
+
+- **Destructive changes blocked by default**: Dropping tables or columns requires the `celerity.sqlDatabase.allowDestructive: true` annotation on the resource
+- **Escape hatch scripts visible in diff**: All pending scripts are shown in `celerity schema diff` output for review
+- **Changeset review**: The deploy pipeline shows the full migration plan before execution
+
+## Deploy Pipeline Integration
+
+✅ **Available in v0**
+
+Schema management is integrated into the `celerity deploy` pipeline:
+
+```
+celerity deploy
+  │
+  ├─ Phase 1: Infrastructure
+  │   Transformer converts celerity/sqlDatabase → AWS RDS instance
+  │   Provider deploys database server infrastructure
+  │   Database verified as reachable
+  │
+  ├─ Phase 2: Schema Migration
+  │   Connect to database directly
+  │   Generate imperative migration plan from diff
+  │   Display plan and prompt for confirmation
+  │   Execute migration (auto-generated DDL + escape hatch scripts)
+  │   Write updated schema state
+  │
+  └─ Phase 3: Application
+      Deploy handler resources with database connection configuration
+      Handlers start against the migrated database
+```
+
+<Callout title="Contract validation in v0" type="info">
+In v0, contract validation is not built into the deploy pipeline. Use `celerity schema validate` in your CI pipeline to catch contract violations before deployment — see [Schema Contracts](#schema-contracts) for details.
+
+Deploy-time contract enforcement (blocking deploys and dispatching webhook notifications automatically) is projected as a paid tier feature for a future release after v1 (post-March 2027).
+</Callout>
+
+## Local Development
+
+✅ **Available in v0**
+
+### Running Locally
+
+When `celerity dev run` starts an application with SQL database resources:
+
+1. A local PostgreSQL or MySQL container is started based on `engine` in the spec, **_only PostgreSQL is supported in v0_**
+2. The full schema is applied from scratch (local dev is ephemeral by default)
+3. Escape hatch SQL scripts are executed in version order
+4. Connection environment variables are injected, pointing to the local container
+5. The runtime starts and handlers receive connection configuration
+
+For **persistent local development** (opt-in): diff-based migration is used instead of full recreate, preserving data between restarts.
+
+### Testing
+
+When `celerity dev test` runs an application with SQL database resources:
+
+1. An isolated database instance is created per test suite
+2. The schema is applied from scratch
+3. Test fixtures are loaded
+4. Tests run against the fully-schema'd database
+5. The database is torn down after tests complete
+
+## CLI Commands
+
+✅ **Available in v0**
+
+The `celerity schema` command group provides all the tools for working with database schemas. For full command reference including all flags and configuration options, see the [CLI Reference — schema](/docs/cli/reference#schema).
+
+| Command | Description |
+|---|---|
+| [`celerity schema diff`](/docs/cli/reference#diff-1) | Show migration plan and contract impact without applying |
+| [`celerity schema apply`](/docs/cli/reference#apply) | Apply migrations outside of a full deployment |
+| [`celerity schema validate`](/docs/cli/reference#validate-1) | Validate schema files, foreign keys, escape hatch SQL, contracts and optionally codegen freshness |
+| [`celerity schema export`](/docs/cli/reference#export) | Export schema as SQL DDL, markdown, JSON Schema or Mermaid ERD |
+| [`celerity schema codegen`](/docs/cli/reference#codegen) | Generate type-safe code from schema definitions |
+| [`celerity schema show`](/docs/cli/reference#show) | Show currently deployed schema for a given environment |
+| [`celerity schema history`](/docs/cli/reference#history) | Show schema change history for a given environment |
+
+### Example: `celerity schema diff`
+
+The diff output displays the engine alongside the database name (e.g. `postgres: orders` or `mysql: orders`). The generated DDL uses engine-appropriate syntax.
+
+```
+$ celerity schema diff
+
+ordersDb (postgres: orders):
+  Auto-generated:
+    [1] ALTER TABLE customers ADD COLUMN tier varchar(20) NOT NULL DEFAULT 'free';
+    [2] CREATE INDEX CONCURRENTLY idx_customers_tier ON customers (tier);
+
+  Escape hatch (pending):
+    [3] V003__backfill_customer_names.sql (new, not yet applied)
+
+  Contracts:
+    ⛔ revenue-pipeline — orders table changed (blocking)
+    ⚠ customer-analytics — customers table changed (notify)
+
+  Warnings:
+    - Column 'users.name' removed and 'users.first_name' + 'users.last_name' added.
+      This looks like a column split. Write an escape hatch script to handle data migration.
+      Auto-generated DDL will NOT drop 'users.name' until you confirm with:
+        celerity.sqlDatabase.allowDestructive: true
+
+  Apply with: celerity schema apply
+```
+
+## Type Generation
+
+✅ **Available in v0** (TypeScript, Python)
+
+Generate types from the schema YAML — TypeScript interfaces or Python Pydantic models representing table rows, plus column name constants. No ORM coupling — combine with whatever library you prefer.
+
+For SDK usage examples with generated types, see the [Node.js SQL Database SDK](/docs/node-runtime/sql-database) and [Python SQL Database SDK](/docs/python-runtime/sql-database) documentation.
+
+### TypeScript
+
+```bash
+celerity schema codegen --lang typescript --out ./src/generated/
+```
+
+Generated output:
+
+```typescript
+// generated/orders-db.ts — auto-generated, do not edit
+
+/** customers table row */
+export type CustomersRow {
+  id: string;
+  email: string;
+  name: string;
+  tier: string;
+  created_at: Date;
+}
+
+/** orders table row */
+export type OrdersRow {
+  id: string;
+  customer_id: string;
+  status: string;
+  total_cents: number;
+  line_items: unknown;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export const Tables = {
+  customers: "customers",
+  orders: "orders",
+  order_events: "order_events",
+} as const;
+
+export const OrdersColumns = {
+  id: "id",
+  customer_id: "customer_id",
+  status: "status",
+  total_cents: "total_cents",
+  line_items: "line_items",
+  created_at: "created_at",
+  updated_at: "updated_at",
+} as const;
+```
+
+### Python
+
+```bash
+celerity schema codegen --lang python --out ./src/generated/
+```
+
+Generated output:
+
+```python
+# generated/orders_db.py — auto-generated, do not edit
+from pydantic import BaseModel
+from datetime import datetime
+from typing import Any
+
+class CustomersRow(BaseModel):
+    id: str
+    email: str
+    name: str
+    tier: str
+    created_at: datetime
+
+class OrdersRow(BaseModel):
+    id: str
+    customer_id: str
+    status: str
+    total_cents: int
+    line_items: Any
+    created_at: datetime
+    updated_at: datetime
+```
+
+### Go
+
+🚀 **Planned for v1** - Go type generation is planned for a future release.
+
+### Java
+
+🚀 **Planned for v1** - Java type generation (record classes) is planned for a future release.
+
+### C#
+
+🚀 **Planned for v1** - C# type generation (record types) is planned for a future release.
+
+## Schema Contracts
+
+Schema contracts allow data teams to declare which tables they depend on, so they are automatically informed when schema changes affect them. Instead of manually tracking column-level dependencies, contracts operate at the table level — any structural change to a watched table triggers the contract's policy.
+
+The migration engine already knows exactly what changed (columns added, dropped, type changes, etc.), so contracts don't need to duplicate that information. They simply declare: "I care about these tables — tell me when they change."
+
+### Contracts File Format
+
+✅ **Available in v0**
+
+Data teams maintain a contracts file in the repository alongside the blueprint:
+
+```yaml
+# schema-contracts.yaml
+contracts:
+  - name: "revenue-pipeline"
+    owner: "data-team"
+    dependencies:
+      - database: "ordersDb"
+        tables: ["orders"]
+        policy: "blocking"       # non-zero exit code if these tables change
+
+  - name: "customer-analytics"
+    owner: "data-team"
+    dependencies:
+      - database: "ordersDb"
+        tables: ["customers", "orders"]
+        policy: "notify"         # warning output, zero exit code
+```
+
+Contracts can also include NoSQL datastore dependencies in the same file. Use the `datastore` key instead of `database` — no `tables` sub-key is needed since a datastore represents a single table:
+
+```yaml
+# schema-contracts.yaml — combined SQL and NoSQL contracts
+contracts:
+  - name: "revenue-pipeline"
+    owner: "data-team"
+    dependencies:
+      - database: "ordersDb"
+        tables: ["orders"]
+        policy: "blocking"
+      - datastore: "userStore"
+        policy: "notify"
+
+  - name: "user-analytics"
+    owner: "data-team"
+    dependencies:
+      - datastore: "userStore"
+        policy: "blocking"
+```
+
+See [NoSQL Datastore Schema Contracts](/docs/framework/applications/nosql-datastore-schema-management#schema-contracts) for more details on NoSQL contract format.
+
+| Field | Description |
+|---|---|
+| `name` | Human-readable contract name |
+| `owner` | Team or individual that owns the downstream dependency |
+| `dependencies[].database` | Name of the `celerity/sqlDatabase` resource in the blueprint (for SQL databases) |
+| `dependencies[].tables` | Tables this contract watches for changes (SQL databases only) |
+| `dependencies[].datastore` | Name of the `celerity/datastore` resource in the blueprint (for NoSQL datastores) |
+| `dependencies[].policy` | `blocking` (non-zero exit code) or `notify` (warning only, zero exit code) |
+
+When a schema change touches any table listed in a contract, the diff output includes the full details of what changed — columns added, dropped, renamed, type changes, etc. The contract itself doesn't need to enumerate these; it just identifies which tables matter.
+
+### Validation and CI Integration
+
+✅ **Available in v0**
+
+Contract checking is built into `celerity schema validate`. When a `schema-contracts.yaml` file exists and deployed state is available, validate evaluates contracts as part of its checks:
+
+- **`blocking` contracts affected**: `validate` exits with a **non-zero exit code**, failing your CI pipeline
+- **`notify` contracts affected**: `validate` prints warnings but does not affect the exit code
+
+This means a single `celerity schema validate` step in CI covers everything — schema correctness, foreign key integrity, escape hatch SQL parsing, and contract impact:
+
+```yaml
+# Example CI step (GitHub Actions)
+- name: Validate schema
+  run: celerity schema validate
+```
+
+When a blocking contract fires, the CI output shows exactly what changed, giving the data team the information they need to review the PR. Use your platform's existing notification mechanisms (CODEOWNERS, required reviewers, Slack integrations on CI failure) to alert the right people.
+
+Contract impact is also shown in `celerity schema diff` output, giving visibility into downstream effects during local development.
+
+### Deploy-Time Enforcement and Webhook Notifications
+
+<Callout title="Future Capability" type="info">
+In v0, contract validation runs via `celerity schema validate` as a CI gate — it does not run automatically during `celerity deploy`.
+
+Deploy-time contract enforcement (automatically blocking deploys when contracts are affected) and webhook notifications (dispatching to Slack, email or custom endpoints when contracts fire) are projected as paid tier features for a future release after v1 (post-March 2027). These are future projections, not committed features.
+
+The paid Schema Service would add a `notify` field to contracts for webhook configuration, integrate contract checks directly into the deploy pipeline, and dispatch notifications automatically.
+</Callout>
+
+### Programmatic Schema API
+
+<Callout title="Future Capability" type="info">
+A programmatic REST API for querying deployed schemas, change history and contract status is projected as a paid tier feature for a future release after v1 (post-March 2027).
+
+Planned endpoints include:
+- `GET /schemas/{instanceId}/{resourceName}` — current deployed schema
+- `GET /schemas/{instanceId}/{resourceName}/history` — change history
+- `GET /schemas/{instanceId}/{resourceName}/contracts` — contract status
+
+Pipeline tools would integrate with this API to auto-generate configs, sync data catalogs and trigger downstream updates.
+</Callout>
+
+### Data Catalog Integrations
+
+<Callout title="Future Capability" type="info">
+Auto-sync to data catalog services (AWS Glue Data Catalog, DataHub, Atlan, etc.) is projected as a paid tier feature for a future release after v1 (post-March 2027).
+</Callout>
+
+## For Data Teams
+
+The schema YAML files serve as always-accurate documentation because they are what actually drives the database. Data teams benefit from:
+
+- **`description`, `owner`, `tags`, `classification` fields** on every table and column make schemas self-documenting
+- **Schema exports** (`celerity schema export --format markdown`) generate human-readable documentation
+- **Git history** of schema files (`git log schemas/orders.yaml`) provides full change history with PR review
+- **Contract definitions** in `schema-contracts.yaml` let data teams declare and protect their dependencies
+- **Machine-readable exports** (`celerity schema export --format json-schema`) integrate with pipeline tools
+- **ERD diagrams** (`celerity schema export --format mermaid`) visualise table relationships

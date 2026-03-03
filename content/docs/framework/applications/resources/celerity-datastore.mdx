@@ -12,7 +12,7 @@ description: Celerity resource type for NoSQL data stores
 
 <Callout title="Ecosystem Compatibility" type="info">
 - **v0 (Current)**: AWS only, supporting Amazon DynamoDB.
-- **v1 (Preview)**: Multi-cloud, supporting Amazon DynamoDB, Google Cloud Datastore and Azure Cosmos DB.
+- **v1 (Preview)**: Multi-cloud, supporting Amazon DynamoDB, Google Cloud Firestore and Azure Cosmos DB.
 
 Read more about Celerity versions [here](/docs/framework/versions).
 </Callout>
@@ -61,13 +61,47 @@ For target environments that do not support composite keys, sort keys will be co
 
 ### schema
 
-A schema to apply to the data store. This is optional, however, it should be considered essential for providing a single source of truth for the structure of the data that can be used by consumers of the data such as data teams that build data pipelines and internal systems (in your company) that make use of the data.
+An inline schema to document the structure of items in the data store. This is optional, however, it should be considered essential for providing a single source of truth for the structure of the data that can be used by consumers of the data such as data teams that build data pipelines and internal systems (in your company) that make use of the data.
+
+When `schemaPath` is provided, the external schema file takes precedence and this inline schema is ignored.
 
 ✅ **Available in v0**
 
 **type**
 
 [dataStoreSchema](#datastoreschema)
+
+### schemaPath
+
+The path to an external YAML schema definition file, relative to the blueprint file. When provided, Celerity manages the datastore schema through its [built-in schema management](/docs/framework/applications/nosql-datastore-schema-management) system. The external schema file supports rich metadata (`owner`, `tags`, `classification`, `default`) and integrates with schema contracts, type generation and export systems.
+
+When `schemaPath` is provided, any inline `schema` on the same resource is ignored — the external file takes precedence.
+
+✅ **Available in v0**
+
+**type**
+
+string
+
+**examples**
+
+`./schemas/user-store.yaml`
+
+### scriptsPath
+
+The path to a directory containing escape hatch data scripts, relative to the blueprint file. These are versioned scripts for data operations that cannot be expressed in the schema YAML (backfilling new fields, migrating data formats, cleaning up deprecated fields).
+
+Scripts follow the naming convention `V<number>__<description>.<ext>` and can be written in any language. They are tracked in schema state and surfaced in `celerity schema diff`, but are NOT automatically executed during deployment. See [Escape Hatch Data Scripts](/docs/framework/applications/nosql-datastore-schema-management#escape-hatch-data-scripts) for details.
+
+✅ **Available in v0**
+
+**type**
+
+string
+
+**examples**
+
+`./scripts/user-store`
 
 ### indexes
 
@@ -86,7 +120,6 @@ Time to live configuration for items in the data store.
 
 <Callout title="Warning" type="warning">
 TTL functionality is only supported for some target environments.
-Google Cloud Datastore, for example, does not have native support for item expiration.
 </Callout>
 
 ✅ **Available in v0**
@@ -118,7 +151,7 @@ string
 
 `arn:aws:dynamodb:us-east-1:123456789012:table/users` (AWS)
 
-`users` (Google Cloud)
+`projects/my-project/databases/(default)/documents/users` (Google Cloud)
 
 `my-account/my-database/users` (Azure)
 
@@ -156,6 +189,36 @@ ___
 A schema to document the structure of the data in the data store.
 
 <FieldsHeading />
+
+<FieldHeading fieldName="description" />
+
+A human-readable description of the data store schema. Used for documentation and [schema exports](/docs/cli/reference#export).
+
+**field type**
+
+string
+
+___
+
+<FieldHeading fieldName="owner" />
+
+The team or individual that owns the data store schema. Used for documentation, data governance and [schema contracts](/docs/framework/applications/nosql-datastore-schema-management#schema-contracts).
+
+**field type**
+
+string
+
+___
+
+<FieldHeading fieldName="tags" />
+
+Arbitrary tags for categorisation of the data store (e.g. `pii`, `core-entity`, `financial`). Used for documentation and [schema exports](/docs/cli/reference#export).
+
+**field type**
+
+array[string]
+
+___
 
 <FieldHeading fieldName="required" />
 
@@ -209,11 +272,41 @@ ___
 
 <FieldHeading fieldName="nullable" />
 
-Whether the field can be null.
+Whether the field can be null. Different from "not required" — a nullable field may exist on an item with a null value, while a non-required field may not exist at all.
 
 **field type**
 
 boolean
+
+___
+
+<FieldHeading fieldName="default" />
+
+A default value for the field. This is used by type generation and SDK validation but is not enforced by the database. When a new item is written without this field, the application should use this default.
+
+**field type**
+
+string
+
+___
+
+<FieldHeading fieldName="classification" />
+
+A data classification label for the field (e.g. `pii`, `sensitive`, `public`, `internal-id`). Used for data governance, documentation and [schema exports](/docs/cli/reference#export).
+
+**field type**
+
+string
+
+___
+
+<FieldHeading fieldName="tags" />
+
+Arbitrary tags for categorisation of the field (e.g. `business-metric`, `engagement-metric`). Used for documentation and [schema exports](/docs/cli/reference#export).
+
+**field type**
+
+array[string]
 
 ___
 
@@ -361,6 +454,85 @@ resources:
                   fields: ["email", "name"]
 ```
 
+### Data Store with External Schema and Indexes
+
+This example uses `schemaPath` and `scriptsPath` to manage the data store schema through Celerity's [built-in schema management](/docs/framework/applications/nosql-datastore-schema-management) system. The external schema file supports rich metadata, type generation, schema contracts and exports.
+
+```yaml
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
+resources:
+    userStore:
+        type: "celerity/datastore"
+        metadata:
+            displayName: "User Store"
+        spec:
+            name: "users"
+            keys:
+                partitionKey: "id"
+            schemaPath: "./schemas/user-store.yaml"
+            scriptsPath: "./scripts/user-store"
+            indexes:
+                - name: "emailIndex"
+                  fields: ["email"]
+                - name: "teamRoleIndex"
+                  fields: ["teamId", "role"]
+            timeToLive:
+                fieldName: "ttl"
+                enabled: true
+```
+
+The corresponding external schema file (`schemas/user-store.yaml`) would define the field-level schema with rich metadata:
+
+```yaml
+description: "User accounts and profile data"
+owner: "platform-team"
+tags: ["pii", "core-entity"]
+
+required: ["id", "email", "name", "status"]
+
+fields:
+  id:
+    type: string
+    description: "Unique user identifier (ULID)"
+  email:
+    type: string
+    description: "Primary email address"
+    classification: pii
+  name:
+    type: string
+    description: "Display name"
+    classification: pii
+  status:
+    type: string
+    description: "Account status: active | suspended | deleted"
+    default: "active"
+  teamId:
+    type: string
+    description: "Team the user belongs to"
+    nullable: true
+  role:
+    type: string
+    description: "User role within their team"
+    default: "member"
+  preferences:
+    type: object
+    description: "User preferences"
+    fields:
+      theme:
+        type: string
+        default: "light"
+      notifications:
+        type: boolean
+        default: true
+  ttl:
+    type: number
+    description: "TTL for soft-deleted accounts (unix timestamp)"
+    nullable: true
+```
+
+See the [NoSQL Datastore Schema Management](/docs/framework/applications/nosql-datastore-schema-management) guide for full details on the schema format, type generation, contracts and more.
+
 ## Target Environments
 
 ### Local Development
@@ -372,7 +544,7 @@ In the local development environment, data stores are backed by a cloud-specific
 | Deploy Target | Local Emulator | Notes |
 |---|---|---|
 | `aws` / `aws-serverless` | [Amazon DynamoDB Local](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html) | Full DynamoDB API compatibility including queries, GSIs, and streams |
-| `gcloud` / `gcloud-serverless` | _Planned for v1_ | |
+| `gcloud` / `gcloud-serverless` | [Firebase Emulator](https://firebase.google.com/docs/emulator-suite) | _Planned for v1_ |
 | `azure` / `azure-serverless` | _Planned for v1_ | |
 
 A single emulator instance is shared across all data stores in the local development environment. Key schema (partition keys, sort keys, and indexes) defined in the blueprint is used to create the local tables automatically.
@@ -584,6 +756,61 @@ string
 
 🚀 **Planned for v1** - The Azure deployment targets are planned for v1, it may become available in a future v0 evolution.
 
+## SDK Operations
+
+The Celerity SDKs provide a cloud-agnostic interface for interacting with data stores. The following operations are supported across all target providers (Amazon DynamoDB, Google Cloud Firestore and Azure Cosmos DB).
+
+For language-specific SDK documentation, see [Node.js Datastore SDK](/docs/node-runtime/datastore) and [Python Datastore SDK](/docs/python-runtime/datastore).
+
+### Core Operations
+
+- **`getItem(key)`** — Get a single item by primary key
+- **`putItem(item)`** — Put or upsert a full item
+- **`deleteItem(key)`** — Delete an item by primary key
+- **`query(options)`** — Query by partition key with optional sort key and filter conditions
+- **`scan(options)`** — Full table scan with optional filter conditions
+- **`batchGetItems(keys)`** — Get multiple items in a single call
+- **`batchWriteItems(ops)`** — Batch put and delete operations
+
+### Condition Expressions
+
+Queries and scans support portable condition expressions with the following operators:
+
+`eq` | `ne` | `lt` | `le` | `gt` | `ge` | `between` | `startsWith` | `contains` | `exists`
+
+<Callout title="Note" type="info">
+The `not_exists` operator is only available through provider-specific SDK classes as Google Cloud Firestore does not support querying for the absence of a field.
+</Callout>
+
+### Range Conditions
+
+When querying with a composite key, the following range conditions are supported for the sort key:
+
+`eq` | `lt` | `le` | `gt` | `ge` | `between` | `startsWith`
+
+### Cursor Pagination
+
+Query and scan results are returned as async iterables with cursor-based pagination, allowing you to efficiently iterate through large result sets and resume from where you left off.
+
+## Schema Management
+
+✅ **Available in v0**
+
+Celerity provides built-in schema management for NoSQL data stores that makes schema a first-class concern — bridging the gap between development and data teams. Unlike SQL databases where you can introspect `information_schema`, NoSQL databases have no database-level schema to query. The "schema" lives only in application code, leaving data teams that build pipelines on the data flying blind.
+
+Celerity solves this by treating the schema YAML as the single source of truth:
+
+- **Schema-as-code**: Declarative YAML definitions with rich metadata (`description`, `owner`, `tags`, `classification`) that are version-controlled alongside your application
+- **Type generation**: Generate TypeScript interfaces and Python Pydantic models from the schema for type-safe development (`celerity schema codegen`)
+- **Schema validation**: Layered validation — runtime (SDK validates on writes), build-time (generated types) and CI (`celerity schema validate`)
+- **Schema contracts**: Data teams declare which data stores they depend on and get CI-level protection when schemas change
+- **Schema exports**: Export as markdown, JSON Schema or Avro for pipeline tool integration (`celerity schema export`)
+- **Schema diff**: See what changed between the current and desired schema state (`celerity schema diff`)
+
+To use schema management, set the `schemaPath` field on the data store resource to point to an external YAML schema file. See the [Data Store with External Schema and Indexes](#data-store-with-external-schema-and-indexes) example above.
+
+For the full guide on NoSQL schema management, see [NoSQL Datastore Schema Management](/docs/framework/applications/nosql-datastore-schema-management).
+
 ## Structure and Data Pipelines
 
 Celerity provides a way to define schemas for NoSQL data stores to define and track the structure of the data in the data store.
@@ -594,3 +821,5 @@ NoSQL databases are often preferred for their flexibility and ability to handle 
 The key benefits of defining a schema for a NoSQL data store is to be able to provide a single source of truth for the structure of the data in the data store. Tools in the Celerity ecosystem that have a tight integration with Celerity applications will be able to use the schema to understand the intended structure of the data in the data store, identify drift where source code or the actual data in the data store does not match the schema, and provide a way to keep all parties that need to make use of the data in sync.
 
 Defining schemas for NoSQL data stores is not required. When experimenting, you may not yet know the shape of the data you will be storing, in which case you may not want to define a schema until further down the line.
+
+For a comprehensive guide on managing NoSQL data store schemas — including type generation, schema contracts for data teams, CI validation and export formats — see [NoSQL Datastore Schema Management](/docs/framework/applications/nosql-datastore-schema-management).

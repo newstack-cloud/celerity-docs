@@ -5,18 +5,578 @@ description: Celerity Cache resource type
 
 **`celerity/cache`**
 
-**Spec Version:** `v2026-02-27-draft`  
-**Ecosystem Compatibility:** v1 (Preview)
+**Spec Version:** `v2026-02-27-draft`
+**Ecosystem Compatibility:** v0 (Current) / v1 (Preview)
 
 **blueprint transform:** `celerity-2026-02-27-draft`
 
 <Callout title="Ecosystem Compatibility" type="info">
-- **v1 (Preview)**: Multi-cloud deployments with support for Redis OSS compatible in-memory databases.
+- **v0 (Current)**: AWS only, supporting Amazon ElastiCache for Redis.
+- **v1 (Preview)**: Multi-cloud, supporting Amazon ElastiCache for Redis, Azure Cache for Redis and Google Cloud Memorystore for Redis.
 
 Read more about Celerity versions [here](/docs/framework/versions).
 </Callout>
 
-🚀 **Planned for v1** - Support for caches is planned for v1, they may become available in a future v0 evolution.
+The `celerity/cache` resource type defines an in-memory cache for a Celerity application. Celerity supports Redis OSS-compatible in-memory databases and abstracts the difference between single-instance and cluster topologies.
 
-The `celerity/cache` resource type defines an in-memory cache for a Celerity application.
-A Celerity cache supports Redis OSS compatible in-memory databases.
+<Callout title="Note" type="info">
+Celerity uses [Valkey](https://valkey.io/) by default, a Redis OSS-compatible fork that is fully compatible with existing Redis clients.
+Redis 7.2.4 was the last open-source version of Redis before the Redis Labs license change; Valkey continues development from that point as an open-source project.
+</Callout>
+
+For Celerity applications, using a cache provides:
+
+- **Low-latency data access**: In-memory caches provide sub-millisecond read and write latency for frequently accessed data.
+- **Reduced database load**: Caching query results, session data or computed values reduces the load on your primary data stores.
+- **Session management**: Caches are commonly used for managing user sessions, rate limiting and temporary state.
+- **Topology abstraction**: Celerity abstracts the difference between single-instance and cluster mode Redis deployments, allowing you to switch between them without application code changes.
+
+## Specification
+
+The specification is the structure of the resource definition that comes under the `spec` field of the resource in a blueprint.
+The rest of this section lists fields that are available to configure the `celerity/cache` resource followed by examples of different configurations for the resource and how the cache behaves in target environments along with additional documentation.
+
+<Callout title="Feature Availability" type="info">
+- ✅ **Available in v0** - Features currently supported
+- 🔄 **Planned for v0** - Features coming in future v0 evolution
+- 🚀 **Planned for v1** - Features coming in v1 release
+</Callout>
+
+### name
+
+A unique name to use for the cache. If a name is not provided, a unique name will be generated based on the blueprint that the cache is defined in.
+
+**type**
+
+string
+
+### clusterMode
+
+Whether to deploy the cache as a cluster with multiple shards and replicas, or as a single instance.
+
+Cluster mode provides higher availability and throughput by distributing data across multiple shards. Single-instance mode is simpler and more cost-effective for development and smaller workloads.
+
+The Celerity SDK cache abstraction handles the difference between single-instance and cluster mode connections transparently — your application code does not need to change when switching modes.
+
+✅ **Available in v0**
+
+**type**
+
+boolean
+
+**default value**
+
+`false`
+
+### engineVersion
+
+The Valkey engine version to use for the cache. Valkey is fully compatible with Redis OSS clients.
+
+✅ **Available in v0**
+
+**type**
+
+string
+
+**default value**
+
+`8.2`
+
+## Annotations
+
+There are no annotations required for linking other resources to a `celerity/cache` resource or modifying the behaviour of a cache resource.
+
+`linkSelector.byLabel` can be used to target caches from other resource types.
+
+## Outputs
+
+Outputs are computed values that are accessible via the `{resourceName}.spec.*` field accessor in a blueprint substitution.
+For example, if the resource name is `sessionCache`, the output would be accessible via `${sessionCache.spec.id}`.
+
+### id
+
+The ID of the created cache in the target environment.
+
+**type**
+
+string
+
+**examples**
+
+`arn:aws:elasticache:us-east-1:123456789012:replicationgroup:session-cache` (AWS)
+
+`projects/my-project/locations/us-central1/instances/session-cache` (Google Cloud)
+
+`/subscriptions/.../resourceGroups/.../providers/Microsoft.Cache/redis/session-cache` (Azure)
+
+### host
+
+The primary endpoint for the cache. For cluster mode, this is the configuration endpoint.
+
+**type**
+
+string
+
+### port
+
+The port number for the cache connection.
+
+**type**
+
+number
+
+**default value**
+
+`6379`
+
+## Data Types
+
+The `celerity/cache` resource type does not define custom data types in the blueprint specification. Cache data is stored as Redis-compatible key-value pairs using the Redis data type system (strings, lists, sets, sorted sets, hashes, streams).
+
+## Linked From
+
+### `celerity/handler`
+
+When a handler links to a cache, the handler will be configured with permissions and environment variables (or secret store entries) that enable it to connect to the cache. The Celerity SDK provides a [thin cache abstraction](#sdk-operations) for common cache operations and a credentials provider for direct Redis client access.
+
+✅ **Available in v0**
+
+[Read more about Celerity handlers](/docs/framework/applications/resources/celerity-handler)
+
+### `celerity/vpc`
+
+When a VPC links to a cache, the cache will be placed within the VPC's private subnets. Caches require VPC placement for secure network access.
+
+✅ **Available in v0**
+
+[Read more about Celerity VPCs](/docs/framework/applications/resources/celerity-vpc)
+
+## Links To
+
+The `celerity/cache` resource type does not link to other resources.
+
+## Examples
+
+### Minimal Cache
+
+```yaml
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
+resources:
+    sessionCache:
+        type: "celerity/cache"
+        metadata:
+            displayName: "Session Cache"
+        spec:
+            name: "sessions"
+```
+
+### Cache with VPC and Handler Link
+
+```yaml
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
+resources:
+    appVpc:
+        type: "celerity/vpc"
+        metadata:
+            displayName: "Application VPC"
+            labels:
+                application: "myapp"
+        linkSelector:
+            byLabel:
+                application: "myapp"
+        spec:
+            preset: "standard"
+
+    sessionCache:
+        type: "celerity/cache"
+        metadata:
+            displayName: "Session Cache"
+            labels:
+                application: "myapp"
+        spec:
+            name: "sessions"
+
+    getSessionHandler:
+        type: "celerity/handler"
+        metadata:
+            displayName: "Get Session"
+            labels:
+                application: "myapp"
+            annotations:
+                celerity.handler.http: true
+                celerity.handler.http.method: "GET"
+                celerity.handler.http.path: "/session"
+        linkSelector:
+            byLabel:
+                application: "myapp"
+        spec:
+            handler: "handlers.getSession"
+            runtime: "nodejs22.x"
+
+    api:
+        type: "celerity/api"
+        metadata:
+            displayName: "API"
+            labels:
+                application: "myapp"
+        linkSelector:
+            byLabel:
+                application: "myapp"
+        spec:
+            type: "http"
+```
+
+### Cluster Mode Cache
+
+```yaml
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
+resources:
+    productCache:
+        type: "celerity/cache"
+        metadata:
+            displayName: "Product Cache"
+            labels:
+                application: "catalog"
+        spec:
+            name: "products"
+            clusterMode: true
+            engineVersion: "7.1"
+```
+
+## Target Environments
+
+### Local Development
+
+✅ **Available in v0**
+
+In the local development environment, caches are backed by a [Valkey](https://valkey.io/) instance. The same Valkey instance is shared across cache resources and config stores in the local development environment, with namespace isolation to prevent key collisions.
+
+When `celerity dev run` starts, cache resources are automatically available and connection configuration is injected into your handlers.
+
+| Deploy Target | Local Emulator | Notes |
+|---|---|---|
+| `aws` / `aws-serverless` | [Valkey](https://valkey.io/) | Redis OSS-compatible, shared with config stores |
+| `gcloud` / `gcloud-serverless` | [Valkey](https://valkey.io/) | _Planned for v1_ |
+| `azure` / `azure-serverless` | [Valkey](https://valkey.io/) | _Planned for v1_ |
+
+### AWS
+
+✅ **Available in v0**
+
+In the AWS environment, caches are backed by [Amazon ElastiCache for Redis](https://aws.amazon.com/elasticache/redis/).
+
+**Single Instance Mode**
+
+A single ElastiCache replication group with one primary node. Suitable for development, staging and workloads that do not require high availability.
+
+**Cluster Mode**
+
+An ElastiCache replication group with cluster mode enabled, distributing data across multiple shards with automatic failover. Suitable for production workloads requiring high availability and throughput.
+
+**Networking**
+
+Caches are placed within the VPC's private subnets when linked to a `celerity/vpc` resource. Security groups are configured to allow traffic from Lambda functions (or ECS/EKS tasks) to the cache port.
+
+The [app deploy configuration](#app-deploy-configuration) can be used to configure the cache with Amazon ElastiCache specific settings such as node type, number of replicas and encryption.
+
+### Google Cloud
+
+🚀 **Planned for v1** - The Google Cloud deployment target is planned for v1, it may become available in a future v0 evolution.
+
+Caches will be provisioned using [Google Cloud Memorystore for Redis](https://cloud.google.com/memorystore/docs/redis).
+
+### Azure
+
+🚀 **Planned for v1** - The Azure deployment target is planned for v1, it may become available in a future v0 evolution.
+
+Caches will be provisioned using [Azure Cache for Redis](https://azure.microsoft.com/en-us/products/cache/).
+
+## App Deploy Configuration
+
+Configuration specific to a target environment can be defined for `celerity/cache` resources in the [app deploy configuration](/docs/cli/app-deploy-configuration) file.
+
+This section lists the configuration options that can be set in the `deployTarget.config` object in the app deploy configuration file.
+
+### AWS Configuration Options
+
+✅ **Available in v0**
+
+#### aws.elasticache.\<cacheName\>.nodeType
+
+The ElastiCache node type to use for the cache. This determines the compute and memory capacity of each cache node.
+`cacheName` is the name (key) of the cache resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+string
+
+**default value**
+
+`cache.t3.micro`
+
+**examples**
+
+```javascript
+{
+    "deployTarget": {
+        "name": "aws-serverless",
+        "appEnv": "production",
+        "config": {
+            "aws.elasticache.sessionCache.nodeType": "cache.r6g.large"
+        }
+    }
+}
+```
+
+#### aws.elasticache.\<cacheName\>.numReplicas
+
+The number of read replicas per shard. In single-instance mode, this creates replicas of the primary node. In cluster mode, this creates replicas per shard.
+`cacheName` is the name (key) of the cache resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+number
+
+**default value**
+
+`0` (single-instance mode) / `1` (cluster mode)
+
+**examples**
+
+```javascript
+{
+    "deployTarget": {
+        "name": "aws-serverless",
+        "appEnv": "production",
+        "config": {
+            "aws.elasticache.sessionCache.numReplicas": 2
+        }
+    }
+}
+```
+
+#### aws.elasticache.\<cacheName\>.numShards
+
+The number of shards in the cluster. Only applicable when `clusterMode` is `true`.
+`cacheName` is the name (key) of the cache resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+number
+
+**default value**
+
+`3`
+
+**examples**
+
+```javascript
+{
+    "deployTarget": {
+        "name": "aws-serverless",
+        "appEnv": "production",
+        "config": {
+            "aws.elasticache.sessionCache.numShards": 3
+        }
+    }
+}
+```
+
+#### aws.elasticache.\<cacheName\>.automaticFailover
+
+Whether to enable automatic failover for the replication group. Requires at least one replica. Automatically enabled when `clusterMode` is `true`.
+`cacheName` is the name (key) of the cache resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+boolean
+
+**default value**
+
+`false` (single-instance mode) / `true` (cluster mode)
+
+**examples**
+
+```javascript
+{
+    "deployTarget": {
+        "name": "aws-serverless",
+        "appEnv": "production",
+        "config": {
+            "aws.elasticache.sessionCache.automaticFailover": true
+        }
+    }
+}
+```
+
+#### aws.elasticache.\<cacheName\>.transitEncryption
+
+Whether to enable encryption in transit (TLS) for the cache.
+`cacheName` is the name (key) of the cache resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+boolean
+
+**default value**
+
+`true`
+
+**examples**
+
+```javascript
+{
+    "deployTarget": {
+        "name": "aws-serverless",
+        "appEnv": "production",
+        "config": {
+            "aws.elasticache.sessionCache.transitEncryption": true
+        }
+    }
+}
+```
+
+#### aws.elasticache.\<cacheName\>.atRestEncryption
+
+Whether to enable encryption at rest for the cache.
+`cacheName` is the name (key) of the cache resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+boolean
+
+**default value**
+
+`true`
+
+**examples**
+
+```javascript
+{
+    "deployTarget": {
+        "name": "aws-serverless",
+        "appEnv": "production",
+        "config": {
+            "aws.elasticache.sessionCache.atRestEncryption": true
+        }
+    }
+}
+```
+
+#### aws.elasticache.\<cacheName\>.snapshotRetentionDays
+
+The number of days to retain automatic snapshots (backups) of the cache. Set to `0` to disable automatic snapshots.
+`cacheName` is the name (key) of the cache resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+number
+
+**default value**
+
+`0`
+
+**examples**
+
+```javascript
+{
+    "deployTarget": {
+        "name": "aws-serverless",
+        "appEnv": "production",
+        "config": {
+            "aws.elasticache.sessionCache.snapshotRetentionDays": 7
+        }
+    }
+}
+```
+
+#### aws.elasticache.\<cacheName\>.evictionPolicy
+
+The eviction policy to use when the cache reaches its memory limit. This maps to the Redis `maxmemory-policy` configuration parameter.
+`cacheName` is the name (key) of the cache resource in the blueprint.
+
+**Deploy Targets**
+
+`aws`, `aws-serverless`
+
+**type**
+
+string
+
+**allowed values**
+
+`allkeys-lru`, `allkeys-lfu`, `allkeys-random`, `volatile-lru`, `volatile-lfu`, `volatile-random`, `volatile-ttl`, `noeviction`
+
+**default value**
+
+`allkeys-lru`
+
+**examples**
+
+```javascript
+{
+    "deployTarget": {
+        "name": "aws-serverless",
+        "appEnv": "production",
+        "config": {
+            "aws.elasticache.sessionCache.evictionPolicy": "volatile-ttl"
+        }
+    }
+}
+```
+
+### Google Cloud Configuration Options
+
+🚀 **Planned for v1** - The Google Cloud deployment targets are planned for v1, they may become available in a future v0 evolution.
+
+### Azure Configuration Options
+
+🚀 **Planned for v1** - The Azure deployment targets are planned for v1, they may become available in a future v0 evolution.
+
+## SDK Operations
+
+The Celerity SDKs provide a thin cache abstraction for common cache operations. The abstraction handles connection setup and transparently manages the difference between single-instance and cluster mode connections.
+
+For language-specific SDK documentation, see [Node.js Cache SDK](/docs/node-runtime/cache) and [Python Cache SDK](/docs/python-runtime/cache).
+
+### Core Operations
+
+- **`get(key)`** — Get a value by key. Returns `null` if the key does not exist.
+- **`set(key, value, options?)`** — Set a value with an optional TTL. `options.ttl` specifies the time-to-live in seconds.
+- **`delete(key)`** — Delete a value by key.
+- **`ttl(key)`** — Get the remaining time-to-live in seconds for a key. Returns `-1` if the key exists but has no expiry, `-2` if the key does not exist.
+
+### Credentials Provider
+
+The credentials provider returns connection details (`host`, `port`, `authToken`, `tls`) for creating your own Redis client. This gives you access to the full Redis API (pub/sub, streams, sorted sets, Lua scripts, transactions, etc.) but means your application code may need changes if you switch between single-instance and cluster mode, as cluster mode Redis requires cluster-aware client configuration.
