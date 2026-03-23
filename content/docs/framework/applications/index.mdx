@@ -14,6 +14,9 @@ There are 5 main compute resource types for a Celerity application including [`c
 There are 7 main infrastructure resource types including [`celerity/vpc`](/docs/applications/resources/celerity-vpc/current), [`celerity/sqlDatabase`](/docs/applications/resources/celerity-sql-database/current), [`celerity/datastore`](/docs/applications/resources/celerity-datastore/current), [`celerity/cache`](/docs/applications/resources/celerity-cache/current), [`celerity/topic`](/docs/applications/resources/celerity-topic/current), [`celerity/queue`](/docs/applications/resources/celerity-queue/current) and [`celerity/bucket`](/docs/applications/resources/celerity-bucket/current).
 
 In addition to these, there are also convenience resource types for shared handler configuration ([`celerity/handlerConfig`](/docs/applications/resources/celerity-handler-config/current)) and application secrets and configuration ([`celerity/config`](/docs/applications/resources/celerity-config/current)).
+
+A [`celerity/channel`](/docs/framework/applications/resources/celerity-channel) resource type is planned for v1+ that provides an opt-in real-time channel layer on top of WebSocket APIs, adding pub/sub messaging, presence tracking, per-channel auth and rate limiting.
+
 Each of these resource types are versioned over time, the implementation of these resource types are spread across the Celerity runtime and deploy engine.
 The runtime and deploy engine projects will indicate which resource versions are supported for a given version of the software.
 

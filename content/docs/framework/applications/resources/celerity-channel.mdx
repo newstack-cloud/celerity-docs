@@ -1,0 +1,503 @@
+---
+title: Celerity Channel
+description: The Celerity Channel resource type is used to define a real-time channel for pub/sub messaging, presence and targeted broadcasting on top of a WebSocket API.
+---
+
+**`celerity/channel`**
+
+**Spec Version:** `v2026-02-27-draft`
+**Ecosystem Compatibility:** v1+ (Future)
+
+**blueprint transform:** `celerity-2026-02-27-draft`
+
+<Callout title="Ecosystem Compatibility" type="info">
+- **v1+ (Future)**: This resource type is planned for after the v1 release. It is not yet available in any ecosystem version.
+
+Read more about Celerity versions [here](/docs/framework/versions).
+</Callout>
+
+The `celerity/channel` resource type is used to define a named channel (or channel pattern) for real-time pub/sub messaging on top of a [`celerity/api`](/docs/framework/applications/resources/celerity-api) with the WebSocket protocol.
+
+Channels are an **opt-in layer** built on top of the WebSocket API. They are activated by declaring `celerity/channel` resources that are linked from the API. Without any channel resources, the channel protocol routes are not registered and the runtime has zero channel overhead.
+
+For Celerity applications, using channels provides:
+
+- **Real-time pub/sub**: Publish messages to a channel and have them delivered to all subscribed clients without manually tracking connections.
+- **Presence tracking**: Optionally track and broadcast join/leave events for channel members.
+- **Per-channel auth**: Each channel declares its own auth guard and can have a subscribe handler for fine-grained authorisation.
+- **Rate limiting**: Configurable per-channel rate limits to protect against message amplification.
+- **Secure by default**: Only channels matching a declared `celerity/channel` resource accept subscriptions — undeclared channels are rejected.
+- **Reconnection recovery**: Client subscriptions are automatically restored after reconnection, transparent to application code.
+
+## Two Distinct Layers
+
+A `celerity/api` with `protocol: websocket` is a fully functional WebSocket API on its own. It handles connections, route-based message dispatch, authentication, heartbeat, reconnection — the full transport protocol. No channels are involved.
+
+Channels are a **separate, opt-in layer** built on top of the WebSocket API. They are activated by declaring `celerity/channel` resources that link to the API. Without any channel resources, the channel protocol routes (`channel:subscribe`, etc.) are not registered and the runtime has zero channel overhead.
+
+```
+┌─────────────────────────────────────────────────┐
+│  Channel Layer (opt-in)                         │
+│  celerity/channel resources → pub/sub,          │
+│  presence, per-channel auth, rate limiting      │
+├─────────────────────────────────────────────────┤
+│  WebSocket API (always present)                 │
+│  celerity/api (protocol: websocket) →           │
+│  connections, routing, auth, heartbeat,         │
+│  capabilities, reconnection                     │
+└─────────────────────────────────────────────────┘
+```
+
+## Specification
+
+The specification is the structure of the resource definition that comes under the `spec` field of the resource in a blueprint.
+The rest of this section lists fields that are available to configure the `celerity/channel` resource followed by examples of different configurations for the resource and how channels behave in target environments along with additional documentation.
+
+<Callout title="Feature Availability" type="info">
+- ✅ **Available in v0** - Features currently supported
+- 🔄 **Planned for v0** - Features coming in future v0 evolution
+- 🚀 **Planned for v1** - Features coming in v1 release
+- 🔮 **Planned for v1+** - Features planned for after v1 release
+</Callout>
+
+### channelName
+
+The exact name of the channel. Clients subscribe to this channel by name.
+The naming convention is `namespace:identifier` (e.g. `public:announcements`, `admin:dashboard`).
+
+Mutually exclusive with `channelPattern` — a channel resource must specify one or the other.
+
+🔮 **Planned for v1+**
+
+**type**
+
+string
+
+**examples**
+
+```yaml
+channelName: "public:announcements"
+```
+
+```yaml
+channelName: "admin:dashboard"
+```
+
+### channelPattern
+
+A glob pattern matching multiple channel names. The `*` matches any non-empty string.
+Clients can subscribe to any channel name that matches the pattern.
+
+Mutually exclusive with `channelName` — a channel resource must specify one or the other.
+
+🔮 **Planned for v1+**
+
+**type**
+
+string
+
+**examples**
+
+```yaml
+channelPattern: "org:*"
+```
+
+```yaml
+channelPattern: "chat:room-*"
+```
+
+### auth
+
+Authentication and authorisation configuration for the channel. The `guard` field specifies the auth guard applied when a client subscribes. The guard receives the channel name, connection context, and auth data. Subscription is rejected if the guard fails.
+
+If no auth guard is specified and no subscribe handler is linked, subscriptions are accepted for any authenticated connection on the API.
+
+🔮 **Planned for v1+**
+
+**type**
+
+[authChannelConfiguration](#authchannelconfiguration)
+
+**examples**
+
+```yaml
+auth:
+  guard: authenticated
+```
+
+```yaml
+auth:
+  guard: orgMember
+```
+
+### presence
+
+Whether to track and broadcast join/leave events for this channel. When enabled, subscribers receive `channel:presence` events when members join or leave, and the subscription confirmation includes the current member list.
+
+🔮 **Planned for v1+**
+
+**type**
+
+boolean
+
+**default value**
+
+`false`
+
+### rateLimit
+
+Optional per-channel rate limiting configuration. Caps the number of messages that can be broadcast to the channel within a time window. This protects the server and subscribers from hot channels — a runaway producer or a bug in a tight loop can amplify to every subscriber, exhausting server resources.
+
+🔮 **Planned for v1+**
+
+**type**
+
+[rateLimitConfiguration](#ratelimitconfiguration)
+
+## Annotations
+
+There are no annotations for the `celerity/channel` resource type itself. Annotations for channel handlers are documented in the [`celerity/handler`](/docs/framework/applications/resources/celerity-handler) resource type under the `celerity/channel` 🔗 `celerity/handler` link.
+
+## Data Types
+
+### authChannelConfiguration
+
+Configuration for channel authentication.
+
+#### guard
+
+The name of the auth guard to apply when a client subscribes to the channel. This can reference one of the guards defined in the parent `celerity/api` resource's `auth.guards` configuration, or a custom auth guard handler.
+
+🔮 **Planned for v1+**
+
+**type**
+
+string
+
+### rateLimitConfiguration
+
+Configuration for per-channel rate limiting.
+
+#### maxMessages
+
+The maximum number of messages allowed in the rate limiting window.
+
+🔮 **Planned for v1+**
+
+**type**
+
+integer
+
+#### windowMs
+
+The size of the rate limiting window in milliseconds.
+
+🔮 **Planned for v1+**
+
+**type**
+
+integer
+
+**default value**
+
+`1000`
+
+#### strategy
+
+The strategy to apply when the rate limit is exceeded.
+
+🔮 **Planned for v1+**
+
+**type**
+
+string
+
+**allowed values**
+
+`"drop"` | `"buffer"`
+
+- `"drop"` — messages exceeding the limit are silently dropped and the publisher receives a `channel:error` with `reason: "rateLimited"`.
+- `"buffer"` — excess messages are queued and delivered in the next window. Buffer is bounded; overflow drops oldest.
+
+**default value**
+
+`"drop"`
+
+## Linked From
+
+### `celerity/api`
+
+When an API with the WebSocket protocol links to a channel, the channel layer is activated for that API. The API's `linkSelector` selects channel resources by label, the same way it selects handlers. Without any linked channel resources, the channel protocol routes are not registered.
+
+🔮 **Planned for v1+**
+
+[Read more about Celerity APIs](/docs/framework/applications/resources/celerity-api)
+
+## Links To
+
+### `celerity/handler`
+
+A channel can link to handlers that process messages received on the channel and hook into channel events (subscribe, unsubscribe, message). The handler annotations `celerity.handler.channel` and `celerity.handler.channel.event` determine which event the handler responds to.
+
+Channel handlers are optional — without them, the channel works with just the auth guard for subscription control.
+
+🔮 **Planned for v1+**
+
+[Read more about Celerity handlers](/docs/framework/applications/resources/celerity-handler)
+
+## Examples
+
+### Minimal Channel
+
+A simple named channel with authentication but no presence or rate limiting.
+
+```yaml
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
+resources:
+    chatApi:
+        type: "celerity/api"
+        linkSelector:
+            byLabel:
+                application: "chatApp"
+        spec:
+            protocols:
+                - websocketConfig:
+                    routeKey: "event"
+                    authStrategy: "authMessage"
+                    authGuard: ["jwt"]
+
+    publicAnnouncements:
+        type: "celerity/channel"
+        metadata:
+            labels:
+                application: "chatApp"
+        spec:
+            channelName: "public:announcements"
+            auth:
+                guard: authenticated
+            presence: false
+```
+
+### Channel with Pattern, Presence and Rate Limiting
+
+A channel pattern that matches multiple channels with presence tracking and rate limiting enabled.
+
+```yaml
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
+resources:
+    chatApi:
+        type: "celerity/api"
+        linkSelector:
+            byLabel:
+                application: "chatApp"
+        spec:
+            protocols:
+                - websocketConfig:
+                    routeKey: "event"
+                    authStrategy: "authMessage"
+                    authGuard: ["jwt"]
+
+    orgUpdates:
+        type: "celerity/channel"
+        metadata:
+            labels:
+                application: "chatApp"
+        spec:
+            channelPattern: "org:*"
+            auth:
+                guard: orgMember
+            presence: true
+            rateLimit:
+                maxMessages: 50
+                windowMs: 1000
+                strategy: "drop"
+```
+
+### Channel with Lifecycle Handlers
+
+A channel with linked handlers for subscribe and message events.
+
+```yaml
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
+resources:
+    chatApi:
+        type: "celerity/api"
+        linkSelector:
+            byLabel:
+                application: "chatApp"
+        spec:
+            protocols:
+                - websocketConfig:
+                    routeKey: "event"
+                    authStrategy: "authMessage"
+                    authGuard: ["jwt"]
+
+    orgUpdates:
+        type: "celerity/channel"
+        metadata:
+            labels:
+                application: "chatApp"
+        linkSelector:
+            byLabel:
+                channel: "orgUpdates"
+        spec:
+            channelPattern: "org:*"
+            auth:
+                guard: orgMember
+            presence: true
+
+    onOrgSubscribe:
+        type: "celerity/handler"
+        metadata:
+            labels:
+                channel: "orgUpdates"
+            annotations:
+                celerity.handler.channel: true
+                celerity.handler.channel.event: "subscribe"
+        spec:
+            handler: handlers.onOrgSubscribe
+
+    onOrgMessage:
+        type: "celerity/handler"
+        metadata:
+            labels:
+                channel: "orgUpdates"
+            annotations:
+                celerity.handler.channel: true
+                celerity.handler.channel.event: "message"
+        spec:
+            handler: handlers.onOrgMessage
+```
+
+## Relationship Summary
+
+```
+celerity/api (websocket)
+  → selects celerity/channel (API owns its channels)
+      → selects celerity/handler (channel owns its handlers)
+
+celerity/api (websocket)
+  → selects celerity/handler (API owns its route handlers)
+      → uses context.channels.sendToChannel() at runtime (no blueprint link to channel)
+```
+
+The link direction is always parent → child: API selects channels, channels select handlers. Application handlers publish to channels imperatively via the SDK, not through blueprint relationships.
+
+## Target Environments
+
+### Local Development
+
+🔮 **Planned for v1+**
+
+Channel state is managed in-memory by the Celerity runtime's `ChannelRegistry`. This provides the same API as production environments without requiring external infrastructure.
+
+### AWS
+
+🔮 **Planned for v1+**
+
+| Deploy Target | Channel State | Broadcast Mechanism |
+|---|---|---|
+| Serverless (API Gateway v2 + Lambda) | Redis (ElastiCache) sets | `@connections` REST API per connection |
+| Containerised (ECS/EKS) — single node | In-memory `ChannelRegistry` | Direct socket write |
+| Containerised (ECS/EKS) — cluster | In-memory + Redis for cross-node | Direct socket write (local) + Redis relay (remote) |
+
+For the serverless deploy target, channel membership is stored in Redis sets alongside existing connection-to-node-group mappings. Broadcasting iterates connection IDs and delivers via the API Gateway `@connections` API. Rate limiting uses a Redis counter (`INCR` + `EXPIRE`) for a globally precise limit.
+
+### Google Cloud
+
+🔮 **Planned for v1+**
+
+| Deploy Target | Channel State | Broadcast Mechanism |
+|---|---|---|
+| Containerised (Cloud Run/GKE) — single node | In-memory `ChannelRegistry` | Direct socket write |
+| Containerised (Cloud Run/GKE) — cluster | In-memory + Redis (Memorystore) for cross-node | Direct socket write (local) + Redis relay (remote) |
+
+### Azure
+
+🔮 **Planned for v1+**
+
+| Deploy Target | Channel State | Broadcast Mechanism |
+|---|---|---|
+| Containerised (Container Apps/AKS) — single node | In-memory `ChannelRegistry` | Direct socket write |
+| Containerised (Container Apps/AKS) — cluster | In-memory + Redis (Azure Cache) for cross-node | Direct socket write (local) + Redis relay (remote) |
+
+## SDK Operations
+
+The Celerity SDKs provide a channel abstraction for server-side handler code to publish messages to channels.
+
+🔮 **Planned for v1+**
+
+### Core Operations
+
+#### sendToChannel
+
+Publish a message to a channel by name. The runtime resolves all subscribed connections and handles fan-out delivery, including cross-node delivery in cluster deployments.
+
+Any handler linked to the API can publish to channels at runtime via the SDK — no blueprint relationship to the channel is needed.
+
+```typescript
+await context.channels.sendToChannel(channelName, {
+  event: "newMessage",
+  data: { text, from: context.auth.userId },
+});
+```
+
+#### getChannelMembers
+
+Retrieve the current set of member identifiers for a channel (only available when presence is enabled on the channel).
+
+## Client Usage
+
+The `@celerity-sdk/channels` package provides a client-side abstraction for interacting with channels. It wraps the [`@celerity-sdk/ws-client`](/docs/framework/runtime/websocket-runtime-protocol) WebSocket transport client.
+
+🔮 **Planned for v1+**
+
+```typescript
+import { CelerityWsClient } from "@celerity-sdk/ws-client";
+import { ChannelManager } from "@celerity-sdk/channels";
+
+// Create the transport client and channel manager
+const client = new CelerityWsClient({ url: "wss://example.com/ws", /* ... */ });
+const channels = new ChannelManager(client);
+
+// Subscribe to a channel with presence tracking
+const room = await channels.subscribe("chat:room-123", { presence: true });
+
+// Listen for messages on the channel
+room.on("message", (data, metadata) => {
+  console.log("Received:", data);
+});
+
+// Listen for presence events (join/leave)
+room.on("presence", (event) => {
+  console.log(`${event.member} ${event.action}ed`);
+  // event: { action: "join" | "leave", member: "user-3" }
+});
+
+// Send a message to the channel
+// (routed to the server, where a handler decides how to broadcast)
+room.send("newMessage", { text: "hello" });
+
+// Access current members
+console.log(room.members); // Set<string>
+
+// Unsubscribe when done
+room.unsubscribe();
+```
+
+### Automatic Re-subscription
+
+The `ChannelManager` listens for the transport client's `connected` event. On reconnect, it automatically re-subscribes to all channels that were active before the disconnect. This is transparent to application code — `room.on("message", ...)` handlers continue to work across reconnections without any additional logic.
+
+### Channel Lifecycle States
+
+```
+subscribe() → "subscribing" → "subscribed" → "unsubscribing" → "unsubscribed"
+                                     ↓                               ↑
+                              "reconnecting" → (auto re-subscribe) ──┘
+```
+
+The channel object emits lifecycle events: `subscribed`, `unsubscribed`, `error`, `reconnecting`.

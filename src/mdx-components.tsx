@@ -1,5 +1,6 @@
 import defaultMdxComponents from 'fumadocs-ui/mdx';
 import { Heading } from 'fumadocs-ui/components/heading';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 import { icons } from 'lucide-react';
 import type { MDXComponents } from 'mdx/types';
 
@@ -8,6 +9,8 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
     ...(icons as unknown as MDXComponents),
     ...defaultMdxComponents,
+    Tab,
+    Tabs,
     ...components,
     h4: ({ children, className, ...props }) => (
       <Heading

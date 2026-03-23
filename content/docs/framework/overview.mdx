@@ -32,6 +32,14 @@ The API building block ([`celerity/api`](/docs/framework/applications/resources/
 
 [Read more about Celerity APIs](/docs/framework/applications/resources/celerity-api).
 
+### Channel
+
+The channel building block ([`celerity/channel`](/docs/framework/applications/resources/celerity-channel)) is an opt-in layer on top of WebSocket APIs that provides real-time pub/sub messaging, presence tracking, per-channel authentication and rate limiting. Channels are declared as resources in the blueprint and linked from a `celerity/api` with the WebSocket protocol. The runtime handles subscription management, message fan-out to all subscribers, and cross-node delivery in cluster deployments. A client SDK (`@celerity-sdk/channels`) wraps the WebSocket transport client to provide channel subscription, presence events, and automatic re-subscription on reconnect.
+
+🔮 **Planned for v1+**
+
+[Read more about Celerity Channels](/docs/framework/applications/resources/celerity-channel).
+
 ### Workflow
 
 The workflow building block ([`celerity/workflow`](/docs/framework/applications/resources/celerity-workflow)) is used to define a workflow that orchestrates the execution of multiple handlers in a blueprint as a series of steps. Workflows can be deployed to different target environments. Serverless environments will use the cloud provider's workflow service, such as AWS Step Functions, Google Cloud Workflows, or Azure Logic Apps. Containerised and custom server environments will use the Celerity workflow runtime to execute the workflow steps.
@@ -132,8 +140,8 @@ The Celerity SDKs are a set of libraries for all the languages that Celerity sup
 
 The SDKs allow you to build your application handlers in a way that is idiomatic to your language of choice and provide a convenient way to interact with your application's infrastructure dependencies such as queues, databases and storage buckets.
 
-<Callout title="Database and Cache SDKs" type="info">
-For **SQL databases**, the SDKs provide a credentials provider that abstracts connection configuration sourcing, plus an optional [knex.js](https://knexjs.org/) connection factory with managed connection pooling. You bring your own SQL library or ORM — the SDK handles connection lifecycle, not queries. For **NoSQL datastores**, the SDKs provide a cloud-agnostic interface for common CRUD operations. For **caches**, the SDKs provide a thin abstraction (`get`/`set`/`delete`/`ttl`) over Redis, with a credentials provider available for direct Redis client access when you need the full Redis API.
+<Callout title="Database and Cache Packages" type="info">
+For **SQL databases**, the SDK provides a credentials provider that abstracts connection configuration sourcing, plus an optional [knex.js](https://knexjs.org/) connection factory with managed connection pooling. You bring your own SQL library or ORM — the SDK handles connection lifecycle, not queries. For **NoSQL datastores**, the SDK provides a cloud-agnostic interface for common CRUD operations. For **caches**, the SDK provides an abstraction covering all core Redis data structures (strings, hashes, lists, sets, sorted sets), with a credentials provider available for direct Redis client access when you need advanced features like pub/sub, streams or transactions.
 </Callout>
 
 Celerity provides SDKs for the following languages:

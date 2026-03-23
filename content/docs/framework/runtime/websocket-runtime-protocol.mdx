@@ -31,6 +31,9 @@ The following top-level object keys are reserved for the Celerity runtime and sh
 
 - `ping`: This top-level object key is used for heartbeat messages sent from the client to the server to check if the connection is still alive.
 - `pong`: This top-level object key is used for heartbeat messages sent from the server to the client to acknowledge that the connection is still alive.
+- `ack`: This value for the `event` key is reserved for JSON-format acknowledgement messages sent in constrained environments where binary frames are not supported. See [Server Capabilities](#server-capabilities).
+- `lostMessage`: This value for the `event` key is reserved for JSON-format lost message notifications sent in constrained environments where binary frames are not supported. See [Server Capabilities](#server-capabilities).
+- `retryAfter`: This key is reserved for use in WebSocket close frame reasons. When present, it indicates the minimum delay in milliseconds before the client should attempt to reconnect. See [Server-Initiated Backoff](#server-initiated-backoff).
 
 ### Reserved Binary Prefixes
 
@@ -40,6 +43,7 @@ The following binary prefixes are reserved for the Celerity runtime and should n
 - `[0x1 0x2 0x0 0x0]`: This binary prefix is used for pong messages.
 - `[0x1 0x3 0x0 0x0]`: This binary prefix is used for informing clients of potentially lost messages.
 - `[0x1 0x4 0x0 0x0]`: This binary prefix is used for acknowledging messages.
+- `[0x1 0x5 0x0 0x0]`: This binary prefix is used for the server capabilities signal, sent by the server immediately after a WebSocket connection is established. Receiving this message indicates the server supports full protocol capabilities including binary messages, custom close codes, and binary control frames. See [Server Capabilities](#server-capabilities) for details.
 
 The first byte of the binary prefix indicates the length of the route key (1 byte).
 The second byte indicates the route key itself (in this case, a single byte indicating the type of message).
@@ -173,6 +177,69 @@ The custom status codes are in the range reserved for application-specific statu
 
 The client SDKs will implement this behaviour automatically if configured for the `connect` approach, exposing callbacks for successful and failed authentication.
 
+## Server Capabilities
+
+The Celerity runtime supports different deployment environments, some of which have limitations on the types of WebSocket frames that can be sent. For example, managed WebSocket gateways may only support text frames, preventing the use of binary messages and binary control frames.
+
+Rather than requiring clients to be configured with backend-specific knowledge, the protocol uses a binary capabilities signal that allows the client to automatically detect the server's capabilities.
+
+### Capabilities Detection
+
+Immediately after a WebSocket connection is established, the server sends a binary capabilities frame:
+
+```plaintext
+[0x1 0x5 0x0 0x0]
+```
+
+This follows the Celerity Binary Message Format, where the first byte indicates the length of the route key (1 byte) and the second byte indicates the route key itself (`0x5` indicating a server capabilities signal). The third and fourth bytes are `0x0` as this reserved message does not require an acknowledgement and has no message ID.
+
+The client should wait a configurable timeout (recommended default: 2 seconds) for this frame after the WebSocket connection opens:
+
+- **Frame received**: The server supports full protocol capabilities — binary messages, custom WebSocket close codes (4000-4999), and binary control frames for acknowledgements and lost message notifications.
+- **Frame not received (timeout)**: The client assumes constrained capabilities — text-only messages, no custom close codes, and JSON text format for control frames (acknowledgements and lost message notifications).
+
+This mechanism is self-proving: in environments where binary frames are not supported, the capabilities signal physically cannot reach the client. The absence of the signal is the signal.
+
+### Format Handling Requirements
+
+For messages that have both binary and JSON representations (heartbeat ping/pong, acknowledgements, lost message notifications), implementations **must** be able to parse both formats regardless of the negotiated capabilities. The capabilities signal indicates what the transport _supports_, not what the server will exclusively use. A server with full capabilities may still choose to send a JSON-format acknowledgement or lost message notification.
+
+In other words:
+- A **client** must always handle both binary and JSON variants of control messages.
+- A **server** in a full-capability environment should prefer binary for control messages but may send JSON.
+- A **server** in a constrained environment must use JSON for control messages since binary frames are not supported.
+
+### Constrained Environment Behaviour
+
+In constrained environments (where the capabilities signal is not received), the following adaptations apply:
+
+- **Acknowledgements** must be sent as JSON text messages instead of binary frames:
+
+```json
+{
+  "event": "ack",
+  "data": {
+    "messageId": "<messageId>",
+    "timestamp": "<timestamp>"
+  }
+}
+```
+
+- **Lost message notifications** must be sent as JSON text messages instead of binary frames:
+
+```json
+{
+  "event": "lostMessage",
+  "data": {
+    "messageId": "<messageId>",
+    "caller": "<caller>"
+  }
+}
+```
+
+- **Heartbeat ping/pong** must use the JSON format (`{"ping": true}` / `{"pong": true}`) rather than binary format.
+- **Binary application messages** are not supported — the client should not attempt to send binary frames using `sendBinary()` or equivalent methods.
+
 ## Resilience & Reconnection Behaviour
 
 Clients of Celerity WebSocket APIs compatible with the Celerity runtime should provide reconnection behaviour and the server-side runtime should provide a way to inform clients of messages that may have been lost.
@@ -189,6 +256,42 @@ A server doesn't need to instigate a heartbeat to check if the connection is ali
 The client should send a ping message to the server at regular intervals to check if the connection is still alive. If the server does not respond with a pong message within a certain timeout period, the client should attempt to reconnect.
 
 The client should allow for a configurable interval and timeout for the ping messages with retry limits and exponential backoff for reconnection attempts. The client should also handle the case where the server is temporarily unavailable and retry the connection after a certain period of time.
+
+#### Reconnection Behaviour
+
+When a client detects a lost connection (heartbeat timeout or unexpected close), it should attempt to reconnect using exponential backoff with [**full jitter**](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/) and a configurable backoff factor:
+
+```
+backoff = min(maxDelay, baseDelay * backoffFactor ^ attempt)
+delay = random(0, backoff)
+```
+
+Where `baseDelay` is the initial backoff ceiling, `backoffFactor` is the multiplier applied each attempt to grow the ceiling (set to `2` to match the standard doubling behaviour), and `attempt` starts at 0 and increments on each consecutive failed reconnect.
+
+Implementations **must** use jitter to prevent reconnection storms. When a server restarts or a network partition heals, potentially thousands of clients will attempt to reconnect simultaneously. Without jitter, these clients would retry in lockstep, overloading the server and preventing recovery. Full jitter (randomising from 0 to the calculated backoff) is the recommended approach as it provides the best spread of retry attempts across the backoff window.
+
+Recommended defaults:
+- Base delay: 1 second
+- Backoff factor: 1.5
+- Maximum delay: 30 seconds
+
+After a successful reconnection, the backoff counter should reset once the connection has been stable for at least one heartbeat cycle — a ping has been sent and a pong has been received. This ensures the next failure gets fast initial retry rather than carrying penalty from a previous outage.
+
+#### Server-Initiated Backoff
+
+When a server is under load and wants clients to slow their reconnection attempts, it may include a `retryAfter` hint in the WebSocket close frame reason:
+
+```json
+{"retryAfter": 5000}
+```
+
+Where `retryAfter` is the minimum delay in milliseconds before the client should attempt to reconnect. The client should use the greater of this value and its locally calculated backoff delay, and should add its own jitter on top to avoid synchronized retries.
+
+This is a hint, not a hard requirement — clients should respect it but servers should not depend on all clients honouring this signal.
+
+#### Connection Attempt Timeout
+
+Clients should implement a timeout for each WebSocket connection attempt (recommended default: 10 seconds). If the WebSocket upgrade does not complete within this window, the attempt should be aborted and counted as a failed retry. This prevents clients from being blocked indefinitely by unresponsive servers or network middleboxes that accept the TCP connection but never complete the WebSocket upgrade.
 
 #### Ping and Pong Messages
 
@@ -281,6 +384,8 @@ Where:
 - The second `0x0` is the length of the message ID (0 bytes, as this is a reserved message).
 - `utf8_encode("{"messageId":"<messageId>","timestamp":"<timestamp>"}")` is the JSON-encoded message that contains the ID of the message that has been acknowledged and the timestamp of the acknowledgement.
 
+In constrained environments where binary frames are not supported, acknowledgements are sent as JSON text messages instead. See [Server Capabilities](#server-capabilities) for the JSON acknowledgement format.
+
 #### Client Requested Acknowledgements
 
 When a message is sent from the server to the client, the client will need to listen for an acknowledgement that the message has been received by the server. The server will then send an acknowledgement message to the client with the message ID and the timestamp of the acknowledgement.
@@ -328,6 +433,8 @@ Where:
 - The first `0x0` indicates that the message does not require an acknowledgement.
 - The second `0x0` is the length of the message ID (0 bytes, as this is a reserved message).
 - `utf8_encode("{"messageId":"<messageId>","caller":"<caller>"}")` is the JSON-encoded message that contains the ID of the message that may have been lost and an ID for the caller context. When an application-defined message ID is provided on the server-side attempt to send the message, this may correspond to a persisted ID at the application level that can be used by the client when taking appropriate action. If the message ID is generated by the runtime, then it won't be very useful to the client, and the caller ID should instead be used to identify the context or purpose of the message.
+
+In constrained environments where binary frames are not supported, lost message notifications are sent as JSON text messages instead. See [Server Capabilities](#server-capabilities) for the JSON lost message format.
 
 When it comes to messages sent from the client to the server, as clients send messages directly to the server that they are intended for, the only way a message can be lost is if there is a network issue or the server is temporarily unavailable. In this case, the client should handle the reconnection logic and retry sending the message after a certain period of time. The client SDKs will provide a way to handle the reconnection automatically but the application logic needs to determine what messages to retry (if any) after a reconnection.
 

@@ -10,21 +10,21 @@ This section provides an overview of the versioning strategy for Celerity spanni
 ## Version Strategy
 
 ### v0 (Current) - Evolving Capabilities
-**Initial Release**: March 31st, 2026
-**Evolution Period**: March 2026 - March 2027
+**Initial Release**: May 31st, 2026
+**Evolution Period**: May 2026 - May 2027
 
 v0 represents the initial release of Celerity with limited but functional capabilities that will continuously evolve until the release of v1.
 
 The current v0 release supports deploying Celerity applications to AWS serverless environments with application handlers running in AWS Lambda:
 
-#### Current v0 Components (March 2026)
+#### Current v0 Components (May 2026)
 - **Celerity CLI**: Full set of commands for starting projects along with the development and deployment lifecycle.
 - **Celerity Core Runtimes & SDKs**: Node.js and Python runtimes only, supporting HTTP APIs, WebSocket APIs, consumers, schedules, SQL databases, NoSQL datastores and caches.
-- **Client SDK for WebSocket APIs**: Client SDKs for browsers, Node.js and Python to interact with WebSocket APIs adhering to the [WebSocket Runtime Protocol](/docs/runtime/websocket-runtime-protocol), that are also compatible with AWS API Gateway v2 WebSocket APIs.
+- **Client SDK for WebSocket APIs**: A single TypeScript package for browsers and Node.js to interact with WebSocket APIs adhering to the [WebSocket Runtime Protocol](/docs/runtime/websocket-runtime-protocol), that are also compatible with AWS API Gateway v2 WebSocket APIs.
 - [**Bluelink Deploy Engine**](https://bluelink.dev/docs/bluelink/overview): The engine that powers deployments of Celerity applications, initially supporting only a subset of AWS services that enable serverless deployments.
 - [**Bluelink Blueprint Language Server**](https://bluelink.dev/docs/bluelink/overview): Diagnostics, validation and auto-complete support for blueprints used to define Celerity applications.
 
-#### Current v0 Resource Types (March 2026)
+#### Current v0 Resource Types (May 2026)
 - `celerity/api` - AWS API Gateway deployments and the Celerity runtime locally - HTTP and WebSocket APIs, full CORS support and authentication.
 - `celerity/handler` - AWS Lambda functions
 - `celerity/handlerConfig` - Helper type for shared handler configuration translating to AWS Lambda function configuration.
@@ -43,7 +43,7 @@ The current v0 release supports deploying Celerity applications to AWS serverles
 - **AWS only** (initially)
 
 ### v1 (Preview) - Full Capabilities
-**Target Release**: March 2027
+**Target Release**: May 2027
 
 v1 represents the full vision of Celerity with complete multi-cloud capabilities:
 
@@ -51,7 +51,7 @@ v1 represents the full vision of Celerity with complete multi-cloud capabilities
 - **Celerity CLI**: Full set of commands for starting projects along with the development and deployment lifecycle.
 - **Celerity Core Runtimes & SDKs**: All language runtimes (Node.js, Python, Go, C#, Java)
 - **Celerity Workflow Runtime**: Workflow orchestration with support for all language runtimes (Node.js, Python, Go, C#, Java)
-- **Client SDK for WebSocket APIs**: Client SDKs for browsers, Node.js and Python to interact with WebSocket APIs adhering to the [WebSocket Runtime Protocol](/docs/runtime/websocket-runtime-protocol), that are also compatible with AWS API Gateway v2 WebSocket APIs.
+- **Client SDK for WebSocket APIs**: Client SDKs for browsers, Node.js and Python to interact with WebSocket APIs adhering to the [WebSocket Runtime Protocol](/docs/runtime/websocket-runtime-protocol), that are also compatible with AWS API Gateway v2 WebSocket APIs. v1 adds a Python WebSocket client SDK.
 - [**Bluelink Deploy Engine**](https://bluelink.dev/docs/bluelink/overview): The engine that powers deployments of Celerity applications, supporting AWS, Azure and Google Cloud.
 - [**Bluelink Blueprint Language Server**](https://bluelink.dev/docs/bluelink/overview): Diagnostics, validation and auto-complete support for blueprints used to define Celerity applications.
 
@@ -147,6 +147,14 @@ v1 represents the full vision of Celerity with complete multi-cloud capabilities
 - **Google Cloud** - Full support
 - **On-premise** - No support planned for v1, considered for the future.
 
+### v1+ (Future) - Post-v1 Features
+
+v1+ represents features that are planned for after the v1 release in May 2027. These are features that have been designed but are not part of the v1 roadmap.
+
+#### Planned Resource Types
+
+- `celerity/channel` - An opt-in real-time channel layer on top of WebSocket APIs providing pub/sub messaging, presence tracking, per-channel auth, and rate limiting. Channels are declared as resources in the blueprint and linked from a `celerity/api` with the WebSocket protocol. The runtime handles subscription management, message fan-out, and cross-node delivery in cluster deployments. A client SDK (`@celerity-sdk/channels`) provides channel subscription, presence, and automatic re-subscription on reconnect.
+
 ## Documentation Versioning Strategy
 
 The Celerity-wide documentation uses a simple versioning approach:
@@ -155,12 +163,12 @@ The Celerity-wide documentation uses a simple versioning approach:
 - **Format**: `vYYYY-MM-DD-draft` (e.g., `v2026-02-27-draft`)
 - **Purpose**: Single evolving specification for each resource type
 - **When to update**: When a stable resource specification changes
-- **Draft Status**: Will remain in draft until v1 release (March 2027)
+- **Draft Status**: Will remain in draft until v1 release (May 2027)
 - **Blueprint transform**: Matches the spec version
 
 ### 2) Ecosystem Compatibility
 - **v0**: Current capabilities (continuously evolving)
-- **v1**: Full planned capabilities (target: March 2027)
+- **v1**: Full planned capabilities (target: May 2027)
 - **Purpose**: Indicates which ecosystem features are available
 - **When to update**: As ecosystem components are implemented
 
@@ -176,7 +184,7 @@ The Celerity-wide documentation uses a simple versioning approach:
 
 ### Simple Timeline
 1. **Current**: `v2026-02-27-draft` (single evolving spec)
-2. **v1 Release**: `v2027-02-01` (stable, no draft suffix)
+2. **v1 Release**: `v2027-05-31` (stable, no draft suffix)
 
 This approach allows us to:
 - **Keep it simple** - Single evolving spec per resource type
@@ -194,5 +202,6 @@ Throughout the documentation, you'll see the following indicators:
 - ✅ **Available in v0** - Features currently supported
 - 🔄 **Planned for v0** - Features coming in future v0 evolution
 - 🚀 **Planned for v1** - Features coming in v1 release
+- 🔮 **Planned for v1+** - Features planned for after v1 release
 
-As v0 evolves, features will gradually move from 🔄 to ✅ as they become available, and from 🚀 to 🔄 as they move from v1 plans to v0 plans. 
+As v0 evolves, features will gradually move from 🔄 to ✅ as they become available, and from 🚀 to 🔄 as they move from v1 plans to v0 plans.

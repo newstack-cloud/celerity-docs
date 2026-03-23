@@ -4,7 +4,13 @@
   "title": "Celerity Handler Manifest",
   "description": "Output schema for Celerity language-specific extractor tools. Describes all handlers discovered in a Celerity application module via language-specific metadata scanning. Consumed by the Celerity CLI to merge with blueprint infrastructure configuration.",
   "type": "object",
-  "required": ["version", "handlers", "functionHandlers", "guardHandlers", "dependencyGraph"],
+  "required": [
+    "version",
+    "handlers",
+    "functionHandlers",
+    "guardHandlers",
+    "dependencyGraph"
+  ],
   "additionalProperties": false,
   "properties": {
     "version": {
@@ -42,7 +48,7 @@
     },
     "Annotations": {
       "type": "object",
-      "description": "Key-value annotations using the 'celerity.handler.*' namespace. Well-known keys:\n- celerity.handler.http (boolean) — true if this is an HTTP handler\n- celerity.handler.http.method (string) — HTTP method (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS)\n- celerity.handler.http.path (string) — full route path using {param} format\n- celerity.handler.websocket (boolean) — true if this is a WebSocket handler\n- celerity.handler.websocket.route (string) — WebSocket route path\n- celerity.handler.websocket.eventType (string) — WebSocket event type (connect, message, disconnect)\n- celerity.handler.consumer (boolean) — true if this is a consumer handler\n- celerity.handler.consumer.sourceId (string) — consumer source identifier\n- celerity.handler.consumer.route (string) — consumer route path\n- celerity.handler.schedule (boolean) — true if this is a schedule handler\n- celerity.handler.schedule.scheduleId (string) — schedule identifier\n- celerity.handler.schedule.expression (string) — schedule expression (e.g. rate(1 day), cron(...))\n- celerity.handler.custom (boolean) — true if this is a custom/invocable handler\n- celerity.handler.custom.name (string) — custom handler name\n- celerity.handler.guard.protectedBy (string[]) — guard names protecting this handler\n- celerity.handler.guard.custom (string) — custom guard name from guard annotations\n- celerity.handler.public (boolean) — true if handler opts out of guards\n- celerity.handler.metadata.* (any annotation value) — user-defined metadata annotations",
+      "description": "Key-value annotations using the 'celerity.handler.*' namespace. Well-known keys:\n- celerity.handler.http (boolean) — true if this is an HTTP handler\n- celerity.handler.http.method (string) — HTTP method (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS)\n- celerity.handler.http.path (string) — full route path using {param} format\n- celerity.handler.websocket (boolean) — true if this is a WebSocket handler\n- celerity.handler.websocket.route (string) — WebSocket route path\n- celerity.handler.websocket.eventType (string) — WebSocket event type (connect, message, disconnect)\n- celerity.handler.consumer (boolean) — true if this is a consumer handler\n- celerity.handler.consumer.source (string) — blueprint resource name of the consumer source\n- celerity.handler.consumer.route (string) — consumer route path\n- celerity.handler.schedule (boolean) — true if this is a schedule handler\n- celerity.handler.schedule.source (string) — blueprint resource name of the schedule\n- celerity.handler.schedule.expression (string) — schedule expression (e.g. rate(1 day), cron(...))\n- celerity.handler.custom (boolean) — true if this is a custom/invocable handler\n- celerity.handler.custom.name (string) — custom handler name\n- celerity.handler.guard.protectedBy (string[]) — guard names protecting this handler\n- celerity.handler.guard.custom (string) — custom guard name from guard annotations\n- celerity.handler.public (boolean) — true if handler opts out of guards\n- celerity.handler.metadata.* (any annotation value) — user-defined metadata annotations",
       "additionalProperties": { "$ref": "#/$defs/AnnotationValue" }
     },
     "ClassHandlerSpec": {
@@ -93,7 +99,15 @@
     "ClassHandlerEntry": {
       "type": "object",
       "description": "A single handler method discovered from an annotated controller or consumer class.",
-      "required": ["resourceName", "className", "methodName", "sourceFile", "handlerType", "annotations", "spec"],
+      "required": [
+        "resourceName",
+        "className",
+        "methodName",
+        "sourceFile",
+        "handlerType",
+        "annotations",
+        "spec"
+      ],
       "additionalProperties": false,
       "properties": {
         "resourceName": {
@@ -124,7 +138,13 @@
     "FunctionHandlerEntry": {
       "type": "object",
       "description": "A function-based handler registered via a framework-provided handler registration function.",
-      "required": ["resourceName", "exportName", "sourceFile", "handlerType", "spec"],
+      "required": [
+        "resourceName",
+        "exportName",
+        "sourceFile",
+        "handlerType",
+        "spec"
+      ],
       "additionalProperties": false,
       "properties": {
         "resourceName": {
@@ -151,7 +171,14 @@
     "GuardHandlerEntry": {
       "type": "object",
       "description": "A guard handler discovered from an annotated guard class or a guard registration function.",
-      "required": ["resourceName", "guardName", "sourceFile", "guardType", "annotations", "spec"],
+      "required": [
+        "resourceName",
+        "guardName",
+        "sourceFile",
+        "guardType",
+        "annotations",
+        "spec"
+      ],
       "additionalProperties": false,
       "properties": {
         "resourceName": {

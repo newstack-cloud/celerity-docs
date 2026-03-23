@@ -82,6 +82,38 @@ string
 
 `8.2`
 
+### authMode
+
+The authentication method used to connect to the cache at runtime. This determines how handlers obtain credentials when connecting to the cache.
+
+✅ **Available in v0** (AWS) / 🚀 **Planned for v1** (Google Cloud, Azure)
+
+**type**
+
+string
+
+**allowed values**
+
+`password` | `iam`
+
+| Value | Description |
+|---|---|
+| `password` | Static AUTH token/password credentials. Celerity auto-generates an AUTH token during provisioning and stores it in the secret store. |
+| `iam` | Platform IAM identity authentication. The handler's execution role, service account or managed identity is granted cache access. The SDK generates short-lived tokens at runtime — no static passwords are stored. |
+
+| Value | AWS | Google Cloud | Azure |
+|---|---|---|---|
+| `password` | Static AUTH token via Secrets Manager | Static AUTH token | Static AUTH token |
+| `iam` | [ElastiCache IAM Authentication](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/auth-iam.html) (SigV4 presigned tokens) | Memorystore IAM Authentication (OAuth2 tokens) | [Entra ID Authentication](https://learn.microsoft.com/en-us/azure/azure-cache-for-redis/cache-azure-active-directory-for-authentication) (managed identity tokens) |
+
+**default value**
+
+`password`
+
+<Callout title="IAM Auth and Local Development" type="info">
+Local development always uses `password` authentication regardless of the `authMode` setting, since the local Valkey instance has no IAM infrastructure. Your application code does not need to change — the SDK handles the difference transparently.
+</Callout>
+
 ## Annotations
 
 There are no annotations required for linking other resources to a `celerity/cache` resource or modifying the behaviour of a cache resource.
@@ -213,7 +245,7 @@ resources:
                 application: "myapp"
         spec:
             handler: "handlers.getSession"
-            runtime: "nodejs22.x"
+            runtime: "nodejs24.x"
 
     api:
         type: "celerity/api"
@@ -245,6 +277,28 @@ resources:
             clusterMode: true
             engineVersion: "7.1"
 ```
+
+### Cache with IAM Authentication
+
+✅ **Available in v0**
+
+```yaml
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
+resources:
+    sessionCache:
+        type: "celerity/cache"
+        metadata:
+            displayName: "Session Cache"
+            labels:
+                application: "myapp"
+        spec:
+            name: "sessions"
+            authMode: "iam"
+            clusterMode: true
+```
+
+When `authMode` is set to `"iam"`, handlers that link to this cache are automatically granted the IAM permissions required for token-based cache authentication on the target cloud provider. The SDK generates short-lived tokens at runtime — no static passwords are stored or rotated.
 
 ## Target Environments
 
@@ -282,17 +336,29 @@ Caches are placed within the VPC's private subnets when linked to a `celerity/vp
 
 The [app deploy configuration](#app-deploy-configuration) can be used to configure the cache with Amazon ElastiCache specific settings such as node type, number of replicas and encryption.
 
+**IAM Authentication**
+
+✅ **Available in v0**
+
+When `authMode` is set to `"iam"`, Celerity enables [IAM Authentication](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/auth-iam.html) on the ElastiCache replication group. An IAM-enabled ElastiCache user is created with the appropriate access string, and the handler's execution role (Lambda or ECS task role) is granted the `elasticache:Connect` permission scoped to the cache resource and user. The SDK generates short-lived authentication tokens via SigV4 presigned requests at runtime instead of using a static AUTH token.
+
+IAM authentication is supported for both single-instance and cluster mode configurations. Transit encryption (TLS) is automatically enabled when using IAM authentication.
+
 ### Google Cloud
 
 🚀 **Planned for v1** - The Google Cloud deployment target is planned for v1, it may become available in a future v0 evolution.
 
-Caches will be provisioned using [Google Cloud Memorystore for Redis](https://cloud.google.com/memorystore/docs/redis).
+Caches will be provisioned using [Google Cloud Memorystore for Valkey](https://cloud.google.com/memorystore/docs/valkey/product-overview).
+
+When `authMode` is set to `"iam"`, Celerity enables IAM Authentication on the Memorystore instance. The handler's service account is granted the necessary Memorystore IAM roles. The SDK uses OAuth2 access tokens for authentication at runtime.
 
 ### Azure
 
 🚀 **Planned for v1** - The Azure deployment target is planned for v1, it may become available in a future v0 evolution.
 
 Caches will be provisioned using [Azure Cache for Redis](https://azure.microsoft.com/en-us/products/cache/).
+
+When `authMode` is set to `"iam"`, Celerity enables [Entra ID Authentication](https://learn.microsoft.com/en-us/azure/azure-cache-for-redis/cache-azure-active-directory-for-authentication) on the Azure Cache for Redis instance. The handler's managed identity is granted cache access, and the SDK fetches access tokens from Entra ID at runtime.
 
 ## App Deploy Configuration
 
@@ -566,17 +632,143 @@ string
 
 ## SDK Operations
 
-The Celerity SDKs provide a thin cache abstraction for common cache operations. The abstraction handles connection setup and transparently manages the difference between single-instance and cluster mode connections.
+The Celerity SDKs provide a cache abstraction covering all five core Redis data structures — strings (key-value), hashes, lists, sets and sorted sets. The abstraction handles connection setup and transparently routes single-key operations in both single-instance and cluster mode.
 
-For language-specific SDK documentation, see [Node.js Cache SDK](/docs/node-runtime/cache) and [Python Cache SDK](/docs/python-runtime/cache).
+For language-specific documentation, see [Node.js SDK - Cache](/docs/node-runtime/cache) and [Python SDK - Cache](/docs/python-runtime/cache).
 
-### Core Operations
+<Callout title="Cluster Mode" type="warn">
+All single-key operations work identically in single-instance and cluster mode — the SDK routes them automatically.
+
+For multi-key operations, use hash tags to co-locate related keys on the same slot (e.g. `{user}:session` and `{user}:prefs`). When all keys share a slot the SDK uses the native Redis command with full atomicity. When keys span slots, behaviour depends on the operation:
+
+- **Batch reads** (`mget`) — the SDK fans out across slots and reassembles results. This is safe because reads are inherently non-atomic.
+- **Batch writes** (`mset`, `mdelete`) — the SDK groups keys by slot and executes each slot's batch atomically via a Lua script. Cross-slot atomicity is not guaranteed — some slots may succeed while others fail.
+- **Cross-key set operations** (`setUnion`, `setIntersect`, `setDiff`), **`rename`**, and **`transaction`** — all keys must share a hash slot. The SDK returns an error if they do not, because the consistency guarantees of a cross-slot fan-out would be too weak to be useful.
+- **`scan`** — iterates all master nodes in parallel. Results are unordered.
+</Callout>
+
+### Core Key-Value Operations
 
 - **`get(key)`** — Get a value by key. Returns `null` if the key does not exist.
-- **`set(key, value, options?)`** — Set a value with an optional TTL. `options.ttl` specifies the time-to-live in seconds.
-- **`delete(key)`** — Delete a value by key.
+- **`set(key, value, options?)`** — Set a value with an optional TTL and conditional flags. `options.ttl` specifies time-to-live in seconds. `options.nx` only sets the key if it does not already exist. `options.xx` only sets the key if it already exists. Returns `true` if the value was set, `false` otherwise.
+- **`delete(key)`** — Delete a value by key. Returns `true` if the key existed and was deleted.
 - **`ttl(key)`** — Get the remaining time-to-live in seconds for a key. Returns `-1` if the key exists but has no expiry, `-2` if the key does not exist.
+- **`getSet(key, value)`** — Atomically set a new value and return the old value. Returns `null` if the key did not previously exist.
+- **`append(key, value)`** — Append a string to an existing value. Returns the length of the string after appending. Creates the key with the given value if it does not exist.
+
+### Batch Key-Value Operations
+
+Batch operations over multiple keys. When all keys share a hash slot the SDK uses the native Redis command with full atomicity. When keys span slots the SDK groups by slot and executes each group atomically via a Lua script — cross-slot atomicity is not guaranteed.
+
+- **`mget(keys)`** — Get multiple values in a single call. Returns an array in the same order as the input keys, with `null` for keys that do not exist.
+- **`mset(entries)`** — Set multiple key-value pairs in a single call. Each entry is a key-value pair.
+- **`mdelete(keys)`** — Delete multiple keys in a single call. Returns the total number of keys that were deleted.
+
+### Key Management Operations
+
+- **`exists(key)`** — Check if a key exists. Returns `true` if the key exists.
+- **`expire(key, seconds)`** — Set a TTL on an existing key. Returns `true` if the timeout was set, `false` if the key does not exist.
+- **`persist(key)`** — Remove the TTL from a key, making it persistent. Returns `true` if the timeout was removed, `false` if the key does not exist or has no TTL.
+- **`type(key)`** — Get the data type stored at a key (`string`, `list`, `set`, `zset`, `hash`). Returns `null` if the key does not exist.
+- **`rename(key, newKey)`** — Rename a key. Throws an error if the source key does not exist. In cluster mode, both keys must resolve to the same hash slot.
+- **`scan(options?)`** — Incrementally iterate over keys. Returns an async iterable of key names. `options.match` is a glob-style pattern (e.g. `session:*`). `options.count` is a hint for how many keys to return per iteration. `options.type` filters by data type. In cluster mode, the SDK scans all master nodes in parallel and merges results into a single iterable.
+
+### Atomic Counter Operations
+
+- **`incr(key, amount?)`** — Atomically increment an integer value by `amount` (default `1`). Returns the new value. Creates the key with value `0` before incrementing if it does not exist.
+- **`decr(key, amount?)`** — Atomically decrement an integer value by `amount` (default `1`). Returns the new value. Creates the key with value `0` before decrementing if it does not exist.
+- **`incrFloat(key, amount)`** — Atomically increment a floating-point value. Returns the new value. Creates the key with value `0` before incrementing if it does not exist.
+
+### Hash Operations
+
+Hashes store field-value pairs under a single key. Ideal for structured objects (e.g. user profiles, session data) without serialising the entire value to a string.
+
+- **`hashGet(key, field)`** — Get the value of a single field. Returns `null` if the key or field does not exist.
+- **`hashSet(key, fields)`** — Set one or more fields. `fields` is an object of field-value pairs. Creates the hash if it does not exist.
+- **`hashDelete(key, fields)`** — Remove one or more fields. Returns the number of fields that were removed.
+- **`hashGetAll(key)`** — Get all fields and values. Returns an empty object if the key does not exist or the hash has no fields.
+- **`hashExists(key, field)`** — Check if a field exists in a hash.
+- **`hashIncr(key, field, amount?)`** — Atomically increment an integer field by `amount` (default `1`). Returns the new value. Creates the field with value `0` before incrementing if it does not exist.
+- **`hashKeys(key)`** — Get all field names. Returns an empty array if the key does not exist.
+- **`hashLen(key)`** — Get the number of fields in a hash. Returns `0` if the key does not exist.
+
+### List Operations
+
+Lists are ordered collections supporting push and pop from both ends. Useful for queues, recent-activity feeds and bounded buffers.
+
+- **`listPush(key, values, end?)`** — Push one or more values onto a list. `end` is `"right"` (default, tail) or `"left"` (head). Returns the length of the list after the push.
+- **`listPop(key, end?, count?)`** — Remove and return elements from a list. `end` is `"left"` (default, head) or `"right"` (tail). `count` defaults to `1`. Returns an empty array if the key does not exist.
+- **`listRange(key, start, stop)`** — Get elements by index range. `0` is the first element, `-1` is the last. Does not modify the list.
+- **`listLen(key)`** — Get the length of a list. Returns `0` if the key does not exist.
+- **`listTrim(key, start, stop)`** — Trim a list to the specified range, removing all elements outside it. Commonly combined with `listPush` to maintain bounded lists (e.g. push then `listTrim(key, 0, 99)` for a 100-element cap).
+- **`listIndex(key, index)`** — Get an element by its index. Returns `null` if the index is out of range or the key does not exist.
+
+### Set Operations
+
+Sets are unordered collections of unique strings. Useful for tagging, tracking unique visitors and membership checks.
+
+- **`setAdd(key, members)`** — Add one or more members. Returns the number of members that were added (excluding already-existing members).
+- **`setRemove(key, members)`** — Remove one or more members. Returns the number of members that were removed.
+- **`setMembers(key)`** — Get all members. Returns an empty array if the key does not exist.
+- **`setIsMember(key, member)`** — Check if a value is a member of a set.
+- **`setLen(key)`** — Get the number of members. Returns `0` if the key does not exist.
+- **`setUnion(keys)`** — Return the union of multiple sets. Does not store the result. In cluster mode, all keys must share a hash slot.
+- **`setIntersect(keys)`** — Return the intersection of multiple sets. Does not store the result. In cluster mode, all keys must share a hash slot.
+- **`setDiff(keys)`** — Return the difference of the first set against all subsequent sets. Does not store the result. In cluster mode, all keys must share a hash slot.
+
+### Sorted Set Operations
+
+Sorted sets are sets where each member has an associated numeric score, maintained in score order. Useful for leaderboards, priority queues, time-series indexes and rate-limiting windows.
+
+- **`sortedSetAdd(key, members)`** — Add one or more `{member, score}` entries. Returns the number of new members added (not counting score updates to existing members).
+- **`sortedSetRemove(key, members)`** — Remove one or more members. Returns the number of members removed.
+- **`sortedSetScore(key, member)`** — Get the score of a member. Returns `null` if the member or key does not exist.
+- **`sortedSetRank(key, member, reverse?)`** — Get the 0-based rank of a member. When `reverse` is `true`, ranks by descending score. Returns `null` if the member does not exist.
+- **`sortedSetRange(key, start, stop, options?)`** — Get members by rank range. `0` is the lowest-score element, `-1` is the last. `options.reverse` reverses the order. `options.withScores` returns objects with `member` and `score`.
+- **`sortedSetRangeByScore(key, min, max, options?)`** — Get members within a score range. `min` and `max` can be numbers or `"-inf"` / `"+inf"`. `options.reverse` reverses the order. `options.withScores` returns objects with `member` and `score`. `options.offset` and `options.count` provide pagination within the range.
+- **`sortedSetIncr(key, member, amount)`** — Atomically increment the score of a member. Returns the new score. Creates the member with the given amount as its score if it does not exist.
+- **`sortedSetLen(key)`** — Get the number of members. Returns `0` if the key does not exist.
+- **`sortedSetCountByScore(key, min, max)`** — Count members within a score range without retrieving them.
+- **`sortedSetRemoveByRank(key, start, stop)`** — Remove all members within a rank range. Returns the number of members removed.
+- **`sortedSetRemoveByScore(key, min, max)`** — Remove all members within a score range. Returns the number of members removed.
+
+### Transaction Operations
+
+Pipeline transactions execute multiple commands atomically via Redis `MULTI`/`EXEC`. All commands are queued — not executed — until the callback returns, at which point they are submitted as a single atomic batch.
+
+- **`transaction(fn)`** — Execute queued commands atomically. The callback receives a transaction builder with write-only operations. Returns a result object containing per-command results in the order commands were queued.
+
+The transaction builder supports all write operations from the cache abstraction: `set`, `delete`, `getSet`, `append`, `incr`, `decr`, `incrFloat`, `hashSet`, `hashDelete`, `hashIncr`, `listPush`, `listTrim`, `setAdd`, `setRemove`, `sortedSetAdd`, `sortedSetRemove`, `sortedSetIncr`, `expire`, `persist`, and `rename`. Each method returns the builder for chaining.
+
+Read operations (`get`, `mget`, `hashGet`, `hashGetAll`, etc.) are not available within a transaction because Redis queues all commands server-side and only returns results after `EXEC`.
+
+<Callout title="Cluster Mode" type="warn">
+In cluster mode, all keys in a transaction must resolve to the same hash slot. The SDK validates this before executing and returns an error if keys span multiple slots. Use hash tags to co-locate related keys — for example, `{user:123}:name` and `{user:123}:prefs` share the hash tag `user:123` and are guaranteed to land on the same slot.
+</Callout>
+
+<Callout title="Advanced Patterns" type="info">
+WATCH-based optimistic locking (check-and-set pattern) and Lua scripting are not part of the transaction abstraction. These are advanced Redis patterns that interact with protocol-level details and are best served by creating your own Redis client using the [Credentials Provider](#credentials-provider).
+</Callout>
 
 ### Credentials Provider
 
-The credentials provider returns connection details (`host`, `port`, `authToken`, `tls`) for creating your own Redis client. This gives you access to the full Redis API (pub/sub, streams, sorted sets, Lua scripts, transactions, etc.) but means your application code may need changes if you switch between single-instance and cluster mode, as cluster mode Redis requires cluster-aware client configuration.
+The credentials provider returns connection details for creating your own Redis client. This gives you direct access to advanced Redis features that are not covered by the SDK abstraction — including pub/sub, streams, WATCH-based optimistic locking, Lua scripting, pipelining, geo commands, HyperLogLog and bitmaps. Note that using the credentials provider directly means your application code may need changes if you switch between single-instance and cluster mode, as cluster mode requires cluster-aware client configuration.
+
+The configuration object shape depends on the `authMode`:
+
+**`password` mode** (default):
+- **`host`** — Cache endpoint (configuration endpoint for cluster mode)
+- **`port`** — Cache port
+- **`tls`** — Whether TLS is enabled
+- **`clusterMode`** — Whether the cache is in cluster mode
+- **`authMode`** — `"password"`
+- **`authToken`** — AUTH password/token (may be absent for local development with no auth)
+
+**`iam` mode** ✅ Available in v0:
+- **`host`** — Cache endpoint (configuration endpoint for cluster mode)
+- **`port`** — Cache port
+- **`tls`** — Always `true` (IAM auth requires TLS on all providers)
+- **`clusterMode`** — Whether the cache is in cluster mode
+- **`user`** — IAM-mapped cache user ID
+- **`authMode`** — `"iam"`
+- **`getToken()`** — Returns a fresh short-lived authentication token. The SDK handles caching and refresh internally, fetching a new token when the current one is within ~1 minute of expiry.

@@ -4,6 +4,7 @@
     "index",
     "architectures",
     "resources",
+    "consumer-events",
     "sql-database-schema-management",
     "nosql-datastore-schema-management",
     "compute-configuration",

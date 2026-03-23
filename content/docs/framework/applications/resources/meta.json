@@ -4,6 +4,7 @@
     "celerity-api",
     "celerity-bucket",
     "celerity-cache",
+    "celerity-channel",
     "celerity-config",
     "celerity-consumer",
     "celerity-datastore",

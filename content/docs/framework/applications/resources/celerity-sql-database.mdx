@@ -39,7 +39,7 @@ The rest of this section lists fields that are available to configure the `celer
 
 ### engine (required)
 
-The SQL engine to use for the database. This determines the SQL dialect for schema management, DDL generation and escape hatch SQL validation.
+The SQL engine to use for the database. This determines the SQL dialect for schema management, DDL generation and migration SQL validation.
 
 ✅ **Available in v0** (PostgreSQL only)
 
@@ -84,11 +84,11 @@ string
 
 ### migrationsPath
 
-The path to a directory containing escape hatch SQL files, relative to the blueprint file. These are versioned SQL scripts for operations that cannot be expressed in the schema YAML (data backfills, custom functions, triggers, complex multi-step alterations).
+The path to a directory containing versioned SQL migration files, relative to the blueprint file. These are migration scripts for operations that cannot be expressed in the schema YAML (data backfills, custom functions, triggers, complex multi-step alterations).
 
-Scripts follow the naming convention `V<number>__<description>.sql` and are executed in version order after auto-generated DDL changes.
+Scripts follow the naming convention `V<number>__<description>.up.sql` (apply) and `V<number>__<description>.down.sql` (rollback). Up scripts are executed in version order after auto-generated schema DDL. Applied versions are tracked in a `celerity_schema_migrations` table to ensure idempotency.
 
-See [Escape Hatch SQL](/docs/framework/applications/sql-database-schema-management#escape-hatch-sql) for details.
+See [Migration SQL](/docs/framework/applications/sql-database-schema-management#migration-sql) for details.
 
 ✅ **Available in v0**
 
@@ -117,6 +117,38 @@ boolean
 **default value**
 
 `false`
+
+### authMode
+
+The authentication method used to connect to the database at runtime. This determines how handlers obtain credentials when connecting to the database.
+
+✅ **Available in v0** (AWS) / 🚀 **Planned for v1** (Google Cloud, Azure)
+
+**type**
+
+string
+
+**allowed values**
+
+`password` | `iam`
+
+| Value | Description |
+|---|---|
+| `password` | Static username/password credentials. Celerity auto-generates credentials during provisioning and stores them in the secret store or environment variables. |
+| `iam` | Platform IAM identity authentication. The handler's execution role, service account or managed identity is granted database access. The SDK generates short-lived tokens at runtime — no static passwords are stored. |
+
+| Value | AWS | Google Cloud | Azure |
+|---|---|---|---|
+| `password` | Static credentials via Secrets Manager | Static credentials | Static credentials |
+| `iam` | [IAM Database Authentication](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.html) (STS tokens) | [IAM Database Authentication](https://cloud.google.com/sql/docs/postgres/iam-authentication) (OAuth2 tokens via Cloud SQL Connector) | [Entra ID Authentication](https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/concepts-azure-ad-authentication) (managed identity tokens) |
+
+**default value**
+
+`password`
+
+<Callout title="IAM Auth and Local Development" type="info">
+Local development always uses `password` authentication regardless of the `authMode` setting, since the local PostgreSQL container has no IAM infrastructure. Your application code does not need to change — the SDK handles the difference transparently.
+</Callout>
 
 ## Annotations
 
@@ -314,7 +346,7 @@ resources:
                 application: "orders"
         spec:
             handler: "handlers.getOrder"
-            runtime: "nodejs22.x"
+            runtime: "nodejs24.x"
 
     ordersApi:
         type: "celerity/api"
@@ -352,6 +384,30 @@ resources:
             readReplicas: true
 ```
 
+### SQL Database with IAM Authentication
+
+✅ **Available in v0**
+
+```yaml
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
+resources:
+    ordersDb:
+        type: "celerity/sqlDatabase"
+        metadata:
+            displayName: "Orders Database"
+            labels:
+                application: "orders"
+        spec:
+            engine: "postgres"
+            name: "orders"
+            schemaPath: "./schemas/orders.yaml"
+            authMode: "iam"
+            readReplicas: true
+```
+
+When `authMode` is set to `"iam"`, handlers that link to this database are automatically granted the IAM permissions required for token-based database authentication on the target cloud provider. The SDK generates short-lived tokens at runtime — no static passwords are stored or rotated.
+
 ## Target Environments
 
 ### Local Development
@@ -361,13 +417,15 @@ resources:
 When running `celerity dev run`, Celerity starts a local PostgreSQL container and manages the database lifecycle automatically:
 
 1. A PostgreSQL container is started (matching the `engine` in the spec)
-2. The full schema is applied from the schema YAML file
-3. Escape hatch SQL scripts are executed in version order
+2. Schema DDL (up statements) is generated from the schema YAML and applied — extensions, tables, foreign keys, indexes, and constraints are created
+3. Migration scripts (`.up.sql` files) are executed in version order, skipping versions already tracked in `celerity_schema_migrations`
 4. Connection environment variables are injected into your handlers
 
 Local development is ephemeral by default — the database is recreated each time `celerity dev run` starts. For persistent local development (keeping data between restarts), you can opt in via the CLI configuration.
 
 When running `celerity dev test`, an isolated database instance is created per test suite with the schema applied from scratch, test fixtures loaded, and the database torn down after tests complete.
+
+Local development always uses `password` authentication regardless of the `authMode` spec setting.
 
 ### AWS
 
@@ -411,17 +469,29 @@ Aurora Serverless v2 is inherently multi-AZ; the cluster automatically spans mul
 
 When `readReplicas` is enabled with Aurora, Celerity provisions Aurora reader instances within the cluster. Reader instances share the same storage volume as the writer (no replication lag for storage) and can be configured with independent ACU ranges via `aws.aurora.<dbName>.reader.minACU` and `aws.aurora.<dbName>.reader.maxACU`. For cross-region read scaling, `aws.rds.<dbName>.readReplicas.regions` provisions replicas via Aurora Global Database.
 
+**IAM Authentication**
+
+✅ **Available in v0**
+
+When `authMode` is set to `"iam"`, Celerity enables [IAM Database Authentication](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.html) on the RDS instance or Aurora cluster. An IAM-mapped database user is created during the schema migration phase, and the handler's execution role (Lambda or ECS task role) is granted the `rds-db:connect` permission scoped to the database resource and user. The SDK generates short-lived authentication tokens via STS at runtime instead of using static passwords.
+
+Both RDS Proxy and Aurora Serverless v2 support IAM authentication — the connection pooling behaviour is unchanged.
+
 ### Google Cloud
 
 🚀 **Planned for v1** - The Google Cloud deployment target is planned for v1, it may become available in a future v0 evolution.
 
 SQL databases will be provisioned using [Google Cloud SQL](https://cloud.google.com/sql) for PostgreSQL and MySQL.
 
+When `authMode` is set to `"iam"`, Celerity enables [IAM Database Authentication](https://cloud.google.com/sql/docs/postgres/iam-authentication) on the Cloud SQL instance. The handler's service account is registered as a Cloud SQL IAM user and granted `roles/cloudsql.client` and `roles/cloudsql.instanceUser`. The SDK uses the Cloud SQL Connector to generate OAuth2 access tokens at runtime.
+
 ### Azure
 
 🚀 **Planned for v1** - The Azure deployment target is planned for v1, it may become available in a future v0 evolution.
 
 SQL databases will be provisioned using [Azure Database](https://azure.microsoft.com/en-us/products/azure-sql/) for PostgreSQL and MySQL.
+
+When `authMode` is set to `"iam"`, Celerity enables [Entra ID Authentication](https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/concepts-azure-ad-authentication) on the Azure Database server. The handler's managed identity is granted database access, and the SDK fetches access tokens from Entra ID at runtime.
 
 ## App Deploy Configuration
 
@@ -886,11 +956,13 @@ The following example configures an Aurora Serverless v2 database with read repl
 
 The Celerity SDKs provide a pre-configured SQL client for each language runtime with connection pool management tuned for the current deployment target and credentials derived automatically from the environment. Developers can opt out and use the credentials provider to set up whichever library or ORM they prefer.
 
-For language-specific SDK documentation, see [Node.js SQL Database SDK](/docs/node-runtime/sql-database) and [Python SQL Database SDK](/docs/python-runtime/sql-database).
+For language-specific documentation, see [Node.js SDK - SQL Database](/docs/node-runtime/sql-database) and [Python SDK - SQL Database](/docs/python-runtime/sql-database).
 
 ### Default SQL Client
 
 Each language runtime ships with a default SQL client library, pre-configured with connection pooling appropriate to the deployment target — conservative for serverless environments and standard for containerised deployments. Credentials are derived by the SDK from the environment (config store, secrets, environment variables) with no manual setup required.
+
+When `authMode` is `"iam"`, the default SQL client uses a password-provider callback that generates a fresh short-lived token for each new connection in the pool. This is transparent to application code — queries work identically regardless of auth mode.
 
 When read replicas are enabled, the default SQL client automatically routes read queries to the read endpoint and write queries to the primary endpoint.
 
@@ -898,15 +970,30 @@ When read replicas are enabled, the default SQL client automatically routes read
 
 Developers who prefer to use their own SQL library or ORM can use the credentials provider instead. It returns a structured connection configuration object abstracting away internal environment variable naming conventions and config store lookups.
 
-The configuration object contains:
+The configuration object shape depends on the `authMode`:
+
+**`password` mode** (default):
 - **`host`** — Primary endpoint for write operations (and reads when replicas are not enabled)
 - **`readHost`** — Read replica endpoint (only present when `readReplicas` is enabled)
 - **`port`** — Database port
 - **`database`** — Database name
 - **`user`** — Database user
+- **`authMode`** — `"password"`
 - **`password`** — Database password
 - **`url`** — Full connection URL for the primary endpoint
 - **`readUrl`** — Full connection URL for the read endpoint (only present when `readReplicas` is enabled)
+
+**`iam` mode** ✅ Available in v0:
+- **`host`** — Primary endpoint for write operations (and reads when replicas are not enabled)
+- **`readHost`** — Read replica endpoint (only present when `readReplicas` is enabled)
+- **`port`** — Database port
+- **`database`** — Database name
+- **`user`** — IAM identity string (e.g. IAM role ARN on AWS, service account email on GCP, managed identity client ID on Azure)
+- **`authMode`** — `"iam"`
+- **`ssl`** — Always `true` (IAM auth requires TLS on all providers)
+- **`getToken()`** — Returns a fresh short-lived authentication token. The SDK handles caching and refresh internally, fetching a new token when the current one is within ~1 minute of expiry.
+- **`getUrl()`** — Returns a connection URL with the current token embedded. Use this instead of a static `url` field to avoid stale-token bugs.
+- **`getReadUrl()`** — Returns a read endpoint connection URL with the current token (only present when `readReplicas` is enabled)
 
 ## Schema Management
 
@@ -915,7 +1002,7 @@ Celerity provides a built-in schema management system for SQL databases that mak
 Key capabilities include:
 - **Declarative schema definition** in YAML with engine-native column types
 - **Imperative migration engine** that generates safe DDL transitions
-- **Escape hatch SQL** for operations that cannot be auto-generated
+- **Migration SQL** for operations that cannot be auto-generated
 - **Schema validation and diff** before deployment
 - **Type generation** for TypeScript and Python from schema definitions
 - **Schema contracts** for cross-team dependency tracking

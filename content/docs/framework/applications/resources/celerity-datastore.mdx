@@ -760,7 +760,7 @@ string
 
 The Celerity SDKs provide a cloud-agnostic interface for interacting with data stores. The following operations are supported across all target providers (Amazon DynamoDB, Google Cloud Firestore and Azure Cosmos DB).
 
-For language-specific SDK documentation, see [Node.js Datastore SDK](/docs/node-runtime/datastore) and [Python Datastore SDK](/docs/python-runtime/datastore).
+For language-specific documentation, see [Node.js SDK - Datastore](/docs/node-runtime/datastore) and [Python SDK - Datastore](/docs/python-runtime/datastore).
 
 ### Core Operations
 
@@ -781,6 +781,25 @@ Queries and scans support portable condition expressions with the following oper
 <Callout title="Note" type="info">
 The `not_exists` operator is only available through provider-specific SDK classes as Google Cloud Firestore does not support querying for the absence of a field.
 </Callout>
+
+Multiple conditions can be combined using AND or OR logic:
+
+- **Array** `[condA, condB]` — implicit AND (all must match)
+- **Explicit AND** `{ and: [...] }` — equivalent to array
+- **OR** `{ or: [...] }` — at least one must match
+
+Groups can be nested recursively for compound logic:
+
+```typescript
+// (status = "active" OR status = "pending") AND age > 18
+filter: { and: [
+  { or: [
+    { name: "status", operator: "eq", value: "active" },
+    { name: "status", operator: "eq", value: "pending" },
+  ]},
+  { name: "age", operator: "gt", value: 18 },
+]}
+```
 
 ### Range Conditions
 

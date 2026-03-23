@@ -50,15 +50,15 @@ The Celerity CLI will emit errors (not just warnings) when attempting to build o
 
 | Runtime | Runtime ID | OS | Celerity Phase | Upstream Status | Security-Only Begins | Celerity EOL |
 |---------|------------|-----|----------------|-----------------|----------------------|--------------|
-| Node.js 22 | nodejs22.x | Debian 13 (trixie) | Active | Maintenance LTS (until Apr 2027) | When Node.js 24+ runtime is added to Celerity | Oct 2027 |
+| Node.js 24 | nodejs24.x | Debian 13 (trixie) | Active | Active LTS (until Apr 2027), _then Maintenance LTS until Apr 2028_ | When Node.js 25+ runtime is added to Celerity | Oct 2028 |
 | Python 3.13 | python3.13.x | Debian 13 (trixie) | Active | Full Support (until ~Oct 2026), Security fixes (until Oct 2029) | When Python 3.14+ runtime is added to Celerity | Apr 2030 |
 
 <Callout title="How Celerity dates are derived" type="info">
 Celerity's Active phase ends when a newer version of the same language is adopted by Celerity. The Security-Only phase aligns with the upstream language version's end of life for security fixes. Celerity then provides a minimum 6-month Deprecated window before reaching End of Life.
 </Callout>
 
-<Callout title="Node.js 22 lifecycle note" type="info">
-Node.js 22 entered upstream Maintenance LTS in October 2025, before the Celerity v0 release. Since it remains the only supported Node.js version in Celerity, it is classified as Active within the Celerity lifecycle. It will transition to Security-Only when Celerity adds support for Node.js 24 or a later LTS version.
+<Callout title="Node.js 24 lifecycle note" type="info">
+Node.js 24 entered Active LTS in October 2025, before the Celerity v0 release. Since it remains the only supported Node.js version in Celerity, it is classified as Active within the Celerity lifecycle. It will transition to Security-Only when Celerity adds support for Node.js 25 or a later LTS version.
 </Callout>
 
 ## Adoption Policy for New Runtimes
@@ -75,7 +75,7 @@ When a new version is added:
 
 ### New languages
 
-New language runtimes (Go, Java, C#) are planned for the v1 release (target: March 2027). New languages will enter the Active phase upon their initial Celerity release and will follow the same lifecycle policy defined on this page.
+New language runtimes (Go, Java, C#) are planned for the v1 release (target: May 2027). New languages will enter the Active phase upon their initial Celerity release and will follow the same lifecycle policy defined on this page.
 
 See the [Celerity versions](/docs/framework/versions) page for the full roadmap.
 
@@ -126,10 +126,10 @@ Azure Functions do not support OS-only runtimes where pre-compiled binaries are 
 
 | Language | Target Celerity Version | Expected Language Version | Status |
 |----------|------------------------|--------------------------|--------|
-| Node.js 24 | v0 evolution | Node.js 24 LTS | 🔄 Planned for v0 |
-| Python 3.14 | v0 evolution | Python 3.14 | 🔄 Planned for v0 |
-| Go | v1 (March 2027) | TBD | 🚀 Planned for v1 |
-| Java | v1 (March 2027) | TBD | 🚀 Planned for v1 |
-| C# | v1 (March 2027) | TBD | 🚀 Planned for v1 |
+| Node.js 26 | v1 (May 2027) | Node.js 26 LTS | 🚀 Planned for v1 |
+| Python 3.14 | v1 (May 2027) | Python 3.14 | 🚀 Planned for v1 |
+| Go | v1 (May 2027) | TBD | 🚀 Planned for v1 |
+| Java | v1 (May 2027) | TBD | 🚀 Planned for v1 |
+| C# | v1 (May 2027) | TBD | 🚀 Planned for v1 |
 
 _Lifecycle dates for planned runtimes will be published when the runtimes are released. Each will follow the same lifecycle policy defined on this page._

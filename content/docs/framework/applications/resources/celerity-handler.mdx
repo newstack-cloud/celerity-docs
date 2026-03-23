@@ -392,6 +392,54 @@ The state in the workflow must be of the `executeStep` type.
 
 string
 
+### `celerity/channel` 🔗 `celerity/handler`
+
+The following are a set of annotations that configure a handler to process messages received on a channel and hook into channel events when linked from a `celerity/channel` resource.
+
+<FieldHeading fieldName="celerity.handler.channel" />
+
+Indicates that this handler is a channel handler that processes messages or hooks into channel events.
+
+🔮 **Planned for v1+**
+
+**type**
+
+boolean
+
+**default value**
+
+`false`
+___
+
+<FieldHeading fieldName="celerity.handler.channel.event" />
+
+The channel event that this handler responds to.
+
+🔮 **Planned for v1+**
+
+**type**
+
+string
+
+**allowed values**
+
+`"subscribe"` | `"unsubscribe"` | `"message"`
+
+| Event | When | Handler can... |
+|---|---|---|
+| `subscribe` | Client requests subscription (after auth guard passes) | Accept/reject with custom authz logic, run side effects |
+| `unsubscribe` | Client unsubscribes or disconnects | Run cleanup, analytics |
+| `message` | Message published to the channel | Transform, filter, persist, or enrich before broadcast |
+
+The `subscribe` handler's return value determines whether the subscription is accepted. This is the **authz** hook — the auth guard on the channel resource handles **authn**, and the subscribe handler adds application-specific authorisation (e.g. checking org membership in a database).
+
+If no handler is linked, the channel works with just the auth guard — subscriptions are auto-accepted after authn.
+
+**default value**
+
+`$default`
+___
+
 ### `celerity/vpc` 🔗 `celerity/handler`
 
 <FieldHeading fieldName="celerity.handler.vpc.subnetType" />
@@ -459,6 +507,16 @@ When a handler is linked to a consumer, it will be used to process messages rece
 
 [Read more about Celerity consumers](/docs/framework/applications/resources/celerity-consumer)
 
+### `celerity/channel`
+
+When a handler is linked from a channel, it processes messages received on the channel or hooks into channel events. The handler annotations `celerity.handler.channel` and `celerity.handler.channel.event` determine which event the handler responds to (`subscribe`, `unsubscribe`, or `message`).
+
+The `subscribe` handler acts as an authz hook — the auth guard on the channel resource handles authn, and the subscribe handler adds application-specific authorisation. If no handler is linked, the channel works with just the auth guard.
+
+🔮 **Planned for v1+**
+
+[Read more about Celerity channels](/docs/framework/applications/resources/celerity-channel)
+
 ### `celerity/workflow`
 
 When a handler is linked to a workflow, it will be used to execute a step in the workflow. The configuration defined in the handler annotations determines the behaviour of the handler in respect to the workflow.
@@ -519,6 +577,8 @@ When a handler links out to an SQL database, it will be configured with permissi
 ✅ **Available in v0**
 
 The Celerity SDK provides a credentials provider (`getSqlDatabaseConnectionConfig`) for use with any SQL library and an optional knex.js connection factory (`createKnexClient`) with managed connection pooling. For AWS serverless deployments, RDS Proxy is automatically provisioned to handle connection pooling for Lambda functions.
+
+When the SQL database has `authMode: "iam"`, the handler's execution identity (Lambda role, service account, or managed identity) is automatically granted the IAM permissions required for token-based database authentication on the target cloud provider.
 
 [Read more about Celerity SQL databases](/docs/framework/applications/resources/celerity-sql-database)
 
@@ -1182,7 +1242,7 @@ You can choose from the following options for the Celerity runtime:
 
 | Runtime | Runtime ID | Operating System | Lifecycle Phase |
 |---------|------------|------------------|-----------------|
-| Node.js 22 | nodejs22.x | Debian 13 (trixie) | Active |
+| Node.js 24 | nodejs24.x | Debian 13 (trixie) | Active |
 | Python 3.13 | python3.13.x | Debian 13 (trixie) | Active |
 
 _Support for additional runtimes will come in the lead up to the v1 release in 2027._

@@ -853,6 +853,16 @@ Handlers can also be custom auth guards that are used to control access to the A
 
 [Read more about Celerity handlers](/docs/framework/applications/resources/celerity-handler)
 
+### `celerity/channel`
+
+When an API with the WebSocket protocol links to a channel, the channel layer is activated for that API. The API's `linkSelector` selects channel resources by label, the same way it selects handlers. Without any linked channel resources, the channel protocol routes (`channel:subscribe`, `channel:unsubscribe`, etc.) are not registered and the runtime has zero channel overhead.
+
+Channels provide real-time pub/sub messaging, presence tracking, per-channel auth, and rate limiting on top of the WebSocket API.
+
+🔮 **Planned for v1+**
+
+[Read more about Celerity channels](/docs/framework/applications/resources/celerity-channel)
+
 ### `celerity/config`
 
 The `celerity/config` resource type can be used to store configuration and sensitive information such as API keys, database passwords, and other credentials that are used by the application.
@@ -1056,6 +1066,8 @@ There are some reserved routes that are used by the Celerity runtime for resilie
 - `0x4` - This route is reserved for acknowledging messages.
 
     The format of the message body is `{"messageId":"<messageId>","timestamp":"<timestamp>"}`.
+
+- `0x5` - This route is reserved for the server capabilities signal. The server sends this binary frame (`[0x1 0x5 0x0 0x0]`) immediately after a WebSocket connection is established to indicate that the server supports full protocol capabilities including binary messages, custom close codes, and binary control frames (acks and lost-message notifications). In environments where binary frames are not supported (e.g., managed WebSocket gateways), this frame will not reach the client, and the client should assume constrained capabilities. See the [WebSocket Runtime Protocol - Server Capabilities](/docs/framework/runtime/websocket-runtime-protocol#server-capabilities) section for full details.
 
 Due to the lack of a browser-based API for interacting with the WebSocket protocol ping/pong mechanism along with variance in browser implementations for server-sent pings, these concerns are brought up to the Celerity runtime protocol level to allow for more control over reconnection behaviour.
 
@@ -1492,6 +1504,8 @@ The Celerity runtime supports the following features for JWT validation:
 
 There are limitations when it comes to deploying a `celerity/api` in Serverless environments. Only Amazon API Gateway supports the WebSocket protocol when opting for an architecture where handlers are deployed as serverless functions (e.g. AWS Lambda).
 Azure and Google Cloud do not have an equivalent for WebSocket APIs in their Serverless API Gateway/Management offerings.
+
+In Serverless environments such as Amazon API Gateway, binary WebSocket frames are not supported. The Celerity client SDK automatically detects this via the [server capabilities signal](/docs/framework/runtime/websocket-runtime-protocol#server-capabilities) — no client-side configuration is needed. The client falls back to text-only operation with JSON-format control frames for acknowledgements and lost message notifications.
 
 Azure API Management supports WebSocket APIs where the upstream backend is itself a WebSocket server. In this situation, you would have a Celerity runtime instance as your backend WebSocket server. Celerity **_does not_** manage this for you. You would need to setup and manage your own Azure API Management instance and configure the Celerity WebSocket API as the backend server.
 
