@@ -7,12 +7,12 @@ This section provides documentation for a configuration format for deploying Cel
 
 ## Overview
 
-App deploy configuration is used for blueprint variable overrides and configuration for the target environment to deploy the application to. This configuration will be converted to the Bluelink [deploy configuration](https://bluelink.dev/docs/cli/deploy-configuration) format when an application is built and deployed.
+App deploy configuration is used for blueprint variable overrides, context variables, and configuration for the target environment to deploy the application to. This configuration will be converted to the Bluelink [deploy configuration](https://bluelink.dev/docs/cli/deploy-configuration) format when an application is built and deployed.
 
 App deploy configuration is used with the following commands:
 - `build` - Used to build the application, target environment configuration helps determine how the application should be built.
-- `stage-changes` - Used to ensure that all the final blueprint variables are set and that the Celerity app transformer and target environment provider is configured correctly.
-- `deploy` - Used to ensure that all the final blueprint variables are set and that the the Celerity app transformer and target environment provider are configured correctly when deploying resources for a new blueprint instance.
+- `stage` - Used to ensure that all the final blueprint variables are set and that the Celerity app transformer and target environment provider is configured correctly.
+- `deploy` - Used to ensure that all the final blueprint variables are set and that the Celerity app transformer and target environment provider are configured correctly when deploying resources for a new blueprint instance.
 - `destroy` - Used to ensure that Celerity app transformer and target environment provider are configured correctly when destroying resources in a blueprint instance. This command does not make use of an input blueprint file so blueprint variable overrides are not used.
 - `validate` - Used to ensure that Celerity app transformer and target environment provider are configured correctly when validating a blueprint document. This command usually does not make use of blueprint variable overrides as validation is carried out on the source blueprint document and not a deployed instance. The target environment provider may provide custom validation logic that in advanced cases may require calls to APIs that require credentials and configuration.
 
@@ -35,12 +35,17 @@ This file is expected to contain the following structure:
     "config": {
       "<key>": "<value> (string | number | boolean)"
     }
-  }
+  },
+  "contextVariables": {
+    "<key>": "<value> (string | number | boolean)"
+  },
   "blueprintVariables": {
     "<key>": "<value> (string | number | boolean)"
   }
 }
 ```
+
+### Deploy Target
 
 `<deploy-target-name>` is the unique name of the target environment that the application will be deployed to. This can be one of the following:
 
@@ -60,7 +65,27 @@ _See the "Target Environments" docs for each Celerity resource type for the deta
 
 _App environments help in determining how the application should be built and deployed. For example, Celerity will use the app environment to determine appropriate defaults for the instance types used to back a containerised deployment._
 
-The `deployTarget.config` object contains configuration for the target environment provider that can include credentials, provider-specific configuration and configuration that is specific to a Celerity resource type. Each Celerity resource type defines its own set of app configuration options, explore Celerity application resource types [here](/docs/applications/intro).
+### Deploy Target Config
+
+The `deployTarget.config` object contains configuration for the target environment. Keys in this section are split between the target environment's **provider** and the Celerity **transformer** based on a prefix convention:
+
+- **Prefixed keys** (e.g. `aws.sqs.messageRetentionPeriod`, `aws.ecs.compute`, `gcloud.pubsub.topicAsQueue.messageRetentionPeriod`) are resource-specific deployment configuration handled by the Celerity transformer. These keys follow the pattern `{cloud}.{service}.{setting}` or `{cloud}.{service}.{resourceName}.{setting}` and are documented under the "App Deploy Configuration" section of each [Celerity resource type](/docs/framework/applications).
+
+- **Non-prefixed keys** (e.g. `accessKeyId`, `secretAccessKey`, `region`, `profile`) are provider configuration for authentication, networking, and infrastructure. These are passed to the target environment's provider plugin (e.g. the AWS provider).
+
+<Callout title="Info" type="info">
+The Celerity CLI automatically determines the correct provider and transformer based on the `deployTarget.name` value. For example, an `aws` or `aws-serverless` deploy target uses the `newstack-cloud/aws` provider and the `newstack-cloud/celerity` transformer.
+</Callout>
+
+### Context Variables
+
+The `contextVariables` section provides additional context variables that are passed to the deploy engine. These can be used by transformer and provider plugins for custom logic that goes beyond blueprint variables.
+
+The `deployTarget.appEnv` value is automatically included as a context variable (`appEnv`) and does not need to be specified separately in this section.
+
+### Blueprint Variables
+
+The `blueprintVariables` section provides overrides for variables defined in the blueprint. These are substituted during change staging and deployment.
 
 ### Example
 
@@ -70,13 +95,19 @@ The `deployTarget.config` object contains configuration for the target environme
     "name": "aws",
     "appEnv": "production",
     "config": {
+      // Provider configuration (non-prefixed → goes to the AWS provider)
       // It would be better to assume an AWS IAM role for the host machine
       // running the deployment.
       "accessKeyId": "my-access-key-id",
       "secretAccessKey": "secret-access-key",
-      "aws.containerService": "eks",
-      "aws.compute": "fargate",
-    },
+      // Transformer configuration (prefixed → goes to the Celerity transformer)
+      "aws.ecs.containerService": "ecs",
+      "aws.ecs.compute": "fargate",
+      "aws.sqs.messageRetentionPeriod": 86400
+    }
+  },
+  "contextVariables": {
+    "myConfigKey": "my-config-value"
   },
   "blueprintVariables": {
     "region": "us-east-1"
@@ -84,11 +115,40 @@ The `deployTarget.config` object contains configuration for the target environme
 }
 ```
 
+In this example:
+- `accessKeyId` and `secretAccessKey` are sent to the AWS provider for authentication.
+- `aws.ecs.containerService`, `aws.ecs.compute`, and `aws.sqs.messageRetentionPeriod` are sent to the Celerity transformer for resource-specific deployment configuration.
+- `region` is a blueprint variable override.
+- `myConfigKey` is a context variable available to plugins.
+
+## Conversion to Bluelink Format
+
+The Celerity CLI automatically converts the app deploy configuration to the [Bluelink deploy configuration](https://bluelink.dev/docs/cli/deploy-configuration) format before sending it to the deploy engine. The conversion mapping is:
+
+| App Deploy Config | Bluelink Deploy Config |
+|---|---|
+| `deployTarget.name` | `transformers.celerity.deployTarget` |
+| `deployTarget.appEnv` | `contextVariables.appEnv` |
+| `deployTarget.config` (prefixed keys) | `transformers.celerity.*` |
+| `deployTarget.config` (non-prefixed keys) | `providers.<provider>.*` |
+| `contextVariables` | `contextVariables` |
+| `blueprintVariables` | `blueprintVariables` |
+
+The converted configuration is written to `.celerity/deploy-config.json` and should be added to `.gitignore`.
+
+## Multiple Environments
+
+When you want to deploy a blueprint project to multiple environments, you can create a separate app deploy configuration file for each environment.
+For example, you could create an `app.deploy.staging.jsonc` file for a staging environment and set the `--app-deploy-config-file` option to
+`app.deploy.staging.jsonc` when deploying to the staging environment.
+
 ## Version Control
 
 The app deploy configuration file is not intended to be version controlled when its contents is primarily used for credentials and blueprint variable overrides that can contain sensitive information. However, for heavily customised deployments where a lot of the deployment target configuration is used (e.g. AWS), it can be useful to commit sections of this file to version control.
 
-When you want to commit sections of configuration in the app deploy configuration file to version control, you can either commit the entire file and use environment variable substitution for sensitive information like so:
+### Environment Variable Substitution
+
+When you want to commit configuration in the app deploy configuration file to version control, you can commit the entire file and use environment variable substitution for sensitive information like so:
 
 ```javascript title="app.deploy.jsonc"
 {
@@ -98,17 +158,21 @@ When you want to commit sections of configuration in the app deploy configuratio
     "config": {
       // It would be better to assume an AWS IAM role for the host machine
       // running the deployment.
-      "aws.accessKeyId": "${AWS_ACCESS_KEY_ID}",
-      "aws.secretAccessKey": "${AWS_SECRET_ACCESS_KEY}",
-      "aws.containerService": "ecs",
-      "aws.compute": "fargate"
-    },
+      "accessKeyId": "${AWS_ACCESS_KEY_ID}",
+      "secretAccessKey": "${AWS_SECRET_ACCESS_KEY}",
+      "aws.ecs.containerService": "ecs",
+      "aws.ecs.compute": "fargate"
+    }
   },
   "blueprintVariables": {
     "region": "${REGION}"
   }
 }
 ```
+
+The Celerity CLI will substitute the environment variables before processing the configuration.
+
+### Template File
 
 Alternatively, you can create a template file that contains the configuration you want to commit to version control and have placeholders for sensitive information that should be populated in the final file used with the Celerity CLI.
 You can then copy this template file to the final file used with the Celerity CLI and populate the placeholders with environment variables or secrets loaded into a CI/CD or local environment from which you are deploying the application.
@@ -119,11 +183,11 @@ You can then copy this template file to the final file used with the Celerity CL
     "name": "aws",
     "appEnv": "production",
     "config": {
-      "aws.accessKeyId": "[placeholder__aws_access_key_id]",
-      "aws.secretAccessKey": "[placeholder__aws_secret_access_key]",
-      "aws.containerService": "ecs",
-      "aws.compute": "fargate"
-    },
+      "accessKeyId": "[placeholder__aws_access_key_id]",
+      "secretAccessKey": "[placeholder__aws_secret_access_key]",
+      "aws.ecs.containerService": "ecs",
+      "aws.ecs.compute": "fargate"
+    }
   },
   "blueprintVariables": {
     "region": "[placeholder__region]"

@@ -3,7 +3,8 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build": "yarn check-links && next build && yarn post-build && yarn sync-content",
+    "fetch-releases": "node scripts/fetch-releases.mjs",
+    "build": "yarn fetch-releases && yarn check-links && next build && yarn post-build && yarn sync-content",
     "dev": "next dev --turbo",
     "start": "next start",
     "postinstall": "fumadocs-mdx",

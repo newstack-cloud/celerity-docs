@@ -32,6 +32,10 @@ The specification is the structure of the resource definition that comes under t
 - 🚀 **Planned for v1** - Features coming in v1 release
 </Callout>
 
+<Callout title="Configuration Inheritance" type="info">
+Most handler spec fields can be inherited from a linked [`celerity/handlerConfig`](/docs/framework/applications/resources/celerity-handler-config) resource or from [`metadata.sharedHandlerConfig`](#sharing-handler-configuration) in the blueprint. When a field is set at multiple levels, the handler spec takes highest priority, followed by the linked handlerConfig, then the shared config, then defaults. Only `handler` is always required on every handler resource; all other fields can be inherited.
+</Callout>
+
 ### handlerName
 
 The name to identify the handler that will be loaded by the runtime.
@@ -46,11 +50,13 @@ string
 `Orders-SaveOrder-v1`
 
 
-### codeLocation (required)
+### codeLocation
 
 The location of the handler code that will be loaded by the runtime,
 this can be a directory or a file path without the file extension.
 In an OS-only runtime, this is expected to be a directory containing the handler binary.
+
+This field can be inherited from a linked `celerity/handlerConfig` or `metadata.sharedHandlerConfig` and must be provided at some level.
 
 ✅ **Available in v0**
 
@@ -77,11 +83,11 @@ string
 
 `save_order`
 
-### runtime (required)
+### runtime
 
-The runtime that the handler will run in.
-This can be any one of the [supported runtimes](#runtimes) depending on the chosen
-target environment.
+The Celerity runtime identifier for this handler (e.g. `nodejs24.x`, `python3.13.x`). This is a portable identifier: the CLI maps it to a local runtime image for development, and the Celerity deploy engine maps it to the target platform's concrete runtime (AWS Lambda, Azure Functions, Google Cloud Functions). See [Runtimes](#runtimes) for the full list of supported Celerity runtime identifiers and how they map to each target.
+
+This field can be inherited from a linked `celerity/handlerConfig` or `metadata.sharedHandlerConfig`.
 
 <Callout title="Using multiple runtimes in an application" type="warning">
 When deploying your application to containerised or custom server environments, it is **not** possible to use different runtimes for different handlers in the same application.
@@ -607,7 +613,7 @@ Celerity supports cache services that are compatible with the Redis 7.2.4 API.
 
 ✅ **Available in v0**
 
-The Celerity SDK provides a thin cache abstraction (`createCacheClient`) with `get`, `set`, `delete` and `ttl` operations, as well as a credentials provider for direct Redis client access.
+The Celerity SDK provides a cache abstraction (`createCacheClient`) covering all core Redis data structures (strings, hashes, lists, sets, sorted sets), atomic counters, transactions and a credentials provider for direct Redis client access.
 
 [Read more about Celerity caches](/docs/framework/applications/resources/celerity-cache)
 
@@ -632,6 +638,16 @@ When a handler links out to a secret and configuration store, it will be configu
 ✅ **Available in v0**
 
 [Read more about Celerity config](/docs/framework/applications/resources/celerity-config)
+
+### `celerity/handlerConfig`
+
+When a handler links out to a handler config resource, it inherit the shared configuration
+defined in the handler config resource. This is useful for sharing common values such as runtime, memory, timeout
+and environment variables.
+
+✅ **Available in v0**
+
+[Read more about Celerity handler config](/docs/framework/applications/resources/celerity-handler-config)
 
 ## Sharing Handler Configuration
 
@@ -1234,52 +1250,45 @@ resources:
 
 ## Runtimes
 
-### Celerity Runtime
+The `runtime` field on a handler spec accepts a **Celerity runtime identifier**. This is a portable string that both the CLI and the Celerity deploy engine understand: you set it once in the blueprint and Celerity maps it to the correct concrete runtime in each environment.
 
-The Celerity runtime is used when you deploy your handlers to a containerised environment such as Kubernetes, Docker, and the container orchestration platforms that use these technologies such as Amazon ECS, Google Kubernetes Engine, and Azure Kubernetes Service.
-
-You can choose from the following options for the Celerity runtime:
+### Supported Runtimes
 
 | Runtime | Runtime ID | Operating System | Lifecycle Phase |
 |---------|------------|------------------|-----------------|
-| Node.js 24 | nodejs24.x | Debian 13 (trixie) | Active |
-| Python 3.13 | python3.13.x | Debian 13 (trixie) | Active |
+| Node.js 24 | `nodejs24.x` | Debian 13 (trixie) | Active |
+| Python 3.13 | `python3.13.x` | Debian 13 (trixie) | Active |
 
 _Support for additional runtimes will come in the lead up to the v1 release in 2027._
 
-For full details on runtime support timelines, deprecation policy, and lifecycle phases, see the [Runtime Lifecycle & Support Policy](/docs/framework/runtime/lifecycle).
+For full details on runtime support timelines, deprecation policy and lifecycle phases, see the [Runtime Lifecycle & Support Policy](/docs/framework/runtime/lifecycle).
 
-<Callout title="Celerity runtimes for current v0" type="info">
-The Celerity runtime is only used for development environments for the current v0 release of Celerity.
+### Runtime Mapping
+
+The Celerity runtime identifier is resolved to a concrete runtime in each environment. The CLI handles local development, and the Celerity deploy engine handles each deployment target.
+
+| Environment | Resolved by | Example for `python3.13.x` |
+|---|---|---|
+| Local development | Celerity CLI (`celerity dev run`) | Celerity runtime container image (`ghcr.io/newstack-cloud/celerity-runtime-python-3-13`) |
+| AWS Lambda | Celerity deploy engine | Lambda runtime `python3.13` |
+| AWS containerised (ECS/EKS) | Celerity deploy engine | Celerity runtime container image |
+| Google Cloud Functions | Celerity deploy engine | `python313` (🚀 Planned for v1) |
+| Google Cloud containerised (Cloud Run/GKE) | Celerity deploy engine | Celerity runtime container image (🚀 Planned for v1) |
+| Azure Functions | Celerity deploy engine | Python 3.13 worker or custom handler (🚀 Planned for v1) |
+| Azure containerised (Container Apps/AKS) | Celerity deploy engine | Celerity runtime container image (🚀 Planned for v1) |
+
+The Celerity deploy engine chooses the closest available runtime on each target platform. If a target doesn't support the exact version, it falls back to the nearest supported version and surfaces a warning during `celerity deploy`.
+
+<Callout title="Google Cloud Functions and OS-only runtimes" type="warning">
+Google Cloud Functions do not support OS-only runtimes where pre-compiled binaries are used for handlers. The only language supported in Google Cloud Functions that is compiled in other environments is Go.
 </Callout>
 
-### AWS Lambda Runtime
-
-The AWS Lambda runtime is used when you deploy your handlers to AWS Lambda.
-You can choose from the [supported runtimes](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html#runtimes-supported) for AWS lambda.
-See the [Runtime Lifecycle & Support Policy](/docs/framework/runtime/lifecycle#aws-lambda) for how Celerity tracks AWS Lambda runtime deprecations.
-
-### Google Cloud Functions Runtime
-
-The Google Cloud Functions runtime is used when you deploy your handlers to Google Cloud Functions.
-You can choose from the [supported runtimes](https://cloud.google.com/functions/docs/concepts/execution-environment#runtimes) for Google Cloud Functions.
-See the [Runtime Lifecycle & Support Policy](/docs/framework/runtime/lifecycle#google-cloud-functions) for how Celerity tracks Google Cloud Functions runtime deprecations.
-
-<Callout title="Warning" type="warning">
-Google Cloud Functions do not support OS-only runtimes where pre-compiled binaries are used for handlers.
-The only supported language in Google Cloud Functions that is compiled in other environments is Go.
+<Callout title="Azure Functions and OS-only runtimes" type="info">
+Azure Functions do not support OS-only runtimes in the same way as the Celerity runtime and AWS Lambda. Azure Functions do support custom handlers that are compiled light-weight HTTP servers that run in the Azure Functions runtime environment. Celerity will map OS-only runtime identifiers (`os.*`) to custom handlers in Azure Functions.
 </Callout>
 
-### Azure Functions Runtime
-
-The Azure Functions runtime is used when you deploy your handlers to Azure Functions.
-You can choose from the [supported runtimes](https://docs.microsoft.com/en-us/azure/azure-functions/supported-languages) for Azure Functions.
-See the [Runtime Lifecycle & Support Policy](/docs/framework/runtime/lifecycle#azure-functions) for how Celerity tracks Azure Functions runtime deprecations.
-
-<Callout title="Note" type="info">
-Azure Functions do not support OS-only runtimes where pre-compiled binaries are used for handlers in the same way as the Celerity runtime and AWS Lambda.
-Azure functions do support custom handlers that are compiled light-weight HTTP servers that run in the Azure Functions runtime environment.
-Celerity will map OS-only runtimes (`os.*`) to custom handlers in Azure Functions.
+<Callout title="Overriding the mapped runtime" type="info">
+🚀 **Planned for v1** — For edge cases where you need a specific target-platform runtime version that differs from the default mapping, you will be able to override it in the [app deploy configuration](/docs/cli/app-deploy-configuration) via a target-specific key (e.g. `aws.lambda.<handlerName>.runtime`). This override is planned and not yet available in v0.
 </Callout>
 
 ## Target Environments
@@ -1290,7 +1299,7 @@ Celerity will map OS-only runtimes (`os.*`) to custom handlers in Azure Function
 
 In the local development environment, handlers are loaded into the Celerity runtime in a single process.
 Depending on links and configuration, the handler will be wired up to the appropriate HTTP route, WebSocket route, event source, stream or scheduled trigger.
-In the local development environment, event sources and datastore streams will flow through Valkey, either as a message sent directly to a stream consumed by the Celerity runtime or to a pub/sub channel in Valkey that the Celerity runtime will be subscribed to indirectly through a stream. Events to trigger handlers are configured through the [`celerity/consumer`](/docs/framework/applications/celerity-consumer#local-development) resource type.
+In the local development environment, event sources and datastore streams will flow through Valkey, either as a message sent directly to a stream consumed by the Celerity runtime or to a pub/sub channel in Valkey that the Celerity runtime will be subscribed to indirectly through a stream. Events to trigger handlers are configured through the [`celerity/consumer`](/docs/framework/applications/resources/celerity-consumer#local-development) resource type.
 
 ### AWS
 
@@ -1298,7 +1307,7 @@ In the local development environment, event sources and datastore streams will f
 
 In the AWS environment, handlers are loaded into the Celerity runtime in a single process.
 Depending on links and configuration, the handler will be wired up to the appropriate HTTP route, WebSocket route, event source, stream or scheduled trigger.
-Services such as Kinesis and SQS will be wired up directly to the application in the runtime that will forward messages to the handler, other event sources will have some glue components such as an SQS Queue that the application will poll for events. The Celerity runtime works in tandem with the Celerity deploy engine to make sure that handlers are wired up correctly to the event sources even when there is no direct connection between the application running in the Celerity runtime and the event source.
+Services such as Kinesis and SQS will be wired up directly to the application in the runtime that will forward messages to the handler, other event sources will have some glue components such as an SQS Queue that the application will poll for events. The Celerity runtime works in tandem with the [Bluelink deploy engine](https://bluelink.dev/docs/bluelink/overview) to make sure that handlers are wired up correctly to the event sources even when there is no direct connection between the application running in the Celerity runtime and the event source.
 
 ### AWS Serverless
 
@@ -1317,7 +1326,7 @@ For workflows, AWS Step Functions will be configured to trigger the Lambda funct
 
 In the Google Cloud environment, handlers are loaded into the Celerity runtime in a single process.
 Depending on links and configuration, the handler will be wired up to the appropriate HTTP route, WebSocket route, event source, stream or scheduled trigger.
-Google Cloud Pub/Sub will be wired up directly to the application in the runtime that will forward messages to the handler, other event sources will have some glue components such as a Pub/Sub topic that the application will poll for events. The Celerity runtime works in tandem with the Celerity deploy engine to make sure that handlers are wired up correctly to the event sources even when there is no direct connection between the application running in the Celerity runtime and the event source.
+Google Cloud Pub/Sub will be wired up directly to the application in the runtime that will forward messages to the handler, other event sources will have some glue components such as a Pub/Sub topic that the application will poll for events. The Celerity runtime works in tandem with the [Bluelink deploy engine](https://bluelink.dev/docs/bluelink/overview) to make sure that handlers are wired up correctly to the event sources even when there is no direct connection between the application running in the Celerity runtime and the event source.
 
 ### Google Cloud Serverless
 
@@ -1336,7 +1345,7 @@ Google Cloud Serverless does not support WebSocket APIs, meaning handlers linked
 
 In the Azure environment, handlers are loaded into the Celerity runtime in a single process.
 Depending on links and configuration, the handler will be wired up to the appropriate HTTP route, WebSocket route, event source, stream or scheduled trigger.
-Azure Queue Storage queues will be wired up directly to the application in the runtime that will forward messages to the handler, other event sources will have some glue components such as a Queue Storage queue that the application will poll for events. The Celerity runtime works in tandem with the Celerity deploy engine to make sure that handlers are wired up correctly to the event sources even when there is no direct connection between the application running in the Celerity runtime and the event source.
+Azure Queue Storage queues will be wired up directly to the application in the runtime that will forward messages to the handler, other event sources will have some glue components such as a Queue Storage queue that the application will poll for events. The Celerity runtime works in tandem with the [Bluelink deploy engine](https://bluelink.dev/docs/bluelink/overview) to make sure that handlers are wired up correctly to the event sources even when there is no direct connection between the application running in the Celerity runtime and the event source.
 
 ### Azure Serverless
 

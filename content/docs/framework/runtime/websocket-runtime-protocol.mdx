@@ -152,7 +152,30 @@ The client SDKs will implement this behaviour automatically if configured for th
 
 ### `connect` approach
 
-The `connect` approach allows the client to send authentication information as part of the WebSocket connection request. This is done by including the authentication token as a HTTP header in the WebSocket connection request.
+The `connect` approach allows the client to send authentication information as part of the WebSocket connection request. The server extracts the token from the request and authenticates it before upgrading the connection.
+
+#### Token Transport
+
+How the token reaches the server depends on the client environment:
+
+- **Server-side or native clients** (Node.js, Python, mobile apps, CLI tools): The token can be sent as a HTTP header (e.g. `Authorization: Bearer <token>`) on the WebSocket upgrade request, as these environments have full control over request headers.
+- **Browser clients**: The browser `WebSocket` API does not support custom headers on the handshake request. In this environment, the token must be sent via a **cookie**. The application's HTTP login or token exchange endpoint should set an `HttpOnly`, `Secure`, `SameSite=Strict` (or `SameSite=Lax`) cookie containing the auth token. The browser will automatically include this cookie on the WebSocket upgrade request to the same origin.
+
+<Callout title="Cross-site browser clients" type="warn">
+Cookie-based auth requires the WebSocket API to be **same-site** as the client application (e.g. `app.example.com` connecting to `api.example.com`). For same-site, different subdomain setups, set the cookie with `Domain=.example.com` so it is included on the upgrade request.
+
+For **cross-site** deployments (e.g. `example.com` connecting to `different.com`), cookies with `SameSite=Strict` or `SameSite=Lax` will not be sent on the upgrade request. Since browsers also cannot set custom headers on the WebSocket handshake, the `connect` strategy is not viable for cross-site browser clients. Use the [`authMessage`](#authmessage-approach) strategy instead.
+</Callout>
+
+<Callout title="Why not query parameters?" type="warn">
+Sending tokens as query parameters (e.g. `wss://example.com/ws?token=...`) is **discouraged** because URLs may be logged by proxies, load balancers, and server access logs, exposing the token. Cookie-based transport avoids this risk.
+</Callout>
+
+The [`celerity/api`](/docs/framework/applications/resources/celerity-api) resource configuration determines where the server extracts the token from using the [`tokenSource`](/docs/framework/applications/resources/celerity-api#authguardconfiguration) field. This can be a header (`$.headers.*`) or a cookie (`$.cookies.*`) specified via a [`valueSourceConfiguration`](/docs/framework/applications/resources/celerity-api#valuesourceconfiguration) entry for the `websocket` protocol.
+
+Only a single token source is supported per protocol. This means the application must choose one transport mechanism for the `connect` strategy: use `$.cookies.*` if the API serves browser clients, or `$.headers.*` if it only serves server-side or native clients.
+
+#### Connection Lifecycle
 
 Upon successful authentication, the connection will be upgraded to WebSockets and the client will be able to send and receive messages.
 
@@ -173,7 +196,7 @@ After upgrading the connection, the server should also send a message to the cli
 ```
 
 Upon failed authentication/authorisation, the connection will be closed with either the custom status code `4001` (Unauthorized) or `4002` (Forbidden). The client should handle these status codes as authentication or authorisation failures respectively.
-The custom status codes are in the range reserved for application-specific status codes, see [RFC 6455](https://tools.ietf.org/html/rfc6455#section-7.4.2) for more information..
+The custom status codes are in the range reserved for application-specific status codes, see [RFC 6455](https://tools.ietf.org/html/rfc6455#section-7.4.2) for more information.
 
 The client SDKs will implement this behaviour automatically if configured for the `connect` approach, exposing callbacks for successful and failed authentication.
 

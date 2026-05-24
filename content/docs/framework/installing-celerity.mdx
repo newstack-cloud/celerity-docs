@@ -2,3 +2,200 @@
 title: Installing Celerity
 description: How to install Celerity for multiple platforms
 ---
+
+Celerity is installed using the **Bluelink Manager** with the Celerity profile. The Bluelink Manager handles downloading the Celerity CLI, the shared Deploy Engine, the Blueprint Language Server, and all required plugins.
+
+## Installation Options
+
+There are three ways to install Celerity:
+
+1. **Quick Install (Recommended)** - Use the one-line installer script or Windows installer
+2. **Using Bluelink Manager** - If you already have the Bluelink Manager installed
+3. **Manual Installation** - Download and configure each component individually
+
+## Quick Install (Recommended)
+
+<Tabs items={["macOS / Linux", "Windows"]}>
+<Tab value="macOS / Linux">
+
+Run the following command in your terminal:
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSfL https://manager-sh.celerityframework.io | sh
+```
+
+This bootstrap script downloads the Bluelink Manager and automatically runs `bluelink-manager install --profile celerity`.
+
+</Tab>
+<Tab value="Windows">
+
+Download and run the Celerity MSI installer:
+
+<WindowsInstallerDownload />
+
+The installer will:
+- Install the Bluelink Manager with the Celerity profile
+- Set up a startup application
+- Prepare all necessary directories
+- Configure the Deploy Engine as a Windows Service
+
+Alternatively, you can use Windows Subsystem for Linux (WSL) and run:
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSfL https://manager-sh.celerityframework.io | sh
+```
+
+</Tab>
+</Tabs>
+
+## Using Bluelink Manager
+
+If you already have the Bluelink Manager installed (for example, from a [Bluelink](https://bluelink.dev) installation), you can add the Celerity profile directly:
+
+```bash
+bluelink-manager install --profile celerity
+```
+
+To install both Bluelink and Celerity profiles side-by-side:
+
+```bash
+bluelink-manager install --profile bluelink,celerity
+```
+
+Shared components (Deploy Engine and Blueprint Language Server) are only downloaded once regardless of which profiles are installed.
+
+## What Gets Installed
+
+The Celerity profile installs the following components:
+
+| Component | Description |
+|---|---|
+| **Celerity CLI** (`celerity`) | Command-line interface for Celerity application development |
+| **Deploy Engine** (shared) | Background service that handles infrastructure deployments |
+| **Blueprint Language Server** (shared) | Provides diagnostics, validation and auto-complete for blueprint files in editors through extensions such as the [Bluelink VSCode extension](https://marketplace.visualstudio.com/items?itemName=NewStack.bluelink) |
+| **Plugins** | `newstack-cloud/aws` and `newstack-cloud/celerity` |
+
+## Manual Download
+
+If you prefer to download the Celerity CLI binary directly, you can find the latest releases below:
+
+<ReleaseTable component="celerity-cli" />
+
+After downloading, extract the archive and move the `celerity` binary to your bin directory:
+
+<Tabs items={["macOS / Linux", "Windows"]}>
+<Tab value="macOS / Linux">
+
+```bash
+# Extract and install
+tar -xzf celerity_*.tar.gz
+mv celerity ~/.bluelink/bin/
+chmod +x ~/.bluelink/bin/celerity
+```
+
+</Tab>
+<Tab value="Windows">
+
+```powershell
+# Extract and install
+Expand-Archive -Path celerity_*.zip -DestinationPath .
+Move-Item celerity.exe "$env:LOCALAPPDATA\NewStack\Bluelink\bin\"
+```
+
+</Tab>
+</Tabs>
+
+### Shared Components
+
+The Deploy Engine and Blueprint Language Server are shared with Bluelink and are distributed from the [Bluelink installation guide](https://bluelink.dev/docs/bluelink/installing-bluelink). If you are installing components manually, refer to the Bluelink documentation for downloading and configuring these shared components.
+
+<VerificationInstructions />
+
+## Verifying the Installation
+
+After installation, verify everything is working:
+
+```bash
+# Check the status of all installed components
+bluelink-manager status
+
+# Verify the Celerity CLI
+celerity --version
+```
+
+## Managing Your Installation
+
+```bash
+# Update all installed components to the latest versions
+bluelink-manager update
+
+# Update only the Celerity profile
+bluelink-manager update --profile celerity
+
+# Start the Deploy Engine service
+bluelink-manager start
+
+# Stop the Deploy Engine service
+bluelink-manager stop
+
+# Restart the Deploy Engine service
+bluelink-manager restart
+
+# Update the manager itself
+bluelink-manager self-update
+
+# Uninstall the Celerity profile (keeps shared components if other profiles are installed)
+bluelink-manager uninstall --profile celerity
+```
+
+## Directory Structure
+
+After installation with the Celerity profile, your Bluelink directory will have the following structure:
+
+<Tabs items={["macOS / Linux", "Windows"]}>
+<Tab value="macOS / Linux">
+
+```
+~/.bluelink/
+├── bin/
+│   ├── celerity           # Celerity CLI
+│   ├── deploy-engine      # Deploy Engine (shared)
+│   └── blueprint-ls       # Language Server (shared)
+├── config/                # CLI configuration
+├── engine/
+│   ├── plugins/           # Core plugins (aws + celerity)
+│   └── state/             # Deployment state
+└── manifest.json          # Tracks installed profiles and versions
+```
+
+</Tab>
+<Tab value="Windows">
+
+```
+%LOCALAPPDATA%\NewStack\Bluelink\
+├── bin\
+│   ├── celerity.exe           # Celerity CLI
+│   ├── deploy-engine.exe      # Deploy Engine (shared)
+│   └── blueprint-ls.exe       # Language Server (shared)
+├── config\                    # CLI configuration
+├── engine\
+│   ├── plugins\               # Core plugins (aws + celerity)
+│   └── state\                 # Deployment state
+└── manifest.json              # Tracks installed profiles and versions
+```
+
+</Tab>
+</Tabs>
+
+## Profiles
+
+The Bluelink Manager uses a profile system to manage different toolchains. The Celerity profile can coexist with the Bluelink profile on the same machine. For a full explanation of how profiles work, see the [Bluelink Profiles documentation](https://bluelink.dev/docs/bluelink/profiles).
+
+## Next Steps
+
+Once you have Celerity installed, you can:
+
+- Follow the [Quick Start guide](/docs/framework) to create your first Celerity application
+- Learn about [Celerity Applications](/docs/framework/applications)
+- Explore the [Celerity CLI reference](/docs/cli/getting-started)
+- Read the [Celerity Runtime documentation](/docs/framework/runtime)

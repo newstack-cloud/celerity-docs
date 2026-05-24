@@ -51,9 +51,7 @@ string
 
 ### runtime
 
-The runtime that handlers will run in.
-This can be any one of the [supported runtimes](#runtimes) depending on the chosen
-target environment.
+The Celerity runtime identifier for handlers that inherit from this config (e.g. `nodejs24.x`, `python3.13.x`). This is a portable identifier: the CLI maps it to a local runtime image for development, and the Celerity deploy engine maps it to the target platform's concrete runtime. See the [Runtimes](/docs/framework/applications/resources/celerity-handler#runtimes) section of the `celerity/handler` documentation for the full list and target mappings.
 
 **type**
 
@@ -61,7 +59,7 @@ string
 
 **examples**
 
-`python3.12.x`
+`python3.13.x`
 
 ### memory
 
@@ -130,7 +128,12 @@ environmentVariables:
 
 ## Linked From
 
-[celerity/handler](/docs/framework/applications/resources/celerity-handler)
+### celerity/handler
+
+Handler config resources can be linked from multiple handler
+resources to share configuration between them.
+
+[Read more about Celerity handlers](/docs/framework/applications/resources/celerity-handler)
 
 ## Links To
 

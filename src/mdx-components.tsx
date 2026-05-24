@@ -3,6 +3,10 @@ import { Heading } from 'fumadocs-ui/components/heading';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 import { icons } from 'lucide-react';
 import type { MDXComponents } from 'mdx/types';
+import InstallCelerity from '@/components/install-celerity';
+import ReleaseTable from '@/components/releases/release-table';
+import WindowsInstallerDownload from '@/components/releases/windows-installer-download';
+import VerificationInstructions from '@/components/releases/verification-instructions';
 
 // use this function to get MDX components, you will need it for rendering MDX
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
@@ -23,6 +27,10 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     ),
     FieldsHeading,
     FieldHeading,
+    InstallCelerity,
+    ReleaseTable,
+    WindowsInstallerDownload,
+    VerificationInstructions,
   };
 }
 

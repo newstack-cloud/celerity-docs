@@ -10,21 +10,21 @@ This section provides an overview of the versioning strategy for Celerity spanni
 ## Version Strategy
 
 ### v0 (Current) - Evolving Capabilities
-**Initial Release**: May 31st, 2026
-**Evolution Period**: May 2026 - May 2027
+**Initial Release**: June 30th, 2026
+**Evolution Period**: June 2026 - June 2027
 
 v0 represents the initial release of Celerity with limited but functional capabilities that will continuously evolve until the release of v1.
 
 The current v0 release supports deploying Celerity applications to AWS serverless environments with application handlers running in AWS Lambda:
 
-#### Current v0 Components (May 2026)
+#### Current v0 Components (June 2026)
 - **Celerity CLI**: Full set of commands for starting projects along with the development and deployment lifecycle.
 - **Celerity Core Runtimes & SDKs**: Node.js and Python runtimes only, supporting HTTP APIs, WebSocket APIs, consumers, schedules, SQL databases, NoSQL datastores and caches.
-- **Client SDK for WebSocket APIs**: A single TypeScript package for browsers and Node.js to interact with WebSocket APIs adhering to the [WebSocket Runtime Protocol](/docs/runtime/websocket-runtime-protocol), that are also compatible with AWS API Gateway v2 WebSocket APIs.
+- **Client SDK for WebSocket APIs**: A single TypeScript package for browsers and Node.js to interact with WebSocket APIs adhering to the [WebSocket Runtime Protocol](/docs/framework/runtime/websocket-runtime-protocol), that are also compatible with AWS API Gateway v2 WebSocket APIs.
 - [**Bluelink Deploy Engine**](https://bluelink.dev/docs/bluelink/overview): The engine that powers deployments of Celerity applications, initially supporting only a subset of AWS services that enable serverless deployments.
 - [**Bluelink Blueprint Language Server**](https://bluelink.dev/docs/bluelink/overview): Diagnostics, validation and auto-complete support for blueprints used to define Celerity applications.
 
-#### Current v0 Resource Types (May 2026)
+#### Current v0 Resource Types (June 2026)
 - `celerity/api` - AWS API Gateway deployments and the Celerity runtime locally - HTTP and WebSocket APIs, full CORS support and authentication.
 - `celerity/handler` - AWS Lambda functions
 - `celerity/handlerConfig` - Helper type for shared handler configuration translating to AWS Lambda function configuration.
@@ -37,13 +37,13 @@ The current v0 release supports deploying Celerity applications to AWS serverles
 - `celerity/bucket` - AWS S3 buckets
 - `celerity/vpc` - AWS VPCs hosting lambda functions and using VPC endpoints to interact with other AWS services.
 - `celerity/sqlDatabase` - AWS RDS for PostgreSQL with built-in schema management (migration engine, schema-as-code, type generation).
-- `celerity/cache` - AWS ElastiCache for Redis with a thin cache abstraction (get/set/delete/ttl).
+- `celerity/cache` - AWS ElastiCache for Redis with an SDK abstraction covering all core Redis data structures (strings, hashes, lists, sets, sorted sets), atomic counters, transactions and a credentials provider for direct Redis client access.
 
 #### Cloud Provider Support
 - **AWS only** (initially)
 
 ### v1 (Preview) - Full Capabilities
-**Target Release**: May 2027
+**Target Release**: June 2027
 
 v1 represents the full vision of Celerity with complete multi-cloud capabilities:
 
@@ -51,7 +51,7 @@ v1 represents the full vision of Celerity with complete multi-cloud capabilities
 - **Celerity CLI**: Full set of commands for starting projects along with the development and deployment lifecycle.
 - **Celerity Core Runtimes & SDKs**: All language runtimes (Node.js, Python, Go, C#, Java)
 - **Celerity Workflow Runtime**: Workflow orchestration with support for all language runtimes (Node.js, Python, Go, C#, Java)
-- **Client SDK for WebSocket APIs**: Client SDKs for browsers, Node.js and Python to interact with WebSocket APIs adhering to the [WebSocket Runtime Protocol](/docs/runtime/websocket-runtime-protocol), that are also compatible with AWS API Gateway v2 WebSocket APIs. v1 adds a Python WebSocket client SDK.
+- **Client SDK for WebSocket APIs**: Client SDKs for browsers, Node.js and Python to interact with WebSocket APIs adhering to the [WebSocket Runtime Protocol](/docs/framework/runtime/websocket-runtime-protocol), that are also compatible with AWS API Gateway v2 WebSocket APIs. v1 adds a Python WebSocket client SDK.
 - [**Bluelink Deploy Engine**](https://bluelink.dev/docs/bluelink/overview): The engine that powers deployments of Celerity applications, supporting AWS, Azure and Google Cloud.
 - [**Bluelink Blueprint Language Server**](https://bluelink.dev/docs/bluelink/overview): Diagnostics, validation and auto-complete support for blueprints used to define Celerity applications.
 

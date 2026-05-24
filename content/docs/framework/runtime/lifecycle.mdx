@@ -100,15 +100,15 @@ When a runtime approaches end of life, the following steps are carried out:
 
 When deploying handlers to cloud provider serverless platforms, the runtime lifecycle is governed by the respective cloud provider. Celerity does not control these runtimes and cannot extend their support beyond what the provider offers.
 
-Celerity tracks cloud provider runtime deprecations. When a provider deprecates a runtime version, Celerity will update documentation and emit CLI warnings accordingly.
+You always specify a [Celerity runtime identifier](/docs/framework/applications/resources/celerity-handler#runtimes) in the blueprint — the Celerity deploy engine maps it to the concrete provider runtime at deploy time. Celerity tracks cloud provider runtime deprecations and will update the mapping, documentation and CLI warnings when a provider deprecates a runtime version.
 
 ### AWS Lambda
 
-You can choose from the [supported runtimes](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html#runtimes-supported) for AWS Lambda. When AWS deprecates a Lambda runtime, Celerity will emit CLI warnings for applications using that runtime and update this documentation.
+The Celerity deploy engine maps each Celerity runtime identifier to a [supported AWS Lambda runtime](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html#runtimes-supported). When AWS deprecates a Lambda runtime that a mapping targets, Celerity will update the mapping to the next supported version and emit CLI warnings for applications affected by the change.
 
 ### Google Cloud Functions
 
-You can choose from the [supported runtimes](https://cloud.google.com/functions/docs/concepts/execution-environment#runtimes) for Google Cloud Functions. When Google deprecates a Cloud Functions runtime, Celerity will emit CLI warnings for applications using that runtime and update this documentation.
+The Celerity deploy engine maps each Celerity runtime identifier to a [supported Google Cloud Functions runtime](https://cloud.google.com/functions/docs/concepts/execution-environment#runtimes). When Google deprecates a Cloud Functions runtime that a mapping targets, Celerity will update the mapping and emit CLI warnings for affected applications.
 
 <Callout title="Warning" type="warning">
 Google Cloud Functions do not support OS-only runtimes where pre-compiled binaries are used for handlers. The only supported language in Google Cloud Functions that is compiled in other environments is Go.
@@ -116,10 +116,10 @@ Google Cloud Functions do not support OS-only runtimes where pre-compiled binari
 
 ### Azure Functions
 
-You can choose from the [supported runtimes](https://docs.microsoft.com/en-us/azure/azure-functions/supported-languages) for Azure Functions. When Azure deprecates a Functions runtime, Celerity will emit CLI warnings for applications using that runtime and update this documentation.
+The Celerity deploy engine maps each Celerity runtime identifier to a [supported Azure Functions runtime](https://docs.microsoft.com/en-us/azure/azure-functions/supported-languages). When Azure deprecates a Functions runtime that a mapping targets, Celerity will update the mapping and emit CLI warnings for affected applications.
 
 <Callout title="Note" type="info">
-Azure Functions do not support OS-only runtimes where pre-compiled binaries are used for handlers in the same way as the Celerity runtime and AWS Lambda. Azure functions do support custom handlers that are compiled light-weight HTTP servers that run in the Azure Functions runtime environment. Celerity will map OS-only runtimes (`os.*`) to custom handlers in Azure Functions.
+Azure Functions do not support OS-only runtimes in the same way as the Celerity runtime and AWS Lambda. Azure Functions do support custom handlers that are compiled light-weight HTTP servers that run in the Azure Functions runtime environment. Celerity will map OS-only runtime identifiers (`os.*`) to custom handlers in Azure Functions.
 </Callout>
 
 ## Future Runtime Roadmap

@@ -22,8 +22,8 @@ The `celerity/api` resource type is used to define an HTTP API or a WebSocket AP
 
 An API can be deployed to different target environments such as a Serverless API Gateway[^1], a containerised environment, or a custom server.
 
-Containerised environments and custom servers use the Celerity runtime for the language of choice to be deployed to handle incoming requests and route them to your [application handlers](/docs/applications/resources/celerity-handler).
-The Celerity deploy engine and platforms built on top of it will take care of this for the supported target environments (e.g. Amazon ECS).
+Containerised environments and custom servers use the Celerity runtime for the language of choice to be deployed to handle incoming requests and route them to your [application handlers](/docs/framework/applications/resources/celerity-handler).
+The [Bluelink deploy engine](https://bluelink.dev/docs/bluelink/overview) and platforms built on top of it will take care of this for the supported target environments (e.g. Amazon ECS).
 
 ## Specification
 
@@ -308,7 +308,7 @@ ___
 
 Determines the strategy for authenticating WebSocket connections.
 When `authMessage` is set, the client is expected to send a message with an authentication token to authenticate the connection.
-When `connect` is set, the client is expected to send the authentication token in the connection request headers.
+When `connect` is set, the client is expected to send the authentication token in the connection request via a HTTP header or cookie. Browser clients must use cookies as the browser `WebSocket` API does not support custom headers on the handshake request.
 
 See the [WebSocket Auth Strategy](#websocket-auth-strategy) section for more information.
 
@@ -673,6 +673,8 @@ In a WebSocket message a token in the message data would be `$.data.token`, assu
 
 <Callout title="Warning" type="warning">
 For WebSocket APIs using the `connect` auth strategy, the token source must be in a HTTP header (`$.headers.*`), in cookies (`$.cookies.*`) or in the query string (`$.query.*`).
+
+Note that browser clients **cannot** send custom headers on the WebSocket handshake request, so `$.cookies.*` is the only viable token source for browser-based `connect` auth. Currently, only a single token source is supported per protocol, so the application must choose one transport mechanism: use `$.cookies.*` for browser-facing APIs or `$.headers.*` for server-to-server APIs. See the [WebSocket Auth Strategy](#websocket-auth-strategy) section and the [WebSocket Runtime Protocol](/docs/framework/runtime/websocket-runtime-protocol#connect-approach) for more details.
 </Callout>
 
 **field type**
@@ -687,15 +689,24 @@ string | array[ [valueSourceConfiguration](#valuesourceconfiguration) ]
 
 `$.body.token`
 
-`$.cookies.token`
+`$.cookies.authToken`
 
 `$.data.token`
 
 ```yaml
+# authMessage strategy: token in the WebSocket message body
 - protocol: "http"
   source: "$.headers.Authorization"
 - protocol: "websocket"
   source: "$.data.token"
+```
+
+```yaml
+# connect strategy: cookie-based token for browser clients
+- protocol: "http"
+  source: "$.headers.Authorization"
+- protocol: "websocket"
+  source: "$.cookies.authToken"
 ```
 ___
 
@@ -778,6 +789,8 @@ In a WebSocket message, a token in the message data would be `$.data.authToken`,
 
 <Callout title="Warning" type="warning">
 When the value source is for a token in a WebSocket API using the `connect` auth strategy, the token source must be in a HTTP header (`$.headers.*`), in cookies (`$.cookies.*`) or in the query string (`$.query.*`).
+
+Note that browser clients **cannot** send custom headers on the WebSocket handshake request, so `$.cookies.*` is the only viable source for browser-based `connect` auth. Only a single token source is supported per protocol, so the application must choose one transport mechanism.
 </Callout>
 
 **field type**
@@ -963,6 +976,58 @@ resources:
                         audience:
                             - "https://identity.newstack.cloud/api/manage/v1/"
 ```
+
+### WebSocket API (`connect` auth strategy)
+
+```yaml
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
+resources:
+    orderStreamApi:
+        type: "celerity/api"
+        metadata:
+            displayName: Order Stream API
+        linkSelector:
+            byLabel:
+                application: "orders"
+        spec:
+            protocols:
+                - websocketConfig:
+                    routeKey: "action"
+                    authStrategy: "connect"
+                    authGuard: "jwt"
+            cors:
+                allowCredentials: true
+                allowOrigins:
+                    - "https://example.com"
+                    - "https://another.example.com"
+            domain:
+                domainName: "api.example.com"
+                basePaths:
+                    - "/"
+                normalizeBasePath: false
+                certificateId: "${variables.certificateId}"
+                securityPolicy: "TLS_1_2"
+            tracingEnabled: true
+            auth:
+                defaultGuard: "jwt"
+                guards:
+                    jwt:
+                        type: jwt
+                        issuer: "https://identity.newstack.cloud/oauth2/v1/"
+                        tokenSource:
+                            # Cookie for browser clients connecting via the connect strategy
+                            - protocol: "websocket"
+                              source: "$.cookies.authToken"
+                        audience:
+                            - "https://identity.newstack.cloud/api/manage/v1/"
+```
+
+<Callout title="Browser clients and the connect strategy" type="info">
+The browser `WebSocket` API does not support custom headers on the handshake request. When browser clients use the `connect` strategy, the auth token must be sent via a cookie. Configure `$.cookies.*` as the WebSocket token source for browser-facing APIs, or `$.headers.*` for APIs that only serve server-side or native clients.
+
+See the [WebSocket Runtime Protocol](/docs/framework/runtime/websocket-runtime-protocol#connect-approach) for more details.
+</Callout>
 
 ### Hybrid API
 
@@ -1150,9 +1215,44 @@ _the "event" field in the response message is not related to the route key, this
 
 🚀 **Planned for v1** - The `connect` approach is planned for v1 as is only applicable to WebSocket APIs deployed as containerised applications hosting the Celerity runtime, it may become available in a future v0 evolution.
 
-The HTTP header configured as the API's auth guard token source must be sent in the connection request headers.
+The token configured in the API's auth guard token source must be present in the WebSocket upgrade request. The server extracts the token and authenticates it before upgrading the connection.
 
-For example, if the token source is `$.headers.Authorization`, the client must send the token in the `Authorization` header when connecting.
+**Token transport depends on the client environment:**
+
+- **Server-side or native clients** (Node.js, Python, mobile apps, CLI tools) can send the token as a HTTP header (e.g. `Authorization: Bearer <token>`) on the upgrade request.
+- **Browser clients** cannot send custom headers on the WebSocket handshake as the browser `WebSocket` API does not support this. In this environment, the token must be sent via a **cookie**. The application's HTTP login or token exchange endpoint should set an `HttpOnly`, `Secure`, `SameSite=Strict` (or `SameSite=Lax`) cookie containing the auth token, which the browser will automatically include on the upgrade request.
+
+<Callout title="Cross-site browser clients" type="warn">
+Cookie-based auth requires the WebSocket API to be **same-site** as the client application (e.g. `app.example.com` connecting to `api.example.com`). For same-site, different subdomain setups, set the cookie with `Domain=.example.com` so it is included on the upgrade request.
+
+For **cross-site** deployments (e.g. `example.com` connecting to `different.com`), cookies with `SameSite=Strict` or `SameSite=Lax` will not be sent on the upgrade request. Since browsers also cannot set custom headers on the WebSocket handshake, the `connect` strategy is not viable for cross-site browser clients. Use the `authMessage` strategy instead.
+</Callout>
+
+Configure the [`tokenSource`](#authguardconfiguration) to match the client environment. For browser-facing APIs, use a cookie source:
+
+```yaml
+tokenSource:
+    - protocol: "http"
+      source: "$.headers.Authorization"
+    - protocol: "websocket"
+      source: "$.cookies.authToken"
+```
+
+For APIs that only serve server-side or native clients, use a header source:
+
+```yaml
+tokenSource:
+    - protocol: "http"
+      source: "$.headers.Authorization"
+    - protocol: "websocket"
+      source: "$.headers.Authorization"
+```
+
+<Callout title="Why not query parameters?" type="warn">
+While the token source supports `$.query.*`, sending tokens as query parameters (e.g. `wss://example.com/ws?token=...`) is **discouraged** because URLs may be logged by proxies, load balancers, and server access logs, exposing the token. Cookie-based transport avoids this risk.
+</Callout>
+
+See the [WebSocket Runtime Protocol](/docs/framework/runtime/websocket-runtime-protocol#connect-approach) for the full protocol details including the connection lifecycle and failure handling.
 
 Upon successful authentication, the connection will be upgraded to WebSockets and the client will be able to send and receive messages.
 
@@ -1211,7 +1311,7 @@ Links from VPCs to APIs are ignored for this environment as the API is deployed 
 In the AWS environment, APIs are deployed as a containerised version of the Celerity runtime.
 Authentication, authorisation and CORS configuration defined for the API is taken care of by the runtime.
 
-APIs can be deployed to [ECS](https://aws.amazon.com/ecs/) or [EKS](https://aws.amazon.com/eks/) backed by [Fargate](https://aws.amazon.com/fargate/) or [EC2](https://aws.amazon.com/ec2/) using [compute configuration](/docs/applications/compute-configuration#aws-configuration-options) that is shared between compute resource types in the app deploy configuration file.
+APIs can be deployed to [ECS](https://aws.amazon.com/ecs/) or [EKS](https://aws.amazon.com/eks/) backed by [Fargate](https://aws.amazon.com/fargate/) or [EC2](https://aws.amazon.com/ec2/) using [compute configuration](/docs/framework/applications/compute-configuration#aws-configuration-options) that is shared between compute resource types in the app deploy configuration file.
 
 #### ECS
 
@@ -1309,7 +1409,7 @@ In the Google Cloud environment, APIs are deployed as a containerised version of
 Authentication, authorisation and CORS configuration defined for the API is taken care of by the runtime.
 
 APIs can be deployed to [Cloud Run](https://cloud.google.com/run), as well as [Google Kubernetes Engine (GKE)](https://cloud.google.com/kubernetes-engine) in [Autopilot](https://cloud.google.com/kubernetes-engine/docs/concepts/autopilot-overview) or [Standard](https://cloud.google.com/kubernetes-engine/docs/how-to/creating-a-regional-cluster) mode.
-You can use [compute configuration](/docs/applications/compute-configuration#google-cloud-configuration-options) shared between compute resource types in the app deploy configuration file to fine-tune the compute configuration for your application.
+You can use [compute configuration](/docs/framework/applications/compute-configuration#google-cloud-configuration-options) shared between compute resource types in the app deploy configuration file to fine-tune the compute configuration for your application.
 
 #### Cloud Run
 
@@ -1387,7 +1487,7 @@ To deploy a WebSockets API to Google Cloud, you will need to use the "[Google Cl
 In the Azure environment, APIs are deployed as a containerised version of the Celerity runtime.
 Authentication, authorisation and CORS configuration defined for the API is taken care of by the runtime.
 
-APIs can be deployed to [Azure Container Apps](https://azure.microsoft.com/en-us/products/container-apps/) or [Azure Kubernetes Service (AKS)](https://azure.microsoft.com/en-us/products/kubernetes-service). You can use [compute configuration](/docs/applications/compute-configuration#azure-configuration-options) shared between compute resource types in the app deploy configuration file to fine-tune the compute configuration for your application.
+APIs can be deployed to [Azure Container Apps](https://azure.microsoft.com/en-us/products/container-apps/) or [Azure Kubernetes Service (AKS)](https://azure.microsoft.com/en-us/products/kubernetes-service). You can use [compute configuration](/docs/framework/applications/compute-configuration#azure-configuration-options) shared between compute resource types in the app deploy configuration file to fine-tune the compute configuration for your application.
 
 #### Container Apps
 
@@ -1468,7 +1568,7 @@ This section lists the configuration options that can be set in the `deployTarge
 
 ### Compute Configuration
 
-Compute configuration that can be used for the `celerity/api`, `celerity/consumer`, `celerity/schedule` and `celerity/workflow` resource types is documented [here](/docs/applications/compute-configuration).
+Compute configuration that can be used for the `celerity/api`, `celerity/consumer`, `celerity/schedule` and `celerity/workflow` resource types is documented [here](/docs/framework/applications/compute-configuration).
 
 ### Azure Configuration Options
 

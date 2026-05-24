@@ -125,6 +125,35 @@ All configuration in the `deployTarget` section of the app deploy config file wi
 This means that when `--check-deploy-config` is set, the CLI will validate the configuration in the `deployTarget` section of the app deploy config file.
 </Callout>
 
+### `--transform-spec`
+
+**Environment Variable**: `CELERITY_CLI_VALIDATE_TRANSFORM_SPEC`
+
+**Configuration Key**: `validateTransformSpec`
+
+**Type**: `boolean`
+
+**Default Value**: `true`
+
+Run transformer plugins during validation so abstract resources are expanded into concrete resources for richer diagnostics.
+Required for transformer-driven workflows to produce meaningful validation output.
+When set to `false`, validation runs against the blueprint without transformation.
+
+### `--validate-after-transform`
+
+**Environment Variable**: `CELERITY_CLI_VALIDATE_AFTER_TRANSFORM`
+
+**Configuration Key**: `validateValidateAfterTransform`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+After transformation, validate resources against the transformed blueprint shape.
+This catches resource-level issues that only surface once abstract resources have been expanded into their concrete forms,
+which is typically useful when diagnosing deployment-time issues.
+Has no effect unless `--transform-spec` is also `true`.
+
 ## `stage-changes`
 
 ## `deploy`
@@ -156,11 +185,633 @@ This is the command category for local development of Celerity applications.
 Start a Celerity application in the local development environment.
 This will set up all the required infrastructure locally (database containers, cache instances, queue emulators, etc.) and start the application runtime with your handlers.
 
+By default, the command runs in the foreground streaming container logs to stdout. Use `--detached` to run in the background.
+
+#### `--blueprint-file`, `-b`
+
+**Environment Variable**: `CELERITY_CLI_DEV_RUN_BLUEPRINT_FILE`
+
+**Configuration Key**: `devRunBlueprintFile`
+
+**Type**: `string`
+
+**Default Value**: auto-detect (`app.blueprint.yaml` or `app.blueprint.jsonc`)
+
+The path to the blueprint file. Relative paths are relative to `--app-dir`.
+
+#### `--deploy-config`, `-d`
+
+**Environment Variable**: `CELERITY_CLI_DEV_RUN_DEPLOY_CONFIG`
+
+**Configuration Key**: `devRunDeployConfig`
+
+**Type**: `string`
+
+**Default Value**: auto-detect (`app.deploy.jsonc`)
+
+The path to the deploy config file. Used to determine the deploy target (e.g. `aws`, `gcloud`) which controls which local emulators are started.
+
+#### `--port`, `-p`
+
+**Environment Variable**: `CELERITY_CLI_DEV_RUN_PORT`
+
+**Configuration Key**: `devRunPort`
+
+**Type**: `string`
+
+**Default Value**: `8080`
+
+The host port to expose the Celerity runtime on.
+
+#### `--app-dir`
+
+**Environment Variable**: `CELERITY_CLI_DEV_RUN_APP_DIR`
+
+**Configuration Key**: `devRunAppDir`
+
+**Type**: `string`
+
+**Default Value**: `.`
+
+The application root directory containing the blueprint, source code, and configuration.
+
+#### `--module-path`
+
+**Environment Variable**: `CELERITY_CLI_DEV_RUN_MODULE_PATH`
+
+**Configuration Key**: `devRunModulePath`
+
+**Type**: `string`
+
+**Default Value**: auto-detect from runtime conventions
+
+The module entry point for the application (e.g. `src/app-module.ts` for Node.js, `src/app_module.py` for Python).
+
+#### `--image`
+
+**Environment Variable**: `CELERITY_CLI_DEV_RUN_IMAGE`
+
+**Configuration Key**: `devRunImage`
+
+**Type**: `string`
+
+Override the Docker image for the runtime container. When set, GHCR image resolution is skipped.
+
+#### `--service-name`
+
+**Environment Variable**: `CELERITY_CLI_DEV_RUN_SERVICE_NAME`
+
+**Configuration Key**: `devRunServiceName`
+
+**Type**: `string`
+
+**Default Value**: directory name
+
+Override the service name used for the Docker container and compose project.
+
+#### `--detached`
+
+**Environment Variable**: `CELERITY_CLI_DEV_RUN_DETACHED`
+
+**Configuration Key**: `devRunDetached`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+Run the dev environment in the background. Use `celerity dev logs` to stream logs and `celerity dev stop` to tear down.
+
+#### `--verbose`, `-v`
+
+**Environment Variable**: `CELERITY_CLI_DEV_RUN_VERBOSE`
+
+**Configuration Key**: `devRunVerbose`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+Enable debug logging in the Celerity runtime and SDK.
+
+#### `--no-local-auth`
+
+**Environment Variable**: `CELERITY_CLI_DEV_RUN_NO_LOCAL_AUTH`
+
+**Configuration Key**: `devRunNoLocalAuth`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+Do not override the blueprint JWT issuer with the local dev auth server. By default, the dev environment patches the blueprint to use a local auth server for convenience during development.
+
 ### `test`
 
-Run tests for a Celerity application.
-This will set up an isolated environment that sets up and tears down test fixtures for local development.
-The underlying test runner will depend on the language used for the application.
+Run tests for a Celerity application with automatic infrastructure setup and teardown.
+
+Infrastructure is started based on the test suites being run:
+
+| Suite | Infrastructure | Description |
+|-------|---------------|-------------|
+| `unit` (default) | None | No Docker infrastructure. Tests use mocks or in-memory alternatives. |
+| `integration` | Compose dependencies only | Databases, caches, and other services are started but no app container. |
+| `api` | Full stack | Compose dependencies + app container. Waits for health check. |
+
+Multiple suites can be combined with commas (e.g. `--suite unit,integration`). Infrastructure is started based on the highest level required by the combined suites.
+
+The test runner is auto-detected from your project files:
+- **Node.js**: Detected from `package.json` scripts (`test`, `test:unit`, `test:integration`, `test:api`) and devDependencies (`vitest`, `jest`, `ava`).
+- **Python**: Detected from `pyproject.toml`, `pytest.ini`, or `setup.cfg`. Uses virtualenv (`.venv` or `venv`) if present.
+
+Use `--test-command` to override auto-detection with a custom command.
+
+The `CELERITY_TEST_BASE_URL` environment variable is passed to the test process when API tests are running, set to `http://localhost:{port}`. Infrastructure endpoint environment variables (e.g. `CELERITY_LOCAL_DATASTORE_ENDPOINT`) are also passed so tests can connect to local services.
+
+<Callout title="Port Isolation">
+`dev test` uses different host ports than `dev run` (offset by +100) so both can run simultaneously:
+- App container: `8081` (vs `8080` for dev run)
+- DynamoDB Local: `8100` (vs `8000`)
+- PostgreSQL: `5532` (vs `5432`)
+- Valkey: `6479` (vs `6379`)
+- MinIO: `9100` (vs `9000`)
+</Callout>
+
+#### `--blueprint-file`, `-b`
+
+**Environment Variable**: `CELERITY_CLI_DEV_TEST_BLUEPRINT_FILE`
+
+**Configuration Key**: `devTestBlueprintFile`
+
+**Type**: `string`
+
+**Default Value**: auto-detect
+
+The path to the blueprint file. Only needed when running integration or API tests (not unit tests).
+
+#### `--deploy-config`, `-d`
+
+**Environment Variable**: `CELERITY_CLI_DEV_TEST_DEPLOY_CONFIG`
+
+**Configuration Key**: `devTestDeployConfig`
+
+**Type**: `string`
+
+**Default Value**: auto-detect
+
+The path to the deploy config file.
+
+#### `--port`, `-p`
+
+**Environment Variable**: `CELERITY_CLI_DEV_TEST_PORT`
+
+**Configuration Key**: `devTestPort`
+
+**Type**: `string`
+
+**Default Value**: `8081`
+
+The host port for the app container. Used by API tests via `CELERITY_TEST_BASE_URL`.
+
+#### `--app-dir`
+
+**Environment Variable**: `CELERITY_CLI_DEV_TEST_APP_DIR`
+
+**Configuration Key**: `devTestAppDir`
+
+**Type**: `string`
+
+**Default Value**: `.`
+
+The application root directory.
+
+#### `--module-path`
+
+**Environment Variable**: `CELERITY_CLI_DEV_TEST_MODULE_PATH`
+
+**Configuration Key**: `devTestModulePath`
+
+**Type**: `string`
+
+**Default Value**: auto-detect
+
+The module entry point for the application.
+
+#### `--image`
+
+**Environment Variable**: `CELERITY_CLI_DEV_TEST_IMAGE`
+
+**Configuration Key**: `devTestImage`
+
+**Type**: `string`
+
+Override the Docker image for the runtime container.
+
+#### `--service-name`
+
+**Environment Variable**: `CELERITY_CLI_DEV_TEST_SERVICE_NAME`
+
+**Configuration Key**: `devTestServiceName`
+
+**Type**: `string`
+
+**Default Value**: directory name
+
+Override the service name.
+
+#### `--verbose`, `-v`
+
+**Environment Variable**: `CELERITY_CLI_DEV_TEST_VERBOSE`
+
+**Configuration Key**: `devTestVerbose`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+Enable debug logging.
+
+#### `--suite`, `-s`
+
+**Environment Variable**: `CELERITY_CLI_DEV_TEST_SUITE`
+
+**Configuration Key**: `devTestSuite`
+
+**Type**: `string`
+
+**Default Value**: `unit`
+
+**Allowed Values**: `unit` | `integration` | `api`
+
+Comma-separated list of test suites to run. Controls which infrastructure is started and which test directories are included.
+
+Test directories follow project structure conventions:
+- `unit` → `src/` (Node.js) or `tests/unit/` (Python)
+- `integration` → `tests/integration/`
+- `api` → `tests/api/`
+
+#### `--coverage`
+
+**Environment Variable**: `CELERITY_CLI_DEV_TEST_COVERAGE`
+
+**Configuration Key**: `devTestCoverage`
+
+**Type**: `boolean`
+
+**Default Value**: `true`
+
+Enable coverage reporting. The coverage mechanism depends on the test framework (e.g. `--coverage` for vitest/jest, `--cov` for pytest).
+
+#### `--test-command`
+
+**Environment Variable**: `CELERITY_CLI_DEV_TEST_COMMAND`
+
+**Configuration Key**: `devTestCommand`
+
+**Type**: `string`
+
+Override the auto-detected test command. When set, this command is executed directly via the shell instead of auto-detecting from project files. Infrastructure setup and teardown still apply based on `--suite`.
+
+#### `--health-timeout`
+
+**Environment Variable**: `CELERITY_CLI_DEV_TEST_HEALTH_TIMEOUT`
+
+**Configuration Key**: `devTestHealthTimeout`
+
+**Type**: `string`
+
+**Default Value**: `60s`
+
+How long to wait for the app container to become healthy before running API tests. Accepts Go duration strings (e.g. `30s`, `2m`). For Python projects, the default is automatically increased to `3m` to allow for dependency installation during container startup.
+
+#### `--health-path`
+
+**Environment Variable**: `CELERITY_CLI_DEV_TEST_HEALTH_PATH`
+
+**Configuration Key**: `devTestHealthPath`
+
+**Type**: `string`
+
+**Default Value**: `/runtime/health/check`
+
+The health check endpoint path used to determine when the app container is ready before running API tests.
+
+#### `--no-teardown`
+
+**Environment Variable**: `CELERITY_CLI_DEV_TEST_NO_TEARDOWN`
+
+**Configuration Key**: `devTestNoTeardown`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+Keep infrastructure running after tests complete. Useful for debugging test failures — you can inspect databases, check logs with `celerity dev logs`, etc.
+
+#### `--no-local-auth`
+
+**Environment Variable**: `CELERITY_CLI_DEV_TEST_NO_LOCAL_AUTH`
+
+**Configuration Key**: `devTestNoLocalAuth`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+Do not override the blueprint JWT issuer with the local dev auth server.
+
+### `stop`
+
+Tear down the running dev environment by stopping the runtime container and all dependency services.
+
+#### `--app-dir`
+
+**Environment Variable**: `CELERITY_CLI_DEV_STOP_APP_DIR`
+
+**Configuration Key**: `devStopAppDir`
+
+**Type**: `string`
+
+**Default Value**: `.`
+
+The application root directory.
+
+### `status`
+
+Display the current state of the local dev environment including container status, handlers, port, runtime, and uptime.
+
+#### `--app-dir`
+
+**Environment Variable**: `CELERITY_CLI_DEV_STATUS_APP_DIR`
+
+**Configuration Key**: `devStatusAppDir`
+
+**Type**: `string`
+
+**Default Value**: `.`
+
+The application root directory.
+
+### `logs`
+
+Stream or filter logs from the running dev environment container.
+
+Supports filtering by handler name and minimum log level. When running in a terminal, output is colored by log level. Log files are written to `.celerity/logs/` alongside stdout streaming.
+
+Use `--sync` to dump all logs to files without streaming to stdout.
+
+#### `--app-dir`
+
+**Environment Variable**: `CELERITY_CLI_DEV_LOGS_APP_DIR`
+
+**Configuration Key**: `devLogsAppDir`
+
+**Type**: `string`
+
+**Default Value**: `.`
+
+The application root directory.
+
+#### `--handler`, `-H`
+
+**Configuration Key**: `devLogsHandler`
+
+**Type**: `string`
+
+Filter logs by handler name. Matches any handler whose name contains the given substring.
+
+#### `--level`, `-l`
+
+**Configuration Key**: `devLogsLevel`
+
+**Type**: `string`
+
+**Allowed Values**: `debug` | `info` | `warn` | `error`
+
+Minimum log level to display. Logs below this level are filtered out.
+
+#### `--follow`, `-f`
+
+**Configuration Key**: `devLogsFollow`
+
+**Type**: `boolean`
+
+**Default Value**: `true`
+
+Follow log output in real time. Set to `false` to print existing logs and exit.
+
+#### `--tail`, `-n`
+
+**Configuration Key**: `devLogsTail`
+
+**Type**: `string`
+
+**Default Value**: `100`
+
+Number of historical log lines to show. Use `all` to show all available lines.
+
+#### `--since`, `-s`
+
+**Configuration Key**: `devLogsSince`
+
+**Type**: `string`
+
+Show logs since a timestamp or duration. Accepts Go duration strings (e.g. `5m`, `1h`) or RFC3339 timestamps (e.g. `2024-01-01T00:00:00Z`).
+
+#### `--sync`
+
+**Configuration Key**: `devLogsSync`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+Dump all logs to per-handler files in `.celerity/logs/` and exit without streaming to stdout.
+
+### `stubs`
+
+Manage over-the-wire HTTP service stubs backed by mountebank.
+
+#### `validate`
+
+Load and validate all stub YAML files in the `stubs/` directory. Checks for YAML syntax errors, missing required fields, port conflicts, and duplicate config keys.
+
+```bash
+celerity dev stubs validate
+```
+
+##### `--app-dir`
+
+**Configuration Key**: `devStubsAppDir`
+
+**Type**: `string`
+
+**Default Value**: `.`
+
+The application root directory.
+
+## `config`
+
+This is the command category for managing deployed application runtime configuration and secrets.
+
+Running `celerity config` without a subcommand opens an interactive TUI session for browsing and managing config values across environments and stores. In non-interactive (headless) mode, use the subcommands directly.
+
+The CLI reads the blueprint to discover `celerity/config` resources and their storage backends. Environment-specific deploy config files (`app.deploy.{env}.jsonc`) can point to different cloud accounts, profiles, and regions. When no environment-specific file exists, the CLI falls back to the base `app.deploy.jsonc` and uses credentials from the current environment.
+
+### Common Options
+
+#### `--env`, `-e`
+
+**Environment Variable**: `CELERITY_CLI_CONFIG_ENV`
+
+**Configuration Key**: `configEnv`
+
+**Type**: `string`
+
+Environment name. Loads `app.deploy.{env}.jsonc` if it exists, otherwise falls back to `app.deploy.jsonc` with `{env}` as the store name prefix. Required in non-interactive mode.
+
+#### `--app-dir`
+
+**Environment Variable**: `CELERITY_CLI_CONFIG_APP_DIR`
+
+**Configuration Key**: `configAppDir`
+
+**Type**: `string`
+
+**Default Value**: `.`
+
+The application root directory.
+
+#### `--blueprint-file`, `-b`
+
+**Environment Variable**: `CELERITY_CLI_CONFIG_BLUEPRINT_FILE`
+
+**Configuration Key**: `configBlueprintFile`
+
+**Type**: `string`
+
+**Default Value**: auto-detect (`app.blueprint.yaml`)
+
+The path to the blueprint file.
+
+#### `--region`
+
+**Environment Variable**: `CELERITY_CLI_CONFIG_REGION`
+
+**Configuration Key**: `configRegion`
+
+**Type**: `string`
+
+Cloud provider region override. Takes precedence over the region specified in the deploy config file.
+
+### `set`
+
+Set a config value in a deployed store. If value is omitted and the key is sensitive, you will be prompted for masked input in interactive mode, or the value is read from stdin in headless mode.
+
+```bash
+celerity config set <store> <key> [value] --env <environment>
+```
+
+#### `--secret`, `-s`
+
+**Environment Variable**: `CELERITY_CLI_CONFIG_SET_SECRET`
+
+**Configuration Key**: `configSetSecret`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+Mark value as sensitive. In Parameter Store, this forces `SecureString` type even if the key is in the blueprint's `plaintext` list.
+
+### `get`
+
+Get a single config value from a deployed store. Outputs the raw value to stdout for scripting.
+
+```bash
+celerity config get <store> <key> --env <environment>
+```
+
+### `list`
+
+Without a store argument, lists all `celerity/config` resources from the blueprint. With a store argument, lists all keys in that store.
+
+```bash
+celerity config list --env <environment>
+celerity config list <store> --env <environment>
+```
+
+#### `--show-secrets`
+
+**Environment Variable**: `CELERITY_CLI_CONFIG_LIST_SHOW_SECRETS`
+
+**Configuration Key**: `configListShowSecrets`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+Reveal masked values. By default, sensitive values are displayed as `********`.
+
+### `delete`
+
+Delete a config value from a deployed store. Prompts for confirmation in interactive mode.
+
+```bash
+celerity config delete <store> <key> --env <environment>
+```
+
+#### `--yes`, `-y`
+
+**Environment Variable**: `CELERITY_CLI_CONFIG_DELETE_YES`
+
+**Configuration Key**: `configDeleteYes`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+Skip confirmation prompt. Required in non-interactive (headless) mode.
+
+### `import`
+
+Import config values from a YAML or JSON file into a deployed store. Values are merged with existing entries by default.
+
+```bash
+celerity config import <store> <file> --env <environment>
+```
+
+### `export`
+
+Export config values from a deployed store to stdout or a file.
+
+```bash
+celerity config export <store> --env <environment>
+celerity config export <store> --env <environment> --format json -o backup.json
+```
+
+#### `--format`
+
+**Environment Variable**: `CELERITY_CLI_CONFIG_EXPORT_FORMAT`
+
+**Configuration Key**: `configExportFormat`
+
+**Type**: `string`
+
+**Default Value**: `yaml`
+
+**Allowed Values**: `yaml` | `json`
+
+Output format for the exported data.
+
+#### `-o`
+
+**Environment Variable**: `CELERITY_CLI_CONFIG_EXPORT_OUT`
+
+**Configuration Key**: `configExportOut`
+
+**Type**: `string`
+
+Output file path. If not specified, output is written to stdout.
 
 ## `schema`
 

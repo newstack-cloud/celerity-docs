@@ -59,7 +59,7 @@ Every time a message is sent to a node group in the cluster, the unique identifi
 
 The sender node will be listening for acknowledgements on the ack channel for its node group. It will then filter the acknowledgements based on the source node ID of the message and update the status of the message for the provided message ID. If an acknowledgement is not received by a configurable timeout, the sender node will publish the message again to the node group. This will continue until the acknowledgement is received or a maximum number of retries is reached. If the maximum number of retries is reached, the sender node will mark the message as lost and ensure that clients that should be notified of the lost message are informed.
 
-See the [Lost Messages](/docs/runtime/websocket-runtime-protocol#lost-messages) section for more details on how lost messages are handled.
+See the [Lost Messages](/docs/framework/runtime/websocket-runtime-protocol#lost-messages) section for more details on how lost messages are handled.
 
 ## Handling Duplicates
 
