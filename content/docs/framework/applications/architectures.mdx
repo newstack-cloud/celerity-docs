@@ -29,6 +29,60 @@ You should limit the amount of consumers defined in a single blueprint to avoid 
 
 An example of multiple consumers in a single application:
 
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+variable ordersQueue: string {}
+variable paymentEventsQueue: string {}
+
+resource ordersConsumer: celerity/consumer {
+    metadata {
+        displayName = "Orders Consumer"
+        annotations = {
+            "celerity.app" = "payments"
+        }
+    }
+
+    select by label {
+        consumerGroup = "orders"
+    }
+
+    spec {
+        sourceId = variables.ordersQueue
+        batchSize = 10
+        visibilityTimeout = 30
+        waitTimeSeconds = 20
+        partialFailures = true
+    }
+}
+
+resource paymentEventsConsumer: celerity/consumer {
+    metadata {
+        displayName = "Payment Events Consumer"
+        annotations = {
+            "celerity.app" = "payments"
+        }
+    }
+
+    select by label {
+        consumerGroup = "paymentEvents"
+    }
+
+    spec {
+        sourceId = variables.paymentEventsQueue
+        batchSize = 10
+        visibilityTimeout = 30
+        waitTimeSeconds = 20
+        partialFailures = true
+    }
+}
+```
+
+YAML
+
 ```yaml
 version: 2025-11-02
 transform: celerity-2026-02-27-draft

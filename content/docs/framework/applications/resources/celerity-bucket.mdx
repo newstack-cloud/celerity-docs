@@ -752,6 +752,25 @@ When a bucket is linked to a workflow, a workflow execution will be triggered wh
 
 ### Basic Bucket Configuration
 
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource myAppBucket: celerity/bucket {
+    metadata {
+        displayName = "My App Bucket"
+    }
+
+    spec {
+        name = "my-app-bucket"
+    }
+}
+```
+
+YAML
+
 ```yaml
 version: 2025-11-02
 transform: celerity-2026-02-27-draft
@@ -765,6 +784,81 @@ resources:
 ```
 
 ### Complex Bucket Configuration
+
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+variable encryptionKeyId: string {
+    description = "The ID of the encryption key to use for the bucket."
+}
+
+variable encryptionAlgorithm: string {
+    description = "The algorithm to use for encryption, e.g. 'AES256' or 'aws:kms'."
+    default = "aws:kms"
+}
+
+variable logsBucket: string {
+    description = "The name of the bucket to store logs in."
+}
+
+resource myAppBucket: celerity/bucket {
+    metadata {
+        displayName = "My App Bucket"
+    }
+
+    spec {
+        name = "my-app-bucket"
+        encryption = {
+            encryptionKeyId = variables.encryptionKeyId,
+            encryptionAlgorithm = variables.encryptionAlgorithm
+        }
+        cors = {
+            corsRules = [
+                {
+                    id = "cors-rule-1",
+                    allowedOrigins = ["http://example.com", "https://example.com"],
+                    allowedHeaders = ["Content-Type", "Authorization"],
+                    allowedMethods = ["GET", "POST"],
+                    exposedHeaders = ["Content-Type"],
+                    maxAge = 3600
+                }
+            ]
+        }
+        lifecycle = {
+            rules = [
+                {
+                    id = "lifecycle-rule-1",
+                    enabled = true,
+                    expirationInDays = 365,
+                    transitions = [
+                        { targetStorageClass = "cool", transitionInDays = 30 }
+                    ]
+                }
+            ]
+        }
+        logging = {
+            destinationBucket = variables.logsBucket,
+            logFilePrefix = "logs/"
+        }
+        versioning = {
+            status = "Enabled"
+        }
+        replication = {
+            enabled = true,
+            regions = ["us-west-2", "us-east-1"]
+        }
+        website = {
+            mainPageDocument = "index.html",
+            notFoundDocument = "404.html"
+        }
+    }
+}
+```
+
+YAML
 
 ```yaml
 version: 2025-11-02

@@ -150,6 +150,25 @@ As topics are typically used to allow asynchronous message passing for decoupled
 
 ### Minimal Topic
 
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource orderEventsTopic: celerity/topic {
+    metadata {
+        displayName = "Order Events Topic"
+    }
+
+    spec {
+        name = "order-events"
+    }
+}
+```
+
+YAML
+
 ```yaml
 version: 2025-11-02
 transform: celerity-2026-02-27-draft
@@ -163,6 +182,68 @@ resources:
 ```
 
 ### Topic with Handler Link
+
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource orderEventsTopic: celerity/topic {
+    metadata {
+        displayName = "Order Events Topic"
+        labels = {
+            application = "orders"
+        }
+    }
+
+    spec {
+        name = "order-events"
+    }
+}
+
+resource createOrderHandler: celerity/handler {
+    metadata {
+        displayName = "Create Order"
+        labels = {
+            application = "orders"
+        }
+        annotations = {
+            "celerity.handler.http" = true,
+            "celerity.handler.http.method" = "POST",
+            "celerity.handler.http.path" = "/orders"
+        }
+    }
+
+    select by label {
+        application = "orders"
+    }
+
+    spec {
+        handler = "handlers.createOrder"
+        runtime = "nodejs24.x"
+    }
+}
+
+resource api: celerity/api {
+    metadata {
+        displayName = "API"
+        labels = {
+            application = "orders"
+        }
+    }
+
+    select by label {
+        application = "orders"
+    }
+
+    spec {
+        protocols = ["http"]
+    }
+}
+```
+
+YAML
 
 ```yaml
 version: 2025-11-02
@@ -204,10 +285,35 @@ resources:
             byLabel:
                 application: "orders"
         spec:
-            type: "http"
+            protocols: ["http"]
 ```
 
 ### FIFO Topic with Encryption
+
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+variable encryptionKeyId: string {
+    description = "The ID of the encryption key to use for encrypting messages at rest."
+}
+
+resource orderEventsTopic: celerity/topic {
+    metadata {
+        displayName = "Order Events Topic"
+    }
+
+    spec {
+        name = "OrderEventsTopic.fifo"
+        fifo = true
+        encryptionKeyId = variables.encryptionKeyId
+    }
+}
+```
+
+YAML
 
 ```yaml
 version: 2025-11-02

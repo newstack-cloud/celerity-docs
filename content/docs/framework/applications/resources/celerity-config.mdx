@@ -209,6 +209,29 @@ Config resources can not link to other resources.
 
 ### Minimal Configuration
 
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource myAppConfig: celerity/config {
+    metadata {
+        displayName = "My App Config"
+    }
+
+    spec {
+        name = "my-app-config"
+        plaintext = [
+            "FETCH_TIMEOUT",
+            "MAX_RETRIES"
+        ]
+    }
+}
+```
+
+YAML
+
 ```yaml
 version: 2025-11-02
 transform: celerity-2026-02-27-draft
@@ -225,6 +248,34 @@ resources:
 ```
 
 ### Custom Encryption Key
+
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+variable customEncryptionKeyId: string {
+    description = """
+        The ID of the custom encryption key to use for encrypting secrets in the config store.
+        For example, `arn:aws:kms:us-west-2:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab`
+        for AWS KMS master key when deploying to AWS.
+    """
+}
+
+resource myAppConfig: celerity/config {
+    metadata {
+        displayName = "My App Config"
+    }
+
+    spec {
+        name = "my-app-config"
+        encryptionKeyId = variables.customEncryptionKeyId
+    }
+}
+```
+
+YAML
 
 ```yaml
 version: 2025-11-02

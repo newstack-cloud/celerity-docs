@@ -54,6 +54,68 @@ def _get_order(req: Request, orders_service: OrdersService) -> Response:
 get_order = create_http_handler(_get_order)
 ```
 
+Blueprint Language
+
+```blueprintlang title="/application.bp"
+version "2025-11-02"
+
+resource ordersApi: celerity/api {
+    metadata {
+        displayName = "Orders API"
+    }
+
+    select by label {
+        application = "orders"
+    }
+
+    spec {
+        protocols = ["http"]
+    }
+}
+
+resource saveOrderHandler: celerity/handler {
+    metadata {
+        displayName = "Save Order Handler"
+        labels = {
+            application = "orders"
+        }
+        annotations = {
+            "celerity.handler.http" = true,
+            "celerity.handler.http.path" = "/orders",
+            "celerity.handler.http.method" = "POST"
+        }
+    }
+
+    spec {
+        codeLocation = "./orders_api"
+        handler = "handlers.save_order"
+        runtime = "python3.12"
+    }
+}
+
+resource getOrderHandler: celerity/handler {
+    metadata {
+        displayName = "Get Order Handler"
+        labels = {
+            application = "orders"
+        }
+        annotations = {
+            "celerity.handler.http" = true,
+            "celerity.handler.http.path" = "/orders/{order_id}",
+            "celerity.handler.http.method" = "GET"
+        }
+    }
+
+    spec {
+        codeLocation = "./orders_api"
+        handler = "handlers.get_order"
+        runtime = "python3.12"
+    }
+}
+```
+
+YAML
+
 ```yaml title="/application.blueprint.yaml"
 version: 2025-11-02
 resources:
@@ -111,13 +173,16 @@ The HTTP server will then listen for incoming requests and route them to the app
 
 ## Supported Languages
 
-The Celerity runtime currently supports the following languages with tailored SDK support:
+The Celerity runtime provides tailored SDK support for the following languages. In v0, Node.js (TypeScript) and Python are available; Go, C# and Java are planned for v1. See the [Celerity versions](/docs/framework/versions) documentation for the full roadmap.
 
-- Python
-- Node.js
-- Java
-- C#
-- Go
+| Language | Tailored SDK support |
+|---|---|
+| Node.js (TypeScript) | ✅ Available in v0 |
+| Python | ✅ Available in v0 |
+| Go | 🚀 Planned for v1 |
+| C# | 🚀 Planned for v1 |
+| Java | 🚀 Planned for v1 |
 
-The runtime also supports any other language that can be compiled ahead of time into an executable binary.
-Languages such as Rust, C++, C or Zig can be used but lack the official SDK support that the languages listed above have. For these languages, you can use the [Local Runtime API](#) to interact with the runtime from your handler code.
+<Callout title="Ahead-of-time compiled languages" type="info">
+🚀 **Planned for v1** — In v1, the runtime will also support any other language that can be compiled ahead of time into an executable binary. Languages such as Rust, C++, C or Zig will be usable but lack the official SDK support that the languages listed above have; for these languages you will be able to use the [Local Runtime API](#) to interact with the runtime from your handler code.
+</Callout>

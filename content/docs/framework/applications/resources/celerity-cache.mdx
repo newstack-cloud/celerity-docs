@@ -191,6 +191,25 @@ The `celerity/cache` resource type does not link to other resources.
 
 ### Minimal Cache
 
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource sessionCache: celerity/cache {
+    metadata {
+        displayName = "Session Cache"
+    }
+
+    spec {
+        name = "sessions"
+    }
+}
+```
+
+YAML
+
 ```yaml
 version: 2025-11-02
 transform: celerity-2026-02-27-draft
@@ -204,6 +223,85 @@ resources:
 ```
 
 ### Cache with VPC and Handler Link
+
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource appVpc: celerity/vpc {
+    metadata {
+        displayName = "Application VPC"
+        labels = {
+            application = "myapp"
+        }
+    }
+
+    select by label {
+        application = "myapp"
+    }
+
+    spec {
+        preset = "standard"
+    }
+}
+
+resource sessionCache: celerity/cache {
+    metadata {
+        displayName = "Session Cache"
+        labels = {
+            application = "myapp"
+        }
+    }
+
+    spec {
+        name = "sessions"
+    }
+}
+
+resource getSessionHandler: celerity/handler {
+    metadata {
+        displayName = "Get Session"
+        labels = {
+            application = "myapp"
+        }
+        annotations = {
+            "celerity.handler.http" = true,
+            "celerity.handler.http.method" = "GET",
+            "celerity.handler.http.path" = "/session"
+        }
+    }
+
+    select by label {
+        application = "myapp"
+    }
+
+    spec {
+        handler = "handlers.getSession"
+        runtime = "nodejs24.x"
+    }
+}
+
+resource api: celerity/api {
+    metadata {
+        displayName = "API"
+        labels = {
+            application = "myapp"
+        }
+    }
+
+    select by label {
+        application = "myapp"
+    }
+
+    spec {
+        protocols = ["http"]
+    }
+}
+```
+
+YAML
 
 ```yaml
 version: 2025-11-02
@@ -257,10 +355,34 @@ resources:
             byLabel:
                 application: "myapp"
         spec:
-            type: "http"
+            protocols: ["http"]
 ```
 
 ### Cluster Mode Cache
+
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource productCache: celerity/cache {
+    metadata {
+        displayName = "Product Cache"
+        labels = {
+            application = "catalog"
+        }
+    }
+
+    spec {
+        name = "products"
+        clusterMode = true
+        engineVersion = "7.1"
+    }
+}
+```
+
+YAML
 
 ```yaml
 version: 2025-11-02
@@ -281,6 +403,30 @@ resources:
 ### Cache with IAM Authentication
 
 ✅ **Available in v0**
+
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource sessionCache: celerity/cache {
+    metadata {
+        displayName = "Session Cache"
+        labels = {
+            application = "myapp"
+        }
+    }
+
+    spec {
+        name = "sessions"
+        authMode = "iam"
+        clusterMode = true
+    }
+}
+```
+
+YAML
 
 ```yaml
 version: 2025-11-02

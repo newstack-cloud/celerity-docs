@@ -169,6 +169,88 @@ A queue can link to a consumer application. The consumer application will be con
 
 This example shows how to define a queue and a consumer application that processes messages from the queue with a dead-letter queue for messages that cannot be processed after the maximum number of attempts have been reached.
 
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+variable dbHost: string {}
+variable dbPort: number {}
+variable encryptionKeyId: string {}
+
+resource orderQueue: celerity/queue {
+    metadata {
+        displayName = "Order Queue"
+    }
+
+    select by label {
+        app = "orderProcessing"
+    }
+
+    spec {
+        name = "Orders"
+        encryptionKeyId = variables.encryptionKeyId
+    }
+}
+
+resource orderDLQ: celerity/queue {
+    metadata {
+        displayName = "Order DLQ"
+        labels = {
+            app = "orderProcessing"
+        }
+    }
+
+    spec {
+        name = "Orders-DLQ"
+        encryptionKeyId = variables.encryptionKeyId
+    }
+}
+
+resource orderConsumer: celerity/consumer {
+    metadata {
+        displayName = "Order Consumer"
+        labels = {
+            app = "orderProcessing"
+        }
+    }
+
+    select by label {
+        app = "orderProcessing"
+    }
+
+    spec {
+        batchSize = 10
+    }
+}
+
+resource handler: celerity/handler {
+    metadata {
+        displayName = "Order Handler"
+        labels = {
+            app = "orderProcessing"
+        }
+    }
+
+    spec {
+        handlerName = "SyncOrders-Handler-v1"
+        codeLocation = "handlers/orders"
+        handler = "sync"
+        runtime = "python3.13.x"
+        memory = 512
+        timeout = 30
+        tracingEnabled = false
+        environmentVariables = {
+            DB_HOST = variables.dbHost,
+            DB_PORT = variables.dbPort
+        }
+    }
+}
+```
+
+YAML
+
 ```yaml
 version: 2025-11-02
 transform: celerity-2026-02-27-draft

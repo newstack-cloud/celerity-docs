@@ -413,6 +413,64 @@ When a data store links out to a consumer, either a stream or pub/sub configurat
 
 ### Data Store with Schema and Indexes
 
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource userStore: celerity/datastore {
+    metadata {
+        displayName = "User Store"
+    }
+
+    spec {
+        name = "users"
+        keys = {
+            partitionKey = "id"
+        }
+        schema = {
+            required = ["id", "name", "email"],
+            fields = {
+                id = {
+                    type = "string",
+                    description = "The ID of the user"
+                },
+                name = {
+                    type = "string",
+                    description = "The name of the user"
+                },
+                email = {
+                    type = "string",
+                    description = "The email of the user"
+                },
+                lastLogin = {
+                    type = "number",
+                    description = "The unix timestamp of the last login"
+                },
+                isActive = {
+                    type = "boolean",
+                    description = "Whether the user is active"
+                },
+                roles = {
+                    type = "array",
+                    description = "The roles of the user",
+                    items = {
+                        type = "string",
+                        description = "The role of the user"
+                    }
+                }
+            }
+        }
+        indexes = [
+            { name = "emailNameIndex", fields = ["email", "name"] }
+        ]
+    }
+}
+```
+
+YAML
+
 ```yaml
 version: 2025-11-02
 transform: celerity-2026-02-27-draft
@@ -457,6 +515,38 @@ resources:
 ### Data Store with External Schema and Indexes
 
 This example uses `schemaPath` and `scriptsPath` to manage the data store schema through Celerity's [built-in schema management](/docs/framework/applications/nosql-datastore-schema-management) system. The external schema file supports rich metadata, type generation, schema contracts and exports.
+
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource userStore: celerity/datastore {
+    metadata {
+        displayName = "User Store"
+    }
+
+    spec {
+        name = "users"
+        keys = {
+            partitionKey = "id"
+        }
+        schemaPath = "./schemas/user-store.yaml"
+        scriptsPath = "./scripts/user-store"
+        indexes = [
+            { name = "emailIndex", fields = ["email"] },
+            { name = "teamRoleIndex", fields = ["teamId", "role"] }
+        ]
+        timeToLive = {
+            fieldName = "ttl",
+            enabled = true
+        }
+    }
+}
+```
+
+YAML
 
 ```yaml
 version: 2025-11-02

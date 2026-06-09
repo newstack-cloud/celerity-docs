@@ -174,6 +174,17 @@ mapping[string, string]
 
 **examples**
 
+Blueprint Language
+
+```blueprintlang
+environmentVariables = {
+    DB_HOST = variables.dbHost,
+    DB_PORT = variables.dbPort
+}
+```
+
+YAML
+
 ```yaml
 environmentVariables:
   DB_HOST: "${variables.dbHost}"
@@ -663,6 +674,29 @@ For approach 1, see the [celerity/handlerConfig](/docs/framework/applications/re
 
 For approach 2, you would define a metadata section in the blueprint like this:
 
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+# resources ...
+
+metadata {
+    sharedHandlerConfig = {
+        runtime = "python3.13.x",
+        memory = 256,
+        timeout = 60,
+        environmentVariables = {
+            DB_HOST = variables.dbHost,
+            DB_PORT = variables.dbPort
+        }
+    }
+}
+```
+
+YAML
+
 ```yaml
 version: 2025-11-02
 transform: celerity-2026-02-27-draft
@@ -688,6 +722,82 @@ The following set of examples include different configurations for the `celerity
 along with resource types that can be linked to the handler resource type to add more context.
 
 ### Handlers for a HTTP API
+
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+# variable definitions ...
+
+resource ordersApi: celerity/api {
+    metadata {
+        displayName = "Orders API"
+    }
+
+    select by label {
+        application = "orders"
+    }
+
+    spec {
+        # API spec configuration ...
+    }
+}
+
+resource saveOrderHandler: celerity/handler {
+    metadata {
+        displayName = "Save Order Handler"
+        annotations = {
+            "celerity.handler.http" = true,
+            "celerity.handler.http.method" = "POST",
+            "celerity.handler.http.path" = "/orders",
+            "celerity.handler.guard.protectedBy" = "authGuard"
+        }
+        labels = {
+            application = "orders"
+        }
+    }
+
+    spec {
+        handlerName = "SaveOrderHandler-v1"
+        codeLocation = "handlers/orders"
+        handler = "save_order"
+        runtime = "python3.13.x"
+        memory = 512
+        timeout = 30
+        tracingEnabled = false
+        environmentVariables = {
+            DB_HOST = variables.dbHost,
+            DB_PORT = variables.dbPort
+        }
+    }
+}
+
+resource authoriseHandler: celerity/handler {
+    metadata {
+        displayName = "Authorise Handler"
+        annotations = {
+            "celerity.handler.guard.custom" = "authGuard"
+        }
+        labels = {
+            application = "orders"
+        }
+    }
+
+    spec {
+        handlerName = "AuthoriseHandler-v1"
+        codeLocation = "handlers/auth"
+        handler = "authorise"
+        runtime = "python3.13.x"
+        memory = 512
+        timeout = 30
+        tracingEnabled = false
+    }
+}
+```
+
+YAML
 
 ```yaml
 version: 2025-11-02
@@ -748,6 +858,80 @@ resources:
 
 ### Handlers for a WebSocket API
 
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+# variable definitions ...
+
+resource ordersApi: celerity/api {
+    metadata {
+        displayName = "Order Stream API"
+    }
+
+    select by label {
+        application = "orderStream"
+    }
+
+    spec {
+        # API spec configuration ...
+    }
+}
+
+resource streamOrderHandler: celerity/handler {
+    metadata {
+        displayName = "Order Stream Handler"
+        annotations = {
+            "celerity.handler.websocket" = true,
+            "celerity.handler.websocket.route" = "orderStream"
+        }
+        labels = {
+            application = "orders"
+        }
+    }
+
+    spec {
+        handlerName = "StreamOrdersHandler-v1"
+        codeLocation = "handlers/orders"
+        handler = "stream_orders"
+        runtime = "python3.13.x"
+        memory = 512
+        timeout = 30
+        tracingEnabled = false
+        environmentVariables = {
+            DB_HOST = variables.dbHost,
+            DB_PORT = variables.dbPort
+        }
+    }
+}
+
+resource authoriseHandler: celerity/handler {
+    metadata {
+        displayName = "Authorise Handler"
+        annotations = {
+            "celerity.handler.guard.custom" = "authGuard"
+        }
+        labels = {
+            application = "orders"
+        }
+    }
+
+    spec {
+        handlerName = "AuthoriseHandler-v1"
+        codeLocation = "handlers/auth"
+        handler = "authorise"
+        runtime = "python3.13.x"
+        memory = 512
+        timeout = 30
+        tracingEnabled = false
+    }
+}
+```
+
+YAML
+
 ```yaml
 version: 2025-11-02
 transform: celerity-2026-02-27-draft
@@ -805,6 +989,74 @@ resources:
 
 ### Handlers for a Message Queue
 
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+# variable definitions ...
+
+resource ordersQueue: celerity/queue {
+    metadata {
+        displayName = "Orders Queue"
+    }
+
+    select by label {
+        application = "ordersProcessing"
+    }
+
+    spec {
+        # Queue configuration ...
+    }
+}
+
+resource orderConsumer: celerity/consumer {
+    metadata {
+        displayName = "Order Consumer"
+        labels = {
+            application = "ordersProcessing"
+        }
+    }
+
+    select by label {
+        application = "ordersProcessing"
+    }
+
+    spec {
+        batchSize = 10
+        visibilityTimeout = 30
+        waitTimeSeconds = 10
+        partialFailures = true
+    }
+}
+
+resource processOrders: celerity/handler {
+    metadata {
+        displayName = "Process Orders Handler"
+        labels = {
+            application = "ordersProcessing"
+        }
+    }
+
+    spec {
+        handlerName = "ProcessOrders-v1"
+        codeLocation = "handlers/orders"
+        handler = "process_orders"
+        runtime = "python3.13.x"
+        memory = 512
+        timeout = 30
+        tracingEnabled = false
+        environmentVariables = {
+            DB_HOST = variables.dbHost,
+            DB_PORT = variables.dbPort
+        }
+    }
+}
+```
+
+YAML
+
 ```yaml
 version: 2025-11-02
 transform: celerity-2026-02-27-draft
@@ -857,6 +1109,59 @@ resources:
 
 ### Handlers for a Pub/Sub System
 
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+# The order updates topic ID would be defined in a separate blueprint
+# following a standard practice in decoupling topics from applications
+# when a topic can be subscribed to by multiple applications.
+variable orderUpdatesTopicId: string {
+    description = "The ID of the Celerity topic for order updates."
+}
+
+resource orderUpdatesConsumer: celerity/consumer {
+    metadata {
+        displayName = "Order Updates Consumer"
+    }
+
+    select by label {
+        application = "orderUpdates"
+    }
+
+    spec {
+        sourceId = variables.orderUpdatesTopicId
+    }
+}
+
+resource orderUpdateHandler: celerity/handler {
+    metadata {
+        displayName = "Order Update Handler"
+        labels = {
+            application = "orderUpdates"
+        }
+    }
+
+    spec {
+        handlerName = "OrderUpdateHandler-v1"
+        codeLocation = "handlers/orders"
+        handler = "order_update_processor"
+        runtime = "python3.13.x"
+        memory = 512
+        timeout = 30
+        tracingEnabled = false
+        environmentVariables = {
+            DB_HOST = variables.dbHost,
+            DB_PORT = variables.dbPort
+        }
+    }
+}
+```
+
+YAML
+
 ```yaml
 version: 2025-11-02
 transform: celerity-2026-02-27-draft
@@ -898,6 +1203,89 @@ resources:
 ```
 
 ### Handlers for a Pub/Sub System with Routing
+
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+# The order events topic ID would be defined in a separate blueprint
+# following a standard practice in decoupling topics from applications
+# when a topic can be subscribed to by multiple applications.
+variable orderEventsTopicId: string {
+    description = "The ID of the Celerity topic for order events."
+}
+
+resource orderEventsConsumer: celerity/consumer {
+    metadata {
+        displayName = "Order Events Consumer"
+    }
+
+    select by label {
+        application = "orderEvents"
+    }
+
+    spec {
+        sourceId = variables.orderEventsTopicId
+        routingKey = "eventType"
+    }
+}
+
+resource orderRemovalHandler: celerity/handler {
+    metadata {
+        displayName = "Remove Order Handler"
+        labels = {
+            application = "orderEvents"
+        }
+        annotations = {
+            "celerity.handler.consumer.route" = "orderRemoved"
+        }
+    }
+
+    spec {
+        handlerName = "RemoveOrderHandler-v1"
+        codeLocation = "handlers/orders"
+        handler = "remove_order"
+        runtime = "python3.13.x"
+        memory = 512
+        timeout = 30
+        tracingEnabled = false
+        environmentVariables = {
+            DB_HOST = variables.dbHost,
+            DB_PORT = variables.dbPort
+        }
+    }
+}
+
+resource orderChangeHandler: celerity/handler {
+    metadata {
+        displayName = "Order Change Handler"
+        labels = {
+            application = "orderEvents"
+        }
+        annotations = {
+            "celerity.handler.consumer.route" = "orderChanged"
+        }
+    }
+
+    spec {
+        handlerName = "OrderChangeHandler-v1"
+        codeLocation = "handlers/orders"
+        handler = "order_change_processor"
+        runtime = "python3.13.x"
+        memory = 512
+        timeout = 30
+        tracingEnabled = false
+        environmentVariables = {
+            DB_HOST = variables.dbHost,
+            DB_PORT = variables.dbPort
+        }
+    }
+}
+```
+
+YAML
 
 ```yaml
 version: 2025-11-02
@@ -964,6 +1352,69 @@ resources:
 
 ### Handlers for a Data Store Stream
 
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+# variable definitions ...
+
+resource ordersTable: celerity/datastore {
+    metadata {
+        displayName = "Orders Table"
+    }
+
+    select by label {
+        application = "orders"
+    }
+
+    spec {
+        # Data store configuration ...
+    }
+}
+
+resource orderEventsConsumer: celerity/consumer {
+    metadata {
+        displayName = "Order Updates Consumer"
+        labels = {
+            application = "orders"
+        }
+    }
+
+    select by label {
+        application = "orders"
+    }
+
+    spec {
+        batchSize = 10
+        partialFailures = true
+        startFromBeginning = true
+    }
+}
+
+resource processOrderEvents: celerity/handler {
+    metadata {
+        displayName = "Process Order Events Handler"
+        labels = {
+            application = "orders"
+        }
+    }
+
+    spec {
+        handlerName = "ProcessOrderEvents-v1"
+        codeLocation = "handlers/orders"
+        handler = "process_order_events"
+        runtime = "python3.13.x"
+        memory = 512
+        timeout = 30
+        tracingEnabled = false
+    }
+}
+```
+
+YAML
+
 ```yaml
 version: 2025-11-02
 transform: celerity-2026-02-27-draft
@@ -1011,6 +1462,157 @@ resources:
 ```
 
 ### Handlers for a Hybrid Application (Pub/Sub, HTTP, WebSocket)
+
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+# variable definitions ...
+
+resource ordersApi: celerity/api {
+    metadata {
+        displayName = "Orders API"
+        annotations = {
+            # Celerity app annotation to group API and consumer
+            # resources to be deployed as a single application.
+            "celerity.app" = "orderService"
+        }
+    }
+
+    select by label {
+        application = "orders"
+    }
+
+    spec {
+        # API spec configuration ...
+    }
+}
+
+resource orderUpdatesConsumer: celerity/consumer {
+    metadata {
+        displayName = "Order Updates Consumer"
+        annotations = {
+            "celerity.app" = "orderService"
+        }
+    }
+
+    select by label {
+        application = "orders"
+    }
+
+    spec {
+        # Consumer configuration ...
+    }
+}
+
+resource streamOrderHandler: celerity/handler {
+    metadata {
+        displayName = "Order Stream Handler"
+        annotations = {
+            "celerity.handler.websocket" = true,
+            "celerity.handler.websocket.route" = "orderStream"
+        }
+        labels = {
+            application = "orders"
+        }
+    }
+
+    spec {
+        handlerName = "StreamOrdersHandler-v1"
+        codeLocation = "handlers/orders"
+        handler = "stream_orders"
+        runtime = "python3.13.x"
+        memory = 512
+        timeout = 30
+        tracingEnabled = false
+        environmentVariables = {
+            DB_HOST = variables.dbHost,
+            DB_PORT = variables.dbPort
+        }
+    }
+}
+
+resource saveOrderHandler: celerity/handler {
+    metadata {
+        displayName = "Save Order Handler"
+        annotations = {
+            "celerity.handler.http" = true,
+            "celerity.handler.http.method" = "POST",
+            "celerity.handler.http.path" = "/orders",
+            "celerity.handler.guard.protectedBy" = "authGuard"
+        }
+        labels = {
+            application = "orders"
+        }
+    }
+
+    spec {
+        handlerName = "SaveOrderHandler-v1"
+        codeLocation = "handlers/orders"
+        handler = "save_order"
+        runtime = "python3.13.x"
+        memory = 512
+        timeout = 30
+        tracingEnabled = false
+        environmentVariables = {
+            DB_HOST = variables.dbHost,
+            DB_PORT = variables.dbPort
+        }
+    }
+}
+
+resource authoriseHandler: celerity/handler {
+    metadata {
+        displayName = "Authorise Handler"
+        annotations = {
+            "celerity.handler.guard.custom" = "authGuard"
+        }
+        labels = {
+            application = "orders"
+        }
+    }
+
+    spec {
+        handlerName = "AuthoriseHandler-v1"
+        codeLocation = "handlers/auth"
+        handler = "authorise"
+        runtime = "python3.13.x"
+        memory = 512
+        timeout = 30
+        tracingEnabled = false
+    }
+}
+
+resource orderUpdateHandler: celerity/handler {
+    metadata {
+        displayName = "Order Update Handler"
+        annotations = {
+            "celerity.handler.consumer" = true
+        }
+        labels = {
+            application = "orders"
+        }
+    }
+
+    spec {
+        handlerName = "OrderUpdateHandler-v1"
+        codeLocation = "handlers/orders"
+        handler = "order_update_processor"
+        runtime = "python3.13.x"
+        memory = 512
+        timeout = 30
+        tracingEnabled = false
+        environmentVariables = {
+            DB_HOST = variables.dbHost,
+            DB_PORT = variables.dbPort
+        }
+    }
+}
+```
+
+YAML
 
 ```yaml
 version: 2025-11-02
@@ -1128,6 +1730,52 @@ resources:
 
 ### Handlers for Scheduled Events
 
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource syncOrdersSchedule: celerity/schedule {
+    metadata {
+        displayName = "Sync Orders Schedule"
+    }
+
+    select by label {
+        application = "syncOrders"
+    }
+
+    spec {
+        schedule = "rate(1 hour)"
+    }
+}
+
+resource syncOrdersHandler: celerity/handler {
+    metadata {
+        displayName = "Sync Orders Handler"
+        labels = {
+            application = "syncOrders"
+        }
+    }
+
+    spec {
+        handlerName = "SyncOrders-Handler-v1"
+        codeLocation = "handlers/orders"
+        handler = "sync"
+        runtime = "python3.13.x"
+        memory = 512
+        timeout = 30
+        tracingEnabled = false
+        environmentVariables = {
+            DB_HOST = variables.dbHost,
+            DB_PORT = variables.dbPort
+        }
+    }
+}
+```
+
+YAML
+
 ```yaml
 version: 2025-11-02
 transform: celerity-2026-02-27-draft
@@ -1162,6 +1810,60 @@ resources:
 ```
 
 ### Handlers for Cloud Object Storage Events (External)
+
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+# variable definitions ...
+
+resource orderEventsConsumer: celerity/consumer {
+    metadata {
+        displayName = "Order Events Consumer"
+    }
+
+    select by label {
+        application = "invoices"
+    }
+
+    spec {
+        externalEvents = {
+            sourceType = "objectStorage",
+            sourceConfiguration = {
+                events = ["created", "deleted"],
+                bucket = "order-events-bucket"
+            }
+        }
+    }
+}
+
+resource invoiceHandler: celerity/handler {
+    metadata {
+        displayName = "Invoice Handler"
+        labels = {
+            application = "invoices"
+        }
+    }
+
+    spec {
+        handlerName = "Invoice-Handler-v1"
+        codeLocation = "handlers/invoices"
+        handler = "invoice_handler"
+        runtime = "python3.13.x"
+        memory = 512
+        timeout = 30
+        tracingEnabled = false
+        environmentVariables = {
+            DB_HOST = variables.dbHost,
+            DB_PORT = variables.dbPort
+        }
+    }
+}
+```
+
+YAML
 
 ```yaml
 version: 2025-11-02
@@ -1203,6 +1905,65 @@ resources:
 ```
 
 ### Handlers for Data Streams (External)
+
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+# variable definitions ...
+
+resource orderEventsConsumer: celerity/consumer {
+    metadata {
+        displayName = "Order Events Consumer"
+    }
+
+    select by label {
+        application = "invoices"
+    }
+
+    spec {
+        externalEvents = {
+            sourceType = "dataStream",
+            sourceConfiguration = {
+                batchSize = 100,
+                # Hard-coding the ID of the data stream like this would couple your application
+                # to an AWS target environment, it would be better to parameterise
+                # the stream ID by passing it in as a variable.
+                dataStreamId = "arn:aws:kinesis:us-east-1:123456789012:stream/MyStream",
+                partialFailures = true,
+                startFromBeginning = true
+            }
+        }
+    }
+}
+
+resource orderEventHandler: celerity/handler {
+    metadata {
+        displayName = "Order Event Handler"
+        labels = {
+            application = "invoices"
+        }
+    }
+
+    spec {
+        handlerName = "OrderEvent-Handler-v1"
+        codeLocation = "handlers/orders"
+        handler = "event_handler"
+        runtime = "python3.13.x"
+        memory = 512
+        timeout = 30
+        tracingEnabled = false
+        environmentVariables = {
+            DB_HOST = variables.dbHost,
+            DB_PORT = variables.dbPort
+        }
+    }
+}
+```
+
+YAML
 
 ```yaml
 version: 2025-11-02

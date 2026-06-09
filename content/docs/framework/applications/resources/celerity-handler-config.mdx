@@ -120,6 +120,17 @@ mapping[string, string]
 
 **examples**
 
+Blueprint Language
+
+```blueprintlang
+environmentVariables = {
+    DB_HOST = variables.dbHost,
+    DB_PORT = variables.dbPort
+}
+```
+
+YAML
+
 ```yaml
 environmentVariables:
   DB_HOST: "${variables.dbHost}"
@@ -150,10 +161,188 @@ along with resource types that would make up a complete application blueprint.
 
 ### Multiple shared configurations for different handler groups
 
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+variable certificateId: string {}
+variable dbHost: string {}
+variable dbPort: integer {}
+
+resource paymentsApi: celerity/api {
+    metadata {
+        displayName = "Payments API"
+    }
+
+    select by label {
+        application = "payments"
+    }
+
+    spec {
+        protocols = ["http"]
+        cors = {
+            allowCredentials = true,
+            allowOrigins = [
+                "https://example.com",
+                "https://another.example.com"
+            ],
+            allowMethods = ["GET", "POST"],
+            allowHeaders = ["Content-Type", "Authorization"],
+            exposeHeaders = ["Content-Length"],
+            maxAge = 3600
+        }
+        domain = {
+            domainName = "api.example.com",
+            basePaths = ["/"],
+            normalizeBasePath = false,
+            certificateId = variables.certificateId,
+            securityPolicy = "TLS_1_2"
+        }
+        tracingEnabled = true
+    }
+}
+
+resource getOrder: celerity/handler {
+    metadata {
+        displayName = "Get Order Handler"
+        labels = {
+            app = "payments"
+        }
+        annotations = {
+            "celerity.handler.http" = true,
+            "celerity.handler.http.method" = "GET",
+            "celerity.handler.http.path" = "/orders/{orderId}"
+        }
+    }
+
+    select by label {
+        handlerGroup = "orders"
+    }
+
+    spec {
+        handler = "orders.get_order"
+    }
+}
+
+resource createOrder: celerity/handler {
+    metadata {
+        displayName = "Create Order Handler"
+        labels = {
+            app = "payments"
+        }
+        annotations = {
+            "celerity.handler.http" = true,
+            "celerity.handler.http.method" = "POST",
+            "celerity.handler.http.path" = "/orders"
+        }
+    }
+
+    select by label {
+        handlerGroup = "orders"
+    }
+
+    spec {
+        handler = "orders.create_order"
+    }
+}
+
+resource getInvoice: celerity/handler {
+    metadata {
+        displayName = "Get Invoice Handler"
+        labels = {
+            app = "payments"
+        }
+        annotations = {
+            "celerity.handler.http" = true,
+            "celerity.handler.http.method" = "GET",
+            "celerity.handler.http.path" = "/invoices/{invoiceId}"
+        }
+    }
+
+    select by label {
+        handlerGroup = "billing"
+    }
+
+    spec {
+        handler = "billing.get_invoice"
+    }
+}
+
+resource createInvoice: celerity/handler {
+    metadata {
+        displayName = "Create Invoice Handler"
+        labels = {
+            app = "payments"
+        }
+        annotations = {
+            "celerity.handler.http" = true,
+            "celerity.handler.http.method" = "POST",
+            "celerity.handler.http.path" = "/invoices"
+        }
+    }
+
+    select by label {
+        handlerGroup = "billing"
+    }
+
+    spec {
+        handler = "billing.create_invoice"
+    }
+}
+
+resource billingHandlerConfig: celerity/handlerConfig {
+    metadata {
+        displayName = "Billing Handlers Configuration"
+        labels = {
+            handlerGroup = "billing"
+        }
+    }
+
+    spec {
+        codeLocation = "./handlers"
+        runtime = "python3.12.x"
+        memory = 256
+        timeout = 60
+        tracingEnabled = true
+        environmentVariables = {
+            DB_HOST = variables.dbHost,
+            DB_PORT = variables.dbPort
+        }
+    }
+}
+
+resource ordersHandlerConfig: celerity/handlerConfig {
+    metadata {
+        displayName = "Order Handlers Configuration"
+        labels = {
+            handlerGroup = "orders"
+        }
+    }
+
+    spec {
+        codeLocation = "./handlers"
+        runtime = "python3.12.x"
+        memory = 512
+        timeout = 120
+        tracingEnabled = false
+        environmentVariables = {
+            DB_HOST = variables.dbHost,
+            DB_PORT = variables.dbPort
+        }
+    }
+}
+```
+
+YAML
+
 ```yaml
 version: 2025-11-02
 transform: celerity-2026-02-27-draft
 variables:
+    certificateId:
+        type: string
     dbHost:
         type: string
     dbPort:
@@ -256,36 +445,36 @@ resources:
                 handlerGroup: "billing"
 
     billingHandlerConfig:
-        type: celerity/handlerConfig
+        type: "celerity/handlerConfig"
         metadata:
-            displayName: Billing Handlers Configuration
+            displayName: "Billing Handlers Configuration"
             labels:
-                handlerGroup: billing
+                handlerGroup: "billing"
         spec:
-        codeLocation: ./handlers
-        runtime: python3.12.x
-        memory: 256
-        timeout: 60
-        tracingEnabled: true
-        environmentVariables:
-            DB_HOST: "${variables.dbHost}"
-            DB_PORT: "${variables.dbPort}"
+            codeLocation: "./handlers"
+            runtime: "python3.12.x"
+            memory: 256
+            timeout: 60
+            tracingEnabled: true
+            environmentVariables:
+                DB_HOST: "${variables.dbHost}"
+                DB_PORT: "${variables.dbPort}"
 
     ordersHandlerConfig:
-        type: celerity/handlerConfig
+        type: "celerity/handlerConfig"
         metadata:
-            displayName: Order Handlers Configuration
+            displayName: "Order Handlers Configuration"
             labels:
-                handlerGroup: orders
+                handlerGroup: "orders"
         spec:
-        codeLocation: ./handlers
-        runtime: python3.12.x
-        memory: 512
-        timeout: 120
-        tracingEnabled: false
-        environmentVariables:
-            DB_HOST: "${variables.dbHost}"
-            DB_PORT: "${variables.dbPort}"
+            codeLocation: "./handlers"
+            runtime: "python3.12.x"
+            memory: 512
+            timeout: 120
+            tracingEnabled: false
+            environmentVariables:
+                DB_HOST: "${variables.dbHost}"
+                DB_PORT: "${variables.dbPort}"
 ```
 
 

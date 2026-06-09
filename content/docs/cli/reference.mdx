@@ -88,7 +88,7 @@ It can also be used to validate a single blueprint file.
 
 **Configuration Key**: `validateBlueprintFile`
 
-**Default Value**: `app.blueprint.yaml`
+**Default Value**: auto-detect (`app.bp`, `app.blueprint.yaml`, or `app.blueprint.jsonc`)
 
 ### `--check-blueprint-vars`
 
@@ -195,7 +195,7 @@ By default, the command runs in the foreground streaming container logs to stdou
 
 **Type**: `string`
 
-**Default Value**: auto-detect (`app.blueprint.yaml` or `app.blueprint.jsonc`)
+**Default Value**: auto-detect (`app.bp`, `app.blueprint.yaml`, or `app.blueprint.jsonc`)
 
 The path to the blueprint file. Relative paths are relative to `--app-dir`.
 
@@ -689,7 +689,7 @@ The application root directory.
 
 **Type**: `string`
 
-**Default Value**: auto-detect (`app.blueprint.yaml`)
+**Default Value**: auto-detect (`app.bp`, `app.blueprint.yaml`, or `app.blueprint.jsonc`)
 
 The path to the blueprint file.
 

@@ -1,25 +1,30 @@
-import { CloudIcon, RectangleGroupIcon, RocketLaunchIcon } from '@heroicons/react/20/solid'
+import { CloudIcon, RectangleGroupIcon, WrenchIcon } from '@heroicons/react/20/solid'
 import Link from 'next/link'
 
 const features = [
     {
-        name: 'Move Fast',
+        name: 'Develop locally, with confidence',
         description: (
             <>
-                Celerity is designed to help you move fast with its comprehensive
-                set of tools to shorten feedback loops and get you swiftly deploying
-                software you can trust will work.
+                Run your whole backend on your own machine, event sources and all,
+                with feedback loops that stay fast as the system grows.
+                The local environment uses open source software to stand in for cloud infrastructure,
+                so what you test behaves like what you ship.
             </>
         ),
-        icon: RocketLaunchIcon,
+        icon: WrenchIcon,
     },
     {
-        name: 'Run Anywhere with Ease',
+        name: 'Deploy without committing your future',
         description: (
             <>
-                Celerity lets you focus on the problems you are trying to solve,
-                you can write your applications once and run them on any cloud provider
-                as containerised or serverless applications.
+                You build against Celerity&apos;s building blocks, not a provider&apos;s APIs,
+                so the same application can deploy as serverless or containerised workloads.
+                <br />
+                <br />
+                <a href="https://bluelink.dev" target="_blank" className="text-indigo-600 dark:text-indigo-400">Bluelink</a> takes care of the networking, permissions and glue, which make moving between
+                targets a change of configuration rather than a rewrite.
+                <br />
                 <br />
                 <i>Current cloud provider support will be limited, see the <Link className="text-indigo-600 dark:text-indigo-400" href="/docs/framework/versions">versions</Link> page for more information.</i>
             </>
@@ -27,11 +32,16 @@ const features = [
         icon: CloudIcon,
     },
     {
-        name: 'Build with Useful Primitives',
+        name: 'Production ready from the first line',
         description: (
             <>
-                Build with a set of useful primitives focusing on common types of applications
-                such as a REST API, WebSocket API, Workflow or a Pub/Sub Consumer.
+                Every building block arrives with the parts you would otherwise wire up by hand:
+                authentication and CORS, built-in observability and telemetry, along with
+                resilient WebSocket connections with their own client SDK.
+                <br />
+                <br />
+                You connect the pieces, Celerity applies the networking and cloud security best
+                practices underneath.
             </>
         ),
         icon: RectangleGroupIcon,
@@ -45,10 +55,7 @@ export default function Features() {
                 <div className="mx-auto max-w-2xl lg:text-center">
                     <h2 className="text-base/7 font-semibold text-indigo-600 dark:text-indigo-400" id="features">Build with freedom</h2>
                     <p className="mt-2 text-pretty text-4xl font-semibold tracking-tight text-gray-900 sm:text-5xl lg:text-balance dark:text-white">
-                        Leave cloud lock-in behind
-                    </p>
-                    <p className="mt-6 text-lg/8 text-gray-600 dark:text-gray-300">
-                        Swiftly build your backend applications using essential building blocks without being locked into a specific cloud provider.
+                        Everything you need, end to end
                     </p>
                 </div>
                 <div className="mx-auto mt-16 max-w-2xl sm:mt-20 lg:mt-24 lg:max-w-none">

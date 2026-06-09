@@ -34,10 +34,11 @@ export default function Hero() {
                             <HeroLogo />
                         </div>
                         <h1 className="text-balance text-5xl font-semibold tracking-tight text-gray-900 sm:text-7xl dark:text-white">
-                            Move fast and deliver quality
+                            The serverless experience, without the lock-in.
                         </h1>
                         <p className="mt-8 text-pretty text-lg font-medium text-gray-500 sm:text-xl/8 dark:text-gray-400">
-                            Celerity is the backend toolkit that will get you moving fast without compromising.
+                            Celerity gives you clean, portable building blocks for backends;
+                            APIs, WebSockets, workflows, queues and more so you ship at serverless speed today and stay free to run anywhere tomorrow.
                         </p>
                         <div className="mt-10 flex items-center justify-center gap-x-6">
                             <Link

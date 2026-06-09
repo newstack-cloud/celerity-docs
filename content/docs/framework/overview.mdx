@@ -136,21 +136,21 @@ The [Workflow runtime](/docs/workflow-runtime) provides a way to run your `celer
 
 ### Celerity SDKs
 
-The Celerity SDKs are a set of libraries for all the languages that Celerity supports to help you build your applications.
+The Celerity SDKs are a set of libraries for the languages that Celerity supports to help you build your applications.
 
 The SDKs allow you to build your application handlers in a way that is idiomatic to your language of choice and provide a convenient way to interact with your application's infrastructure dependencies such as queues, databases and storage buckets.
 
 <Callout title="Database and Cache Packages" type="info">
-For **SQL databases**, the SDK provides a credentials provider that abstracts connection configuration sourcing, plus an optional [knex.js](https://knexjs.org/) connection factory with managed connection pooling. You bring your own SQL library or ORM — the SDK handles connection lifecycle, not queries. For **NoSQL datastores**, the SDK provides a cloud-agnostic interface for common CRUD operations. For **caches**, the SDK provides an abstraction covering all core Redis data structures (strings, hashes, lists, sets, sorted sets), with a credentials provider available for direct Redis client access when you need advanced features like pub/sub, streams or transactions.
+For **SQL databases**, the SDK provides a credentials provider that abstracts connection configuration sourcing, plus an optional connection factory with managed connection pooling. You bring your own SQL library or ORM — the SDK handles connection lifecycle, not queries. For **NoSQL datastores**, the SDK provides a cloud-agnostic interface for common CRUD operations. For **caches**, the SDK provides an abstraction covering all core Redis data structures (strings, hashes, lists, sets, sorted sets), with a credentials provider available for direct Redis client access when you need advanced features like pub/sub, streams or transactions.
 </Callout>
 
-Celerity provides SDKs for the following languages:
+Celerity provides SDKs for the following languages. In v0, Node.js (TypeScript) and Python are available; Go, C#/.NET and Java are planned for v1 (see [Celerity versions](/docs/framework/versions)):
 
-- [Node.js (TypeScript)](/docs/node-runtime)
-- [Python](/docs/python-runtime)
-- [Go](/docs/go-sdk)
-- [C#/.NET](/docs/csharp-runtime)
-- [Java](/docs/java-runtime)
+- [Node.js (TypeScript)](/docs/node-runtime) — ✅ Available in v0
+- [Python](/docs/python-runtime) — ✅ Available in v0
+- [Go](/docs/go-sdk) — 🚀 Planned for v1
+- [C#/.NET](/docs/csharp-runtime) — 🚀 Planned for v1
+- [Java](/docs/java-runtime) — 🚀 Planned for v1
 
 ### Bluelink
 

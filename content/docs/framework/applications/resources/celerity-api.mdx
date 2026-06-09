@@ -67,6 +67,28 @@ string | [corsConfiguration](#corsconfiguration)
 
 **examples**
 
+Blueprint Language
+
+```blueprintlang
+cors = "*"
+```
+
+```blueprintlang
+cors = {
+    allowCredentials = true,
+    allowOrigins = [
+        "https://example.com",
+        "https://another.example.com"
+    ],
+    allowMethods = ["GET", "POST"],
+    allowHeaders = ["Content-Type", "Authorization"],
+    exposeHeaders = ["Content-Length"],
+    maxAge = 3600
+}
+```
+
+YAML
+
 ```yaml
 cors: "*"
 ```
@@ -99,6 +121,20 @@ Configure a custom domain for the API.
 [domainConfiguration](#domainconfiguration)
 
 **examples**
+
+Blueprint Language
+
+```blueprintlang
+domain = {
+    domainName = "api.example.com",
+    basePaths = ["/"],
+    normalizeBasePath = false,
+    certificateId = variables.certificateId,
+    securityPolicy = "TLS_1_2"
+}
+```
+
+YAML
 
 ```yaml
 domain:
@@ -134,6 +170,24 @@ Configure authorization to control access to the API.
 [authConfiguration](#authconfiguration)
 
 **examples**
+
+Blueprint Language
+
+```blueprintlang
+auth = {
+    defaultGuard = "jwt",
+    guards = {
+        jwt = {
+            type = "jwt",
+            issuer = "https://identity.newstack.cloud/oauth2/v1/",
+            tokenSource = "$.headers.Authorization",
+            audience = ["https://identity.newstack.cloud/api/manage/v1/"]
+        }
+    }
+}
+```
+
+YAML
 
 ```yaml
 auth:
@@ -345,6 +399,18 @@ string | array[string]
 
 **examples**
 
+Blueprint Language
+
+```blueprintlang
+# Single guard
+authGuard = "jwt"
+
+# Ordered guard chain
+authGuard = ["jwt", "rbac"]
+```
+
+YAML
+
 ```yaml
 # Single guard
 authGuard: "jwt"
@@ -468,6 +534,17 @@ The presence of the base path in the request allows the runtime router to determ
 
 Advanced example where base path should **not** be stripped:
 
+Blueprint Language
+
+```blueprintlang
+basePaths = [
+    { protocol = "http", basePath = "/api" },
+    { protocol = "websocket", basePath = "/ws" }
+]
+```
+
+YAML
+
 ```yaml
 - protocol: "http"
   basePath: "/api"
@@ -485,6 +562,17 @@ array[( string | [basePathConfiguration ](#basepathconfiguration))]
 `["/"]`
 
 **examples**
+
+Blueprint Language
+
+```blueprintlang
+basePaths = [
+    { protocol = "http", basePath = "/api" },
+    { protocol = "websocket", basePath = "/ws" }
+]
+```
+
+YAML
 
 ```yaml
 - protocol: "http"
@@ -576,6 +664,18 @@ Claims from all passing guards are accumulated and namespaced by guard name in `
 string | array[string]
 
 **examples**
+
+Blueprint Language
+
+```blueprintlang
+# Single guard
+defaultGuard = "jwt"
+
+# Ordered guard chain
+defaultGuard = ["jwt", "rbac"]
+```
+
+YAML
 
 ```yaml
 # Single guard
@@ -692,6 +792,26 @@ string | array[ [valueSourceConfiguration](#valuesourceconfiguration) ]
 `$.cookies.authToken`
 
 `$.data.token`
+
+Blueprint Language
+
+```blueprintlang
+# authMessage strategy: token in the WebSocket message body
+tokenSource = [
+    { protocol = "http", source = "$.headers.Authorization" },
+    { protocol = "websocket", source = "$.data.token" }
+]
+```
+
+```blueprintlang
+# connect strategy: cookie-based token for browser clients
+tokenSource = [
+    { protocol = "http", source = "$.headers.Authorization" },
+    { protocol = "websocket", source = "$.cookies.authToken" }
+]
+```
+
+YAML
 
 ```yaml
 # authMessage strategy: token in the WebSocket message body
@@ -889,6 +1009,62 @@ An API can link to a `celerity/config` resource to access secrets and configurat
 
 ### HTTP API
 
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource ordersApi: celerity/api {
+    metadata {
+        displayName = "Orders API"
+        annotations = {
+            "celerity.api.vpc.subnetType" = "public"
+        }
+    }
+
+    select by label {
+        application = "orders"
+    }
+
+    spec {
+        protocols = ["http"]
+        cors = {
+            allowCredentials = true,
+            allowOrigins = [
+                "https://example.com",
+                "https://another.example.com"
+            ],
+            allowMethods = ["GET", "POST"],
+            allowHeaders = ["Content-Type", "Authorization"],
+            exposeHeaders = ["Content-Length"],
+            maxAge = 3600
+        }
+        domain = {
+            domainName = "api.example.com",
+            basePaths = ["/"],
+            normalizeBasePath = false,
+            certificateId = variables.certificateId,
+            securityPolicy = "TLS_1_2"
+        }
+        tracingEnabled = true
+        auth = {
+            defaultGuard = "jwt",
+            guards = {
+                jwt = {
+                    type = "jwt",
+                    issuer = "https://identity.newstack.cloud/oauth2/v1/",
+                    tokenSource = "$.headers.Authorization",
+                    audience = ["https://identity.newstack.cloud/api/manage/v1/"]
+                }
+            }
+        }
+    }
+}
+```
+
+YAML
+
 ```yaml
 version: 2025-11-02
 transform: celerity-2026-02-27-draft
@@ -939,6 +1115,56 @@ resources:
 
 ### WebSocket API
 
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource orderStreamApi: celerity/api {
+    metadata {
+        displayName = "Order Stream API"
+    }
+
+    select by label {
+        application = "orders"
+    }
+
+    spec {
+        protocols = [
+            { websocketConfig = { routeKey = "action" } }
+        ]
+        cors = {
+            allowOrigins = [
+                "https://example.com",
+                "https://another.example.com"
+            ]
+        }
+        domain = {
+            domainName = "api.example.com",
+            basePaths = ["/"],
+            normalizeBasePath = false,
+            certificateId = variables.certificateId,
+            securityPolicy = "TLS_1_2"
+        }
+        tracingEnabled = true
+        auth = {
+            defaultGuard = "jwt",
+            guards = {
+                jwt = {
+                    type = "jwt",
+                    issuer = "https://identity.newstack.cloud/oauth2/v1/",
+                    tokenSource = "$.data.token",
+                    audience = ["https://identity.newstack.cloud/api/manage/v1/"]
+                }
+            }
+        }
+    }
+}
+```
+
+YAML
+
 ```yaml
 version: 2025-11-02
 transform: celerity-2026-02-27-draft
@@ -978,6 +1204,66 @@ resources:
 ```
 
 ### WebSocket API (`connect` auth strategy)
+
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource orderStreamApi: celerity/api {
+    metadata {
+        displayName = "Order Stream API"
+    }
+
+    select by label {
+        application = "orders"
+    }
+
+    spec {
+        protocols = [
+            {
+                websocketConfig = {
+                    routeKey = "action",
+                    authStrategy = "connect",
+                    authGuard = "jwt"
+                }
+            }
+        ]
+        cors = {
+            allowCredentials = true,
+            allowOrigins = [
+                "https://example.com",
+                "https://another.example.com"
+            ]
+        }
+        domain = {
+            domainName = "api.example.com",
+            basePaths = ["/"],
+            normalizeBasePath = false,
+            certificateId = variables.certificateId,
+            securityPolicy = "TLS_1_2"
+        }
+        tracingEnabled = true
+        auth = {
+            defaultGuard = "jwt",
+            guards = {
+                jwt = {
+                    type = "jwt",
+                    issuer = "https://identity.newstack.cloud/oauth2/v1/",
+                    tokenSource = [
+                        # Cookie for browser clients connecting via the connect strategy
+                        { protocol = "websocket", source = "$.cookies.authToken" }
+                    ],
+                    audience = ["https://identity.newstack.cloud/api/manage/v1/"]
+                }
+            }
+        }
+    }
+}
+```
+
+YAML
 
 ```yaml
 version: 2025-11-02
@@ -1030,6 +1316,65 @@ See the [WebSocket Runtime Protocol](/docs/framework/runtime/websocket-runtime-p
 </Callout>
 
 ### Hybrid API
+
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource ordersApi: celerity/api {
+    metadata {
+        displayName = "Orders API"
+    }
+
+    select by label {
+        application = "orders"
+    }
+
+    spec {
+        protocols = ["http", "websocket"]
+        cors = {
+            allowCredentials = true,
+            allowOrigins = [
+                "https://example.com",
+                "https://another.example.com"
+            ],
+            allowMethods = ["GET", "POST"],
+            allowHeaders = ["Content-Type", "Authorization"],
+            exposeHeaders = ["Content-Length"],
+            maxAge = 3600
+        }
+        domain = {
+            domainName = "api.example.com",
+            basePaths = [
+                { protocol = "http", basePath = "/api" },
+                { protocol = "websocket", basePath = "/ws" }
+            ],
+            normalizeBasePath = false,
+            certificateId = variables.certificateId,
+            securityPolicy = "TLS_1_2"
+        }
+        tracingEnabled = true
+        auth = {
+            defaultGuard = "jwt",
+            guards = {
+                jwt = {
+                    type = "jwt",
+                    issuer = "https://identity.newstack.cloud/oauth2/v1/",
+                    tokenSource = [
+                        { protocol = "http", source = "$.headers.Authorization" },
+                        { protocol = "websocket", source = "$.data.token" }
+                    ],
+                    audience = ["https://identity.newstack.cloud/api/manage/v1/"]
+                }
+            }
+        }
+    }
+}
+```
+
+YAML
 
 ```yaml
 version: 2025-11-02
@@ -1230,6 +1575,17 @@ For **cross-site** deployments (e.g. `example.com` connecting to `different.com`
 
 Configure the [`tokenSource`](#authguardconfiguration) to match the client environment. For browser-facing APIs, use a cookie source:
 
+Blueprint Language
+
+```blueprintlang
+tokenSource = [
+    { protocol = "http", source = "$.headers.Authorization" },
+    { protocol = "websocket", source = "$.cookies.authToken" }
+]
+```
+
+YAML
+
 ```yaml
 tokenSource:
     - protocol: "http"
@@ -1239,6 +1595,17 @@ tokenSource:
 ```
 
 For APIs that only serve server-side or native clients, use a header source:
+
+Blueprint Language
+
+```blueprintlang
+tokenSource = [
+    { protocol = "http", source = "$.headers.Authorization" },
+    { protocol = "websocket", source = "$.headers.Authorization" }
+]
+```
+
+YAML
 
 ```yaml
 tokenSource:
@@ -1576,7 +1943,7 @@ Compute configuration that can be used for the `celerity/api`, `celerity/consume
 
 #### azure.serverless.functions.otel
 
-When set to `true`, OpenTelemetry will be enabled for Azure Functions. This feature is currently in preview (May 2025) and is only supported for a subset of languages.
+When set to `true`, OpenTelemetry will be enabled for Azure Functions. This feature is currently in preview (June 2026) and is only supported for a subset of languages.
 See the [OpenTelemetry for Azure Functions](https://learn.microsoft.com/en-us/azure/azure-functions/opentelemetry-howto?tabs=otlp-export&pivots=programming-language-csharp) documentation for more information.
 This is used when deploying to the `azure-serverless` target environment. 
 

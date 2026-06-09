@@ -1,0 +1,237 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "blueprintlang",
+  "scopeName": "source.blueprintlang",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#literal-keywords" },
+    { "include": "#directives" },
+    { "include": "#wildcard-export" },
+    { "include": "#include-decl" },
+    { "include": "#typed-decl" },
+    { "include": "#subconstruct-keywords" },
+    { "include": "#inline-statements" },
+    { "include": "#reference-namespaces" },
+    { "include": "#loop-helpers" },
+    { "include": "#filter-operator-words" },
+    { "include": "#function-call" },
+    { "include": "#accessor-dot" },
+    { "include": "#member-access" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.number-sign.blueprintlang",
+          "match": "#.*$"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        { "include": "#multiline-string" },
+        { "include": "#single-line-string" }
+      ]
+    },
+    "multiline-string": {
+      "name": "string.quoted.triple.blueprintlang",
+      "begin": "\"\"\"",
+      "end": "\"\"\"",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.string.begin.blueprintlang" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.end.blueprintlang" }
+      },
+      "patterns": [
+        { "include": "#interpolation" }
+      ]
+    },
+    "single-line-string": {
+      "name": "string.quoted.double.blueprintlang",
+      "begin": "\"",
+      "end": "\"",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.string.begin.blueprintlang" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.end.blueprintlang" }
+      },
+      "patterns": [
+        { "include": "#interpolation" },
+        {
+          "name": "constant.character.escape.blueprintlang",
+          "match": "\\\\\""
+        }
+      ]
+    },
+    "interpolation": {
+      "name": "meta.interpolation.blueprintlang",
+      "contentName": "meta.embedded.expression.blueprintlang",
+      "begin": "\\$\\{",
+      "end": "\\}",
+      "beginCaptures": {
+        "0": { "name": "punctuation.section.interpolation.begin.blueprintlang" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.section.interpolation.end.blueprintlang" }
+      },
+      "patterns": [
+        { "include": "#expression-content" }
+      ]
+    },
+    "balanced-braces": {
+      "begin": "\\{",
+      "end": "\\}",
+      "beginCaptures": {
+        "0": { "name": "punctuation.section.braces.begin.blueprintlang" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.section.braces.end.blueprintlang" }
+      },
+      "patterns": [
+        { "include": "#expression-content" }
+      ]
+    },
+    "expression-content": {
+      "patterns": [
+        { "include": "#numbers" },
+        { "include": "#literal-keywords" },
+        { "include": "#strings" },
+        { "include": "#reference-namespaces" },
+        { "include": "#loop-helpers" },
+        { "include": "#function-call" },
+        { "include": "#accessor-dot" },
+        { "include": "#member-access" },
+        { "include": "#operators" },
+        { "include": "#balanced-braces" }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        { "include": "#float-literal" },
+        { "include": "#int-literal" }
+      ]
+    },
+    "float-literal": {
+      "name": "constant.numeric.float.blueprintlang",
+      "match": "(?<![A-Za-z0-9_\\-])-?[0-9]+\\.[0-9]+(?![A-Za-z0-9_\\-])"
+    },
+    "int-literal": {
+      "name": "constant.numeric.integer.blueprintlang",
+      "match": "(?<![A-Za-z0-9_\\-])-?[0-9]+(?![A-Za-z0-9_\\-.])"
+    },
+    "literal-keywords": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.blueprintlang",
+          "match": "(?<![A-Za-z0-9_\\-.])(true|false)(?![A-Za-z0-9_\\-])(?!\\s*=(?!=))"
+        },
+        {
+          "name": "constant.language.none.blueprintlang",
+          "match": "(?<![A-Za-z0-9_\\-.])none(?![A-Za-z0-9_\\-])(?!\\s*=(?!=))"
+        }
+      ]
+    },
+    "directives": {
+      "match": "(?<![A-Za-z0-9_\\-.])(version|transform)(?=\\s+[\\[\"])",
+      "name": "keyword.directive.blueprintlang"
+    },
+    "wildcard-export": {
+      "match": "(?<![A-Za-z0-9_\\-.])(export)\\s+(\\*)",
+      "captures": {
+        "1": { "name": "keyword.declaration.blueprintlang" },
+        "2": { "name": "constant.other.wildcard.blueprintlang" }
+      }
+    },
+    "include-decl": {
+      "match": "(?<![A-Za-z0-9_\\-.])(include)\\s+([A-Za-z_][A-Za-z0-9_\\-]*|\"[^\"]+\")(?=\\s+\")",
+      "captures": {
+        "1": { "name": "keyword.declaration.blueprintlang" },
+        "2": { "name": "entity.name.blueprintlang" }
+      }
+    },
+    "typed-decl": {
+      "match": "(?<![A-Za-z0-9_\\-.])(variable|value|data|resource|export)\\s+([A-Za-z_][A-Za-z0-9_\\-]*|\"[^\"]+\")(?:\\s+(as)\\s+([A-Za-z_][A-Za-z0-9_\\-]*|\"[^\"]+\"))?\\s*(:)\\s*((?:string|integer|float|boolean|array|object)(?![A-Za-z0-9_/])|[A-Za-z][A-Za-z0-9]*(?:/[A-Za-z][A-Za-z0-9]*)+)",
+      "captures": {
+        "1": { "name": "keyword.declaration.blueprintlang" },
+        "2": { "name": "entity.name.blueprintlang" },
+        "3": { "name": "keyword.modifier.blueprintlang" },
+        "4": { "name": "entity.name.blueprintlang" },
+        "5": { "name": "punctuation.separator.type.blueprintlang" },
+        "6": { "name": "storage.type.blueprintlang" }
+      }
+    },
+    "subconstruct-keywords": {
+      "patterns": [
+        {
+          "match": "(?<![A-Za-z0-9_\\-.])(select)\\s+(by)\\s+(label)(?=\\s*\\{)",
+          "captures": {
+            "1": { "name": "keyword.other.subconstruct.blueprintlang" },
+            "2": { "name": "keyword.modifier.blueprintlang" },
+            "3": { "name": "keyword.modifier.blueprintlang" }
+          }
+        },
+        {
+          "match": "(?<![A-Za-z0-9_\\-.])(metadata|spec|variables)(?=\\s*\\{)",
+          "name": "keyword.other.subconstruct.blueprintlang"
+        }
+      ]
+    },
+    "inline-statements": {
+      "patterns": [
+        {
+          "match": "(?<![A-Za-z0-9_\\-.])filter(?=\\s+\")",
+          "name": "keyword.control.blueprintlang"
+        },
+        {
+          "match": "(?<![A-Za-z0-9_\\-.])foreach(?![A-Za-z0-9_\\-])(?!\\s*=(?!=))",
+          "name": "keyword.control.blueprintlang"
+        }
+      ]
+    },
+    "reference-namespaces": {
+      "match": "(?<![A-Za-z0-9_\\-.])(variables|values|resources|datasources|children)(?=\\.)",
+      "name": "variable.language.namespace.blueprintlang"
+    },
+    "loop-helpers": {
+      "match": "(?<![A-Za-z0-9_\\-.])(elem|i)(?![A-Za-z0-9_\\-])(?!\\s*=(?!=))",
+      "name": "variable.language.iterator.blueprintlang"
+    },
+    "filter-operator-words": {
+      "match": "(?<![A-Za-z0-9_\\-.])(in|not|has|key|contains|starts|with|ends)(?![A-Za-z0-9_\\-])(?!\\s*=(?!=))",
+      "name": "keyword.operator.word.blueprintlang"
+    },
+    "function-call": {
+      "match": "(?<![A-Za-z0-9_\\-])[A-Za-z_][A-Za-z0-9_\\-]*(?=\\s*\\()",
+      "name": "entity.name.function.blueprintlang"
+    },
+    "accessor-dot": {
+      "match": "\\.(?=[A-Za-z_])",
+      "name": "punctuation.accessor.dot.blueprintlang"
+    },
+    "member-access": {
+      "match": "(?<=\\.)[A-Za-z_][A-Za-z0-9_\\-]*",
+      "name": "variable.other.property.blueprintlang"
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.comparison.blueprintlang",
+          "match": "==|!=|<=|>=|<|>"
+        },
+        {
+          "name": "keyword.operator.logical.blueprintlang",
+          "match": "&&|\\|\\||!(?!=)"
+        },
+        {
+          "name": "keyword.operator.assignment.blueprintlang",
+          "match": "=(?!=)"
+        }
+      ]
+    }
+  }
+}

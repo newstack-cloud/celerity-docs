@@ -269,6 +269,26 @@ The `celerity/sqlDatabase` resource type does not link to other resources.
 
 ### Minimal SQL Database
 
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource ordersDb: celerity/sqlDatabase {
+    metadata {
+        displayName = "Orders Database"
+    }
+
+    spec {
+        engine = "postgres"
+        name = "orders"
+    }
+}
+```
+
+YAML
+
 ```yaml
 version: 2025-11-02
 transform: celerity-2026-02-27-draft
@@ -283,6 +303,31 @@ resources:
 ```
 
 ### SQL Database with Schema Management
+
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource ordersDb: celerity/sqlDatabase {
+    metadata {
+        displayName = "Orders Database"
+        labels = {
+            application = "orders"
+        }
+    }
+
+    spec {
+        engine = "postgres"
+        name = "orders"
+        schemaPath = "./schemas/orders.yaml"
+        migrationsPath = "./sql/orders-db"
+    }
+}
+```
+
+YAML
 
 ```yaml
 version: 2025-11-02
@@ -302,6 +347,92 @@ resources:
 ```
 
 ### SQL Database with Handler and VPC Links
+
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource ordersVpc: celerity/vpc {
+    metadata {
+        displayName = "Orders VPC"
+        labels = {
+            application = "orders"
+        }
+    }
+
+    select by label {
+        application = "orders"
+    }
+
+    spec {
+        preset = "standard"
+    }
+}
+
+resource ordersDb: celerity/sqlDatabase {
+    metadata {
+        displayName = "Orders Database"
+        labels = {
+            application = "orders"
+        }
+    }
+
+    spec {
+        engine = "postgres"
+        name = "orders"
+        schemaPath = "./schemas/orders.yaml"
+        migrationsPath = "./sql/orders-db"
+    }
+}
+
+resource getOrderHandler: celerity/handler {
+    metadata {
+        displayName = "Get Order"
+        labels = {
+            application = "orders"
+        }
+        annotations = {
+            "celerity.handler.http" = true,
+            "celerity.handler.http.method" = "GET",
+            "celerity.handler.http.path" = "/orders/{id}"
+        }
+    }
+
+    select by label {
+        application = "orders"
+    }
+
+    spec {
+        handler = "handlers.getOrder"
+        runtime = "nodejs24.x"
+    }
+}
+
+resource ordersApi: celerity/api {
+    metadata {
+        displayName = "Orders API"
+        labels = {
+            application = "orders"
+        }
+    }
+
+    select by label {
+        application = "orders"
+    }
+
+    spec {
+        type = "http"
+        domain = {
+            domainName = "api.example.com",
+            basePaths = ["/orders"]
+        }
+    }
+}
+```
+
+YAML
 
 ```yaml
 version: 2025-11-02
@@ -367,6 +498,31 @@ resources:
 
 ### SQL Database with Read Replicas
 
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource ordersDb: celerity/sqlDatabase {
+    metadata {
+        displayName = "Orders Database"
+        labels = {
+            application = "orders"
+        }
+    }
+
+    spec {
+        engine = "postgres"
+        name = "orders"
+        schemaPath = "./schemas/orders.yaml"
+        readReplicas = true
+    }
+}
+```
+
+YAML
+
 ```yaml
 version: 2025-11-02
 transform: celerity-2026-02-27-draft
@@ -387,6 +543,32 @@ resources:
 ### SQL Database with IAM Authentication
 
 ✅ **Available in v0**
+
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource ordersDb: celerity/sqlDatabase {
+    metadata {
+        displayName = "Orders Database"
+        labels = {
+            application = "orders"
+        }
+    }
+
+    spec {
+        engine = "postgres"
+        name = "orders"
+        schemaPath = "./schemas/orders.yaml"
+        authMode = "iam"
+        readReplicas = true
+    }
+}
+```
+
+YAML
 
 ```yaml
 version: 2025-11-02

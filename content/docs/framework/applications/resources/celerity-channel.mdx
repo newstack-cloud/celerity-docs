@@ -75,6 +75,18 @@ string
 
 **examples**
 
+Blueprint Language
+
+```blueprintlang
+channelName = "public:announcements"
+```
+
+```blueprintlang
+channelName = "admin:dashboard"
+```
+
+YAML
+
 ```yaml
 channelName: "public:announcements"
 ```
@@ -98,6 +110,18 @@ string
 
 **examples**
 
+Blueprint Language
+
+```blueprintlang
+channelPattern = "org:*"
+```
+
+```blueprintlang
+channelPattern = "chat:room-*"
+```
+
+YAML
+
 ```yaml
 channelPattern: "org:*"
 ```
@@ -119,6 +143,22 @@ If no auth guard is specified and no subscribe handler is linked, subscriptions 
 [authChannelConfiguration](#authchannelconfiguration)
 
 **examples**
+
+Blueprint Language
+
+```blueprintlang
+auth = {
+    guard = "authenticated"
+}
+```
+
+```blueprintlang
+auth = {
+    guard = "orgMember"
+}
+```
+
+YAML
 
 ```yaml
 auth:
@@ -251,6 +291,49 @@ Channel handlers are optional — without them, the channel works with just the 
 
 A simple named channel with authentication but no presence or rate limiting.
 
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource chatApi: celerity/api {
+    select by label {
+        application = "chatApp"
+    }
+
+    spec {
+        protocols = [
+            {
+                websocketConfig = {
+                    routeKey = "event",
+                    authStrategy = "authMessage",
+                    authGuard = ["jwt"]
+                }
+            }
+        ]
+    }
+}
+
+resource publicAnnouncements: celerity/channel {
+    metadata {
+        labels = {
+            application = "chatApp"
+        }
+    }
+
+    spec {
+        channelName = "public:announcements"
+        auth = {
+            guard = "authenticated"
+        }
+        presence = false
+    }
+}
+```
+
+YAML
+
 ```yaml
 version: 2025-11-02
 transform: celerity-2026-02-27-draft
@@ -282,6 +365,54 @@ resources:
 ### Channel with Pattern, Presence and Rate Limiting
 
 A channel pattern that matches multiple channels with presence tracking and rate limiting enabled.
+
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource chatApi: celerity/api {
+    select by label {
+        application = "chatApp"
+    }
+
+    spec {
+        protocols = [
+            {
+                websocketConfig = {
+                    routeKey = "event",
+                    authStrategy = "authMessage",
+                    authGuard = ["jwt"]
+                }
+            }
+        ]
+    }
+}
+
+resource orgUpdates: celerity/channel {
+    metadata {
+        labels = {
+            application = "chatApp"
+        }
+    }
+
+    spec {
+        channelPattern = "org:*"
+        auth = {
+            guard = "orgMember"
+        }
+        presence = true
+        rateLimit = {
+            maxMessages = 50,
+            windowMs = 1000,
+            strategy = "drop"
+        }
+    }
+}
+```
+
+YAML
 
 ```yaml
 version: 2025-11-02
@@ -318,6 +449,85 @@ resources:
 ### Channel with Lifecycle Handlers
 
 A channel with linked handlers for subscribe and message events.
+
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource chatApi: celerity/api {
+    select by label {
+        application = "chatApp"
+    }
+
+    spec {
+        protocols = [
+            {
+                websocketConfig = {
+                    routeKey = "event",
+                    authStrategy = "authMessage",
+                    authGuard = ["jwt"]
+                }
+            }
+        ]
+    }
+}
+
+resource orgUpdates: celerity/channel {
+    metadata {
+        labels = {
+            application = "chatApp"
+        }
+    }
+
+    select by label {
+        channel = "orgUpdates"
+    }
+
+    spec {
+        channelPattern = "org:*"
+        auth = {
+            guard = "orgMember"
+        }
+        presence = true
+    }
+}
+
+resource onOrgSubscribe: celerity/handler {
+    metadata {
+        labels = {
+            channel = "orgUpdates"
+        }
+        annotations = {
+            "celerity.handler.channel" = true,
+            "celerity.handler.channel.event" = "subscribe"
+        }
+    }
+
+    spec {
+        handler = "handlers.onOrgSubscribe"
+    }
+}
+
+resource onOrgMessage: celerity/handler {
+    metadata {
+        labels = {
+            channel = "orgUpdates"
+        }
+        annotations = {
+            "celerity.handler.channel" = true,
+            "celerity.handler.channel.event" = "message"
+        }
+    }
+
+    spec {
+        handler = "handlers.onOrgMessage"
+    }
+}
+```
+
+YAML
 
 ```yaml
 version: 2025-11-02
