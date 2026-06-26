@@ -22,6 +22,11 @@ Celerity applications can be deployed as both serverless[^2] and traditional app
 - **Pain point**: Building production-ready backend systems is complex and time-consuming. A lot of trade-offs are often made to meet deadlines and budgets where an optimised development workflow is often de-prioritised. Even when substantial internal tooling is built for an optimal developer workflow, it is often a large maintenance burden with its own issues and complexity that can slow down development.
 - **Solution**: Celerity provides an optimised development environment that can run locally or in the cloud that provides tooling for testing and running your applications focused on providing fast feedback loops. When it comes to production-readiness, Celerity makes sure that your applications are instrumented with built-in observability and telemetry to integrate with your monitoring tools out-of-the-box. When you choose to deploy your applications to a containerised environment, Celerity runs your application in a runtime that is built to be performant and fault-tolerant.
 
+### Product & data team friction
+
+- **Pain point**: The teams that build a product and the teams that analyse its data are constantly out of sync. The data model is scattered across application code and tribal knowledge, and with NoSQL stores there is no database-level schema to introspect at all, so data teams build pipelines effectively blind. When product teams evolve the schema, breaking changes surprise downstream consumers with no warning, and keeping documentation, types and pipelines aligned is a manual, error-prone effort.
+- **Solution**: Celerity makes the schema a first-class, version-controlled source of truth shared by both teams. [Schema-as-code](/docs/framework/applications/nosql-datastore-schema-management) YAML describes the intended structure with rich ownership and classification metadata; [type generation](/docs/framework/applications/nosql-datastore-schema-management#type-generation) keeps application code type-safe in supported languages; [schema contracts](/docs/framework/applications/nosql-datastore-schema-management#schema-contracts) let data teams declare the dependencies they rely on so breaking changes are flagged in CI before they ship; and [data team exports](/docs/framework/applications/nosql-datastore-schema-management#for-data-teams) (Markdown, JSON Schema, Avro and Mermaid ERD) feed documentation and pipeline tooling directly. See the [NoSQL datastore](/docs/framework/applications/nosql-datastore-schema-management) and [SQL database](/docs/framework/applications/sql-database-schema-management) schema management guides for the full picture.
+
 ## Application building blocks
 
 Celerity provides a set of building blocks (often referred to as "primitives") that can be used to build backend applications. These building blocks are derived from common patterns and practices in the industry when designing and building backend systems.
@@ -60,7 +65,7 @@ The config/secret store building block ([`celerity/config`](/docs/framework/appl
 
 ### SQL Database
 
-The SQL database building block ([`celerity/sql-database`](/docs/framework/applications/resources/celerity-sql-database)) is used to define a SQL database that can be used to store structured data. This includes support for multiple providers such as AWS RDS, Azure SQL Database and GCP Cloud SQL.
+The SQL database building block ([`celerity/sql-database`](/docs/framework/applications/resources/celerity-sql-database)) is used to define a SQL database that can be used to store structured data. This includes support for multiple providers such as AWS RDS, Azure SQL Database and GCP Cloud SQL. Celerity provides [built-in schema management](/docs/framework/applications/sql-database-schema-management) for SQL databases, covering schema-as-code with an automated migration engine, type generation, schema contracts and data team exports, giving development and data teams a single, versioned source of truth for the database structure.
 
 [Read more about Celerity SQL Databases](/docs/framework/applications/resources/celerity-sql-database).
 
@@ -169,7 +174,7 @@ Well, this is partially true, but here's why we think the Celerity approach prov
 1. Celerity aims to leverage as much as possible in terms of what serverless platforms have to offer; often, the approach to portability is to run traditional applications in containers on a function-as-a-service platforms which misses out on all the benefits of the first-class integrations with event sources and API gateways that serverless platforms provide.
 2. Celerity provides a fully integrated approach that allows you to define and manage [application building blocks](#application-building-blocks) that allows for portable infrastructure[^5] in addition to the portability of your application code.
 
-[^1]: Currently, Celerity only supports AWS, Azure, GCP and local environments, but the goal is to support on-premise environments in the future.
+[^1]: In the current plan for v1, Celerity only aims to support AWS, Azure, GCP and local environments. However, the goal is to support on-premise environments in the future.
 [^2]: Serverless applications in this context refers to Function-as-a-Service (FaaS) platforms (Such as AWS Lambda) that integrate with event sources and API gateways.
 [^3]: Traditional applications in this context refers to those that are deployed as containers with a container orchestration service or virtual machines. An example of a container orchestration service would be a managed Kubernetes service such as Amazon EKS.
 [^4]: Additional tooling refers to third-party tools or commercial services that help with the migration of infrastructure such as databases between cloud providers.

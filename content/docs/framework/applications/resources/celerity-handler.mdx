@@ -462,7 +462,7 @@ ___
 <FieldHeading fieldName="celerity.handler.vpc.subnetType" />
 
 The type of subnet that the handler will be deployed to in a VPC.
-This is only supported for serverless target environments where functions can be deployed to specific VPCs.
+This is only considered for some serverless target environments where functions can be placed in specific subnets of a VPC (such as AWS Lambda); it has no effect on other targets. See [how subnet types for handlers work in serverless environments](/docs/framework/applications/resources/celerity-vpc#subnet-placement-in-serverless-environments) for the per-target behaviour and the reasoning behind the default.
 
 ✅ **Available in v0**
 
@@ -476,7 +476,7 @@ string
 
 **default value**
 
-`public`
+`private`
 
 ## Outputs
 

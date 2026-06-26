@@ -525,7 +525,7 @@ celerity deploy
 <Callout title="Contract validation in v0" type="info">
 In v0, contract validation is not built into the deploy pipeline. Use `celerity schema validate` in your CI pipeline to catch contract violations before deployment. See [Schema Contracts](#schema-contracts) for details.
 
-Deploy-time contract enforcement (blocking deploys and dispatching webhook notifications automatically) is projected as a paid tier feature for a future release after v1 (post-June 2027).
+Deploy-time contract enforcement (blocking deploys and dispatching webhook notifications automatically) is projected as a paid tier feature for a future release after v1 (post-July 2027).
 </Callout>
 
 ## Local Development
@@ -788,7 +788,7 @@ Contract impact is also shown in `celerity schema diff` output, giving visibilit
 <Callout title="Future Capability" type="info">
 In v0, contract validation runs via `celerity schema validate` as a CI gate; it does not run automatically during `celerity deploy`.
 
-Deploy-time contract enforcement (automatically blocking deploys when contracts are affected) and webhook notifications (dispatching to Slack, email or custom endpoints when contracts fire) are projected as paid tier features for a future release after v1 (post-June 2027). These are future projections, not committed features.
+Deploy-time contract enforcement (automatically blocking deploys when contracts are affected) and webhook notifications (dispatching to Slack, email or custom endpoints when contracts fire) are projected as paid tier features for a future release after v1 (post-July 2027). These are future projections, not committed features.
 
 The paid Schema Service would add a `notify` field to contracts for webhook configuration, integrate contract checks directly into the deploy pipeline, and dispatch notifications automatically.
 </Callout>
@@ -796,7 +796,7 @@ The paid Schema Service would add a `notify` field to contracts for webhook conf
 ### Programmatic Schema API
 
 <Callout title="Future Capability" type="info">
-A programmatic REST API for querying deployed schemas, change history and contract status is projected as a paid tier feature for a future release after v1 (post-June 2027).
+A programmatic REST API for querying deployed schemas, change history and contract status is projected as a paid tier feature for a future release after v1 (post-July 2027).
 
 Planned endpoints include:
 - `GET /schemas/{instanceId}/{resourceName}` — current deployed schema
@@ -809,7 +809,7 @@ Pipeline tools would integrate with this API to auto-generate configs, sync data
 ### Data Catalog Integrations
 
 <Callout title="Future Capability" type="info">
-Auto-sync to data catalog services (AWS Glue Data Catalog, DataHub, Atlan, etc.) is projected as a paid tier feature for a future release after v1 (post-June 2027).
+Auto-sync to data catalog services (AWS Glue Data Catalog, DataHub, Atlan, etc.) is projected as a paid tier feature for a future release after v1 (post-July 2027).
 </Callout>
 
 ## For Data Teams

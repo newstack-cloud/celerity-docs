@@ -114,6 +114,19 @@ A link between a VPC and handler will have no effect on handlers in a containeri
 
 ✅ **Available in v0**
 
+#### Subnet placement in serverless environments
+
+The handler's `celerity.handler.vpc.subnetType` annotation selects which subnet a VPC-attached serverless function is placed in. It accepts `public` or `private` and **defaults to `private`**.
+
+It is only considered by serverless targets that support placing functions in specific subnets of a customer-managed VPC, which is currently limited to **AWS Lambda**. It has no effect on other serverless targets: Google Cloud (Cloud Functions / Cloud Run) attaches functions to a VPC through a Serverless VPC Access connector and egress settings, and Azure Functions use VNet integration — neither offers a public/private subnet choice for the function.
+
+On AWS, a VPC-attached Lambda never receives a public IP address, which makes subnet choice behave differently than it does for a typical instance:
+
+- **`private`** (default): the function can reach private resources in the VPC (such as a linked `celerity/sqlDatabase` or `celerity/cache`) and, where the VPC provides a NAT gateway, the public internet.
+- **`public`**: the function can reach private resources in the VPC but has **no outbound internet access**. A VPC-attached function has no public IP, so it cannot use the public subnet's internet gateway. This is the appropriate choice for cost-optimised VPCs that are provisioned without a NAT gateway, such as the `public` and `light-public` [presets](#preset): the function reaches other in-VPC resources, for example a database or cache secured by security groups without incurring NAT gateway charges. In a VPC that already provisions a NAT gateway (such as the `standard` preset), `public` offers no advantage over `private`.
+
+A handler that is not linked to a VPC is not VPC-attached and retains full outbound internet access by default.
+
 [Read more about Celerity handlers](/docs/framework/applications/resources/celerity-handler)
 
 ### `celerity/consumer`
