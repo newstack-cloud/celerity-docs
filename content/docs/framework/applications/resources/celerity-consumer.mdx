@@ -83,7 +83,7 @@ integer
 ### visibilityTimeout
 
 The time in seconds that a message is hidden from other consumers after being retrieved from the queue or message broker.
-Depending on the target environment, this value may be ignored, see the [configuration mappings](#configuration-mappings) section for more details.
+This value is not applicable to the AWS Serverless target — the only v0 deploy target currently available — and is only honoured by container-backed targets planned for a future v0 evolution; see the [configuration mappings](#configuration-mappings) section for more details.
 
 ✅ **Available in v0**
 
@@ -94,7 +94,7 @@ integer
 ### waitTimeSeconds
 
 The time in seconds to wait for messages to become available in the queue or message broker before polling again.
-Depending on the target environment, this value may be ignored, see the [configuration mappings](#configuration-mappings) section for more details.
+This value is not applicable to the AWS Serverless target — the only v0 deploy target currently available — and is only honoured by container-backed targets planned for a future v0 evolution; see the [configuration mappings](#configuration-mappings) section for more details.
 
 ✅ **Available in v0**
 
@@ -774,6 +774,8 @@ A sidecar [ADOT collector](https://aws-otel.github.io/docs/getting-started/colle
 In the AWS Serverless environment, consumer applications are deployed as SQS, Kinesis, S3 or DynamoDB Stream triggers (event source mappings) for the AWS Lambda handlers defined for the consumer application.
 
 When the `sourceId` is a Celerity topic, an SQS Queue is created to subscribe to the topic to implement a reliable and scalable fan-out approach. The queue will be configured as the trigger for the handlers linked to from the consumer application.
+
+When a consumer defines `externalEvents`, each entry is wired as an event source mapping (or notification) for the handler's Lambda function: a `dbStream` maps to a DynamoDB Streams event source mapping (`dbStreamId` → `eventSourceArn`), a `dataStream` to a Kinesis event source mapping (`dataStreamId` → `eventSourceArn`), and an `objectStorage` source to an S3 event notification on the referenced bucket. Where supported, `batchSize`, `partialFailures` (→ `functionResponseTypes`) and `startFromBeginning` (→ `startingPosition = "TRIM_HORIZON"`) are applied to the mapping. The same event-source-mapping wiring applies when `sourceId` refers to an external Amazon SQS queue that is not defined in the blueprint.
 
 When tracing is enabled, an [ADOT lambda layer](https://aws-otel.github.io/docs/getting-started/lambda) is bundled with and configured to instrument each handler to collect traces and metrics. Traces are only collected when tracing is enabled for the handlers that process messages.
 

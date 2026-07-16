@@ -144,12 +144,12 @@ string
 ## Outputs
 
 Outputs are computed values that are accessible via the `{resourceName}.spec.*` field accessor in a blueprint substitution.
-For example, if the resource name is `mySchedule`, the output would be accessible via `${mySchedule.spec.id}`.
+For example, if the resource name is `mySchedule`, the output would be accessible via `${mySchedule.spec.queueId}`.
 
 ### queueId (optional)
 
 The ID of the queue or pub/sub topic that is created for the schedule.
-This output is **only** present in the outputs when the `sourceId` is a Celerity topic and the target environment requires a queue or pub/sub topic as an intermediary between the scheduler and the scheduled handler.
+This output is **only** present in the outputs when the target environment requires a queue or pub/sub topic as an intermediary between the scheduler and the scheduled handler (for example, container-backed AWS, GKE or Azure targets). It is not present for serverless target environments, where the scheduler triggers the handler directly.
 
 **type**
 

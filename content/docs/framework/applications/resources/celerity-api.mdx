@@ -288,7 +288,7 @@ For example, if the resource name is `myApi`, the output would be accessible via
 ### id
 
 The ID of the created API in the target environment.
-For customer server or containerised environments, this will be the same as the `baseUrl` output field.
+For custom server or containerised environments, this will be the same as the `baseUrl` output field.
 
 **type**
 
@@ -483,7 +483,7 @@ A value that contains the number of seconds to cache a CORS Preflight request fo
 
 **field type**
 
-string
+integer
 ___
 
 ### domainConfiguration
@@ -734,7 +734,7 @@ This is used when the guard type is `jwt`, otherwise it will be ignored.
 
 <Callout title="Warning" type="warning">
 Depending on the target environment, the `oauth2` discovery mode may not be supported, serverless platforms will often only support OIDC discovery documents.
-When running an API in the Celerity runtime (containerised deployments), the `oauth2` discovery mode will always be supported, meaning the `/.well-known/oauth-authorizaton-server` will be used to retrieve the discovery document.
+When running an API in the Celerity runtime (containerised deployments), the `oauth2` discovery mode will always be supported, meaning the `/.well-known/oauth-authorization-server` will be used to retrieve the discovery document.
 </Callout>
 
 **field type**
@@ -1567,7 +1567,7 @@ The token configured in the API's auth guard token source must be present in the
 - **Server-side or native clients** (Node.js, Python, mobile apps, CLI tools) can send the token as a HTTP header (e.g. `Authorization: Bearer <token>`) on the upgrade request.
 - **Browser clients** cannot send custom headers on the WebSocket handshake as the browser `WebSocket` API does not support this. In this environment, the token must be sent via a **cookie**. The application's HTTP login or token exchange endpoint should set an `HttpOnly`, `Secure`, `SameSite=Strict` (or `SameSite=Lax`) cookie containing the auth token, which the browser will automatically include on the upgrade request.
 
-<Callout title="Cross-site browser clients" type="warn">
+<Callout title="Cross-site browser clients" type="warning">
 Cookie-based auth requires the WebSocket API to be **same-site** as the client application (e.g. `app.example.com` connecting to `api.example.com`). For same-site, different subdomain setups, set the cookie with `Domain=.example.com` so it is included on the upgrade request.
 
 For **cross-site** deployments (e.g. `example.com` connecting to `different.com`), cookies with `SameSite=Strict` or `SameSite=Lax` will not be sent on the upgrade request. Since browsers also cannot set custom headers on the WebSocket handshake, the `connect` strategy is not viable for cross-site browser clients. Use the `authMessage` strategy instead.
@@ -1615,7 +1615,7 @@ tokenSource:
       source: "$.headers.Authorization"
 ```
 
-<Callout title="Why not query parameters?" type="warn">
+<Callout title="Why not query parameters?" type="warning">
 While the token source supports `$.query.*`, sending tokens as query parameters (e.g. `wss://example.com/ws?token=...`) is **discouraged** because URLs may be logged by proxies, load balancers, and server access logs, exposing the token. Cookie-based transport avoids this risk.
 </Callout>
 
@@ -1964,7 +1964,7 @@ The Celerity runtime does not have exact parity with the JWT support in serverle
 The Celerity runtime supports the following features for JWT validation:
 
 - OpenID Connect (OIDC) discovery to retrieve the JWKS (`/.well-known/openid-configuration`)
-- OAuth2 discovery to retrieve the JWKS (`/.well-known/oauth-authorizaton-server`)
+- OAuth2 discovery to retrieve the JWKS (`/.well-known/oauth-authorization-server`)
 - Multiple asymmetric signing algorithms compatible with JSON Web Key Sets (RS256, RS384, RS512, PS256, ES256, ES384, EdDSA).
 
 ## ⚠️ Limitations

@@ -35,6 +35,8 @@ The rest of this section lists fields that are available to configure the `celer
 A unique name for the VPC that will be used to identify the VPC in the target environment.
 This will be used as a resource tag in target environments that support resource tagging for networking resources.
 
+The `name` is also the key used to share a VPC across applications: a `celerity/vpc` declared in [`referenced` mode](#mode) locates the existing Celerity-managed VPC by matching this `name`, so the referencing resource must use the **same `name`** as the managed VPC it points at.
+
 **type**
 
 string
@@ -61,6 +63,35 @@ For target environments that supports Dual-stack VPCs for Ipv4 and Ipv6 traffic,
 **default value**
 
 `standard`
+
+**type**
+
+string
+
+### mode
+
+Determines whether Celerity provisions the VPC or references an existing Celerity-managed VPC.
+
+This can be one of the following values:
+- `managed`: Celerity provisions the VPC and its associated networking resources from the `preset`, and owns their lifecycle.
+- `referenced`: The resource is a reference to an existing Celerity-managed VPC that has the same `name`. Celerity does not provision or modify any networking resources; it resolves the existing VPC along with its subnets, routing and access controls, this allows applications, databases and caches defined in this blueprint to be placed into it.
+
+`referenced` mode allows a VPC to be **shared across multiple applications (blueprints)** without native cross-blueprint links. One application declares the VPC in `managed` mode (the owner), and any number of other applications declare a `celerity/vpc` with the **same `name`** in `referenced` mode. Each application places its own resources into the shared VPC through its own local links; the VPC itself is matched by `name` in the target environment, so no link crosses a blueprint boundary.
+
+When `mode` is `referenced`:
+- `preset` is ignored — the topology already exists and is not re-derived.
+- Target-environment networking options in the [app deploy configuration](#app-deploy-configuration) (for example `aws.vpc.cidrBlock`) are ignored, for the same reason.
+- The referenced VPC must be one that Celerity created in `managed` mode, identified by the Celerity VPC `name`. Referencing a VPC provisioned outside of Celerity is not supported by this field.
+
+✅ **Available in v0**
+
+**allowed values**
+
+`managed` | `referenced`
+
+**default value**
+
+`managed`
 
 **type**
 
@@ -122,7 +153,7 @@ It is only considered by serverless targets that support placing functions in sp
 
 On AWS, a VPC-attached Lambda never receives a public IP address, which makes subnet choice behave differently than it does for a typical instance:
 
-- **`private`** (default): the function can reach private resources in the VPC (such as a linked `celerity/sqlDatabase` or `celerity/cache`) and, where the VPC provides a NAT gateway, the public internet.
+- **`private`** (default): the function can reach private resources in the VPC (such as a linked `celerity/sqlDatabase` or `celerity/cache`) and, where the VPC provides a NAT gateway, the public internet. This default requires the VPC to provide a private subnet; on the `public` and `light-public` [presets](#preset), which provision none, set `subnetType` to `public` explicitly.
 - **`public`**: the function can reach private resources in the VPC but has **no outbound internet access**. A VPC-attached function has no public IP, so it cannot use the public subnet's internet gateway. This is the appropriate choice for cost-optimised VPCs that are provisioned without a NAT gateway, such as the `public` and `light-public` [presets](#preset): the function reaches other in-VPC resources, for example a database or cache secured by security groups without incurring NAT gateway charges. In a VPC that already provisions a NAT gateway (such as the `standard` preset), `public` offers no advantage over `private`.
 
 A handler that is not linked to a VPC is not VPC-attached and retains full outbound internet access by default.
@@ -200,6 +231,53 @@ resources:
             preset: "standard"
 ```
 
+### Share a VPC across applications
+
+One application owns the VPC in `managed` mode (the default). This is the blueprint that provisions the networking resources:
+
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource sharedVpc: celerity/vpc {
+    spec {
+        name = "platform-shared-vpc"
+        preset = "standard"
+    }
+}
+```
+
+Any other application references the same VPC by `name` in `referenced` mode. It provisions no networking resources of its own, but its handlers, caches and databases are placed into the shared VPC:
+
+Blueprint Language
+
+```blueprintlang
+version "2025-11-02"
+transform "celerity-2026-02-27-draft"
+
+resource sharedVpc: celerity/vpc {
+    spec {
+        name = "platform-shared-vpc"
+        mode = "referenced"
+    }
+}
+```
+
+YAML
+
+```yaml
+version: 2025-11-02
+transform: celerity-2026-02-27-draft
+resources:
+    sharedVpc:
+        type: "celerity/vpc"
+        spec:
+            name: "platform-shared-vpc"
+            mode: "referenced"
+```
+
 ## Target Environments
 
 ### Local Development
@@ -212,17 +290,19 @@ VPCs are not provisioned in the local development environment.
 
 Celerity VPCs are provisioned in AWS using the EC2 VPCs and associated networking resources. The Celerity VPC presets map to configurations of subnets, routing and access controls required for resources such as applications, databases and caches to be placed in the VPC.
 
+A `managed` VPC is tagged with its Celerity `name`. A [`referenced`](#mode) VPC is resolved by looking up that same name tag in the target AWS account, so a VPC shared across applications is matched without any cross-blueprint reference. Because AWS VPCs are regional, the referenced VPC must be in the same region as the resources being placed into it.
+
 ### Google Cloud
 
 🚀 **Planned for v1** - The Google Cloud deployment target is planned for v1, it may become available in a future v0 evolution.
 
-Celerity VPCs are provisioned in Google Cloud using the VPC resource type in `custom` mode along with associated networking resources. The Celerity VPC presets map to configurations of subnets, routing and access controls required for resources such as applications, databases and caches to be placed in the VPC.
+Celerity VPCs are provisioned in Google Cloud using the VPC resource type in `custom` mode along with associated networking resources. The Celerity VPC presets map to configurations of subnets, routing and access controls required for resources such as applications, databases and caches to be placed in the VPC. A [`referenced`](#mode) VPC is resolved by its Celerity `name` (via network labelling); Google Cloud VPCs are global, so no region needs to match.
 
 ### Azure
 
 🚀 **Planned for v1** - The Azure deployment target is planned for v1, it may become available in a future v0 evolution.
 
-Celerity VPCs are provisioned in Azure using VNets and associated networking resources. The Celerity VPC presets map to configurations of subnets, routing and access controls required for resources such as applications, databases and caches to be placed in the VNet.
+Celerity VPCs are provisioned in Azure using VNets and associated networking resources. The Celerity VPC presets map to configurations of subnets, routing and access controls required for resources such as applications, databases and caches to be placed in the VNet. A [`referenced`](#mode) VNet is resolved by its Celerity `name`; as with AWS, Azure VNets are regional, so the referenced VNet must be in the same region as the resources placed into it.
 
 ## App Deploy Configuration
 
@@ -272,11 +352,3 @@ boolean
 **default value**
 
 `false`
-
-### Google Cloud Configuration Options
-
-TODO: Add Google Cloud configuration options for VPCs.
-
-### Azure Configuration Options
-
-TODO: Add Azure configuration options for VPCs.

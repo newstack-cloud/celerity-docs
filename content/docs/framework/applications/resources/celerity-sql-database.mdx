@@ -70,7 +70,7 @@ string
 
 The path to a YAML schema definition file, relative to the blueprint file. When provided, Celerity manages the database schema through its [built-in schema management](/docs/framework/applications/sql-database-schema-management) system.
 
-The schema file defines the desired state of the database (tables, columns, indexes, constraints, extensions) in a declarative YAML format. Celerity's migration engine computes the difference between the current and desired state and generates the appropriate DDL to transition the database.
+The schema file defines the desired state of the database (tables, columns, indexes, constraints, extensions) in a declarative YAML format. When the schema changes, `celerity schema diff` computes the difference between the current and desired state (powered by the embedded open-source [Atlas](https://atlasgo.io) engine) and generates a versioned SQL migration file capturing the transition.
 
 ✅ **Available in v0**
 
@@ -84,11 +84,11 @@ string
 
 ### migrationsPath
 
-The path to a directory containing versioned SQL migration files, relative to the blueprint file. These are migration scripts for operations that cannot be expressed in the schema YAML (data backfills, custom functions, triggers, complex multi-step alterations).
+The path to the migration directory for the database, relative to the blueprint file. This single directory holds the full linear migration history: files generated from schema YAML changes by `celerity schema diff` and hand-written files for operations the schema YAML cannot express (custom functions, triggers, row-level security policies, partitioning).
 
-Scripts follow the naming convention `V<number>__<description>.up.sql` (apply) and `V<number>__<description>.down.sql` (rollback). Up scripts are executed in version order after auto-generated schema DDL. Applied versions are tracked in a `celerity_schema_migrations` table to ensure idempotency.
+Files follow the naming convention `<timestamp>_<description>.sql` and are executed in timestamp order. An `atlas.sum` integrity file guards against tampered or inconsistent directories. Applied migrations are tracked in a revision table (`atlas_schema_revisions`) in each managed database to ensure idempotency.
 
-See [Migration SQL](/docs/framework/applications/sql-database-schema-management#migration-sql) for details.
+See [Migration Directory](/docs/framework/applications/sql-database-schema-management#migration-directory) for details.
 
 ✅ **Available in v0**
 
@@ -154,7 +154,7 @@ Local development always uses `password` authentication regardless of the `authM
 
 ### celerity.sqlDatabase.allowDestructive
 
-When set to `true`, allows destructive schema changes (dropping tables, dropping columns) during deployment. Without this annotation, destructive changes will be blocked and the deployment will fail with a warning.
+When set to `true`, allows destructive schema changes (dropping tables, dropping columns). Without this annotation, Celerity's analysis of pending migrations — both generated and hand-written — blocks destructive statements: `celerity schema diff` will not generate them, and applying a migration containing them fails with a warning.
 
 This annotation is a safety mechanism to prevent accidental data loss. It should only be set when you explicitly intend to remove tables or columns.
 
@@ -203,7 +203,9 @@ string
 
 ### readHost
 
-The hostname or endpoint for read replica connections. Only present when `readReplicas` is enabled. This is the load-balanced reader endpoint provided by the cloud provider.
+The hostname or endpoint for read replica connections. Only present when `readReplicas` is enabled.
+
+On Aurora Serverless v2 this is the cluster reader endpoint, which load-balances connections across all reader instances in the cluster. On standalone Amazon RDS, this resolves to the read-replica instance endpoint; load-balancing a single reader endpoint across multiple standalone replicas is 🔄 **Planned for v0**.
 
 When read replicas are not enabled, this output is not available — use `host` for all connections.
 
@@ -599,9 +601,8 @@ When `authMode` is set to `"iam"`, handlers that link to this database are autom
 When running `celerity dev run`, Celerity starts a local PostgreSQL container and manages the database lifecycle automatically:
 
 1. A PostgreSQL container is started (matching the `engine` in the spec)
-2. Schema DDL (up statements) is generated from the schema YAML and applied — extensions, tables, foreign keys, indexes, and constraints are created
-3. Migration scripts (`.up.sql` files) are executed in version order, skipping versions already tracked in `celerity_schema_migrations`
-4. Connection environment variables are injected into your handlers
+2. Migration files are applied in timestamp order, skipping migrations already tracked in the revision table
+3. Connection environment variables are injected into your handlers
 
 Local development is ephemeral by default — the database is recreated each time `celerity dev run` starts. For persistent local development (keeping data between restarts), you can opt in via the CLI configuration.
 
@@ -628,7 +629,7 @@ SQL databases are placed within the VPC's private subnets when linked to a `cele
 During `celerity deploy`, the deploy pipeline includes a schema migration phase:
 1. Infrastructure is deployed (RDS instance created/updated)
 2. The database is verified as reachable
-3. The schema migration engine computes and applies changes
+3. Migration directory integrity is verified and a pre-apply drift check runs, then pending migration files are applied in order
 4. Handler resources are deployed with connection configuration
 
 See [Schema Management](/docs/framework/applications/sql-database-schema-management) for the full deploy pipeline.
@@ -637,7 +638,7 @@ The [app deploy configuration](#app-deploy-configuration) can be used to configu
 
 **Read Replicas**
 
-When `readReplicas` is enabled, Celerity provisions Amazon RDS read replicas for horizontal read scaling. Same-region replicas default to 1 and can be configured via `aws.rds.<dbName>.readReplicas.count` in the deploy config. A single RDS reader endpoint is exposed, which load-balances read connections across all available replicas. The reader endpoint is surfaced as the `readHost` output and through the SDK credentials provider.
+When `readReplicas` is enabled, Celerity provisions Amazon RDS read replicas for horizontal read scaling. Same-region replicas default to 1 and can be configured via `aws.rds.<dbName>.readReplicas.count` in the deploy config. In v0 the `readHost` output resolves to the read-replica instance endpoint; a single load-balanced reader endpoint across all standalone RDS replicas is 🔄 **Planned for v0**. The reader endpoint is surfaced as the `readHost` output and through the SDK credentials provider.
 
 For cross-region read scaling, `aws.rds.<dbName>.readReplicas.regions` provisions one replica per listed region in addition to the same-region replicas. Cross-region replicas use asynchronous replication and are useful for reducing read latency for globally distributed applications.
 
@@ -1179,12 +1180,13 @@ The configuration object shape depends on the `authMode`:
 
 ## Schema Management
 
-Celerity provides a built-in schema management system for SQL databases that makes database schemas a first-class concern. Schema definitions are written in declarative YAML, and Celerity's migration engine handles the imperative transitions between states.
+Celerity provides a built-in schema management system for SQL databases that makes database schemas a first-class concern. Schema definitions are written in declarative YAML, and schema changes become generated, reviewable SQL migration files — powered by the embedded open-source [Atlas](https://atlasgo.io) engine.
 
 Key capabilities include:
 - **Declarative schema definition** in YAML with engine-native column types
-- **Imperative migration engine** that generates safe DDL transitions
-- **Migration SQL** for operations that cannot be auto-generated
+- **Generated migrations** — safe, reviewable DDL transitions produced by `celerity schema diff`
+- **Hand-written migrations** in the same directory for operations the schema YAML cannot express
+- **Drift detection** for surfacing out-of-band database changes
 - **Schema validation and diff** before deployment
 - **Type generation** for TypeScript and Python from schema definitions
 - **Schema contracts** for cross-team dependency tracking
