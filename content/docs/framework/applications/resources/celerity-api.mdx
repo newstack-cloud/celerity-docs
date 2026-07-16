@@ -151,6 +151,8 @@ domain:
 Determines whether tracing is enabled for the API.
 Depending on the target environment this could mean enabling AWS X-Ray, Google Cloud Trace, or Azure Application Insights.
 
+On the AWS Serverless target, API Gateway v2 (HTTP and WebSocket) APIs do not support X-Ray active tracing at the gateway/stage level (X-Ray active tracing is only available on API Gateway REST/v1 stages). Enabling `tracingEnabled` therefore does not enable stage-level tracing; instead, enable tracing on the linked handlers (`celerity/handler` `tracingEnabled`), whose Lambda functions are traced with X-Ray and produce the request traces.
+
 ✅ **Tracing** - Available in v0
 
 **type**
