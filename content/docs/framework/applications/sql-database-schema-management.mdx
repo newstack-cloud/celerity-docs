@@ -17,16 +17,18 @@ This page covers schema management for SQL databases (`celerity/sqlDatabase`). F
 
 ## How It Works
 
-Schema definitions are declarative YAML files that describe the desired state of your database. Celerity's migration engine computes the difference between the current state and the desired state, then generates an imperative sequence of SQL statements to transition the database safely.
+Schema definitions are declarative YAML files that describe the desired state of your database. When the YAML changes, `celerity schema diff` generates a **versioned SQL migration file** capturing the transition, which you review, adjust if needed, and commit alongside your code. Deployments then apply pending migrations in order.
 
 ```
-Schema YAML (desired state) ──► Migration Engine ──► DDL Statements ──► Database
-                                      ▲
-                              Current state from
-                              previous deployment
+Schema YAML (desired state) ──► celerity schema diff ──► Migration file (SQL) ──► PR review ──► celerity deploy / schema apply ──► Database
+                                        ▲
+                                Current state replayed from
+                                the migration directory
 ```
 
-This approach gives you the benefits of declarative schema definition (readable, diffable, version-controlled) with the safety of imperative migrations (ordered operations, data-aware transitions, migration scripts for complex cases).
+This approach gives you the benefits of declarative schema definition (readable, diffable, version-controlled) with the safety and transparency of versioned migrations: every change to the database is an ordered, reviewable SQL file in your repository. Most files are generated for you, and you write them by hand when you need full control.
+
+Diffing and migration execution are powered by the open-source core of [Atlas](https://atlasgo.io), a production-grade schema migration engine. See [Powered by Atlas](#powered-by-atlas) for details.
 
 ## Schema Definition Format
 
@@ -56,11 +58,11 @@ my-app/
 │   ├── analytics.yaml               # SQL schema for analyticsDb resource
 │   └── user-store.yaml              # NoSQL schema for userStore resource (if applicable)
 ├── sql/
-│   └── orders-db/                   # Migration SQL (per SQL database resource)
-│       ├── V001__add_audit_trigger.up.sql
-│       ├── V001__add_audit_trigger.down.sql
-│       ├── V002__add_gin_index_on_line_items.up.sql
-│       └── V002__add_gin_index_on_line_items.down.sql
+│   └── orders-db/                   # Migration directory (per SQL database resource)
+│       ├── 20260601120000_init.sql                      # Generated from schema YAML
+│       ├── 20260610093000_add_audit_trigger.sql         # Hand-written
+│       ├── 20260628141500_add_customer_tier.sql         # Generated from schema YAML
+│       └── atlas.sum                                    # Directory integrity file
 ├── scripts/
 │   └── user-store/                  # Escape hatch data scripts (per NoSQL datastore, if applicable)
 │       └── V001__backfill_status.py
@@ -279,6 +281,8 @@ extensions:
   - "pg_trgm"
 ```
 
+When you add an extension to the schema YAML, Celerity emits the corresponding `CREATE EXTENSION IF NOT EXISTS` statement into the next generated migration file.
+
 ### Rich Metadata
 
 The following fields have no effect on DDL. They exist for documentation, data governance and tooling:
@@ -289,16 +293,57 @@ The following fields have no effect on DDL. They exist for documentation, data g
 | `owner` | Tables | Team or individual that owns the table |
 | `tags` | Tables, Columns | Arbitrary tags for categorisation (e.g. `pii`, `financial`, `core-entity`) |
 | `classification` | Columns | Data classification label (e.g. `pii`, `sensitive`, `public`) |
+| `typeName` | Tables | Overrides the generated entity type name for [codegen](#type-generation) (e.g. `Person` for a `people` table) when singularisation gets it wrong |
 
 These fields make the schema YAML self-documenting for data team consumption. They are included in [schema exports](/docs/cli/reference#export) and used by [schema contracts](#schema-contracts) for dependency tracking.
 
-## Migration Engine
+#### Tags vs Classification
+
+`tags` and `classification` serve different purposes and work best together:
+
+- **`classification` is a formal sensitivity label.** It takes a single value per column from a small, controlled vocabulary agreed with your data team (e.g. `public`, `internal`, `sensitive`, `pii`). It answers "how sensitive is the data in this exact column?" and is what compliance and security tooling consumes: masking policies, access reviews, and the dedicated classification fields in data catalogs.
+- **`tags` are free-form categorisation.** A table or column can have as many as are useful (`financial`, `core-entity`, `deprecated`, `financial-metric`). They answer "what kind of thing is this?" and are what people and pipelines use for discovery, filtering exports, and grouping tables by domain.
+
+The two are complementary rather than redundant. A `pii` tag on a table is a coarse discovery signal saying the table contains PII somewhere, while a `pii` classification on a column pinpoints exactly which columns carry that sensitivity, which is what an access policy or column-masking rule actually needs:
+
+```yaml
+tables:
+  customers:
+    tags: ["pii", "core-entity"]      # Coarse signal: this table contains PII somewhere
+    columns:
+      id:
+        type: "uuid"
+        primaryKey: true              # No classification: an opaque ID isn't sensitive
+      email:
+        type: "varchar(255)"
+        classification: "pii"         # Precise: THIS column is the PII
+      tier:
+        type: "varchar(20)"
+        classification: "public"      # Explicitly safe to expose
+        tags: ["segmentation"]        # Also useful for analytics grouping
+```
+
+A rule of thumb: if a compliance or security tool would consume it, it belongs in `classification`; if a human or pipeline is searching, filtering or grouping, use `tags`. Treat `classification` values as an enum and apply them consistently, since a single-valued field with a mixed vocabulary loses most of its value to downstream tooling. Tags can stay loose.
+
+## Migrations
 
 ✅ **Available in v0** (PostgreSQL) · 🚀 MySQL support planned for v1
 
-### Declarative State, Imperative Transitions
+### Powered by Atlas
 
-The schema YAML is declarative: it describes the desired end state. The migration engine computes the imperative transition from current state to desired state as an ordered sequence of DDL statements.
+Celerity does not implement its own SQL diffing engine. Migration generation and execution are built on the open-source (Apache 2.0) core of [Atlas](https://atlasgo.io), a schema migration engine that is embedded directly in the Celerity CLI, so there is nothing extra to install. Atlas handles what it is best at: computing correct, dialect-aware DDL transitions and executing versioned migrations safely. Celerity layers its own capabilities on top: schema YAML as the desired-state format, data-aware backfills, destructive-change gating, [schema contracts](#schema-contracts), [drift detection](#drift-detection), type generation and data team exports.
+
+Because the migration directory uses the Atlas format (timestamped migration files plus an `atlas.sum` integrity file), teams that separately license [Atlas Pro](https://atlasgo.io/pricing) can point its migration linting and monitoring tooling directly at the same directory. This is entirely optional; everything documented on this page works without an Atlas account or license.
+
+### Generating Migrations
+
+The schema YAML is declarative: it describes the desired end state. Running `celerity schema diff` computes the transition from the current state to the desired state and writes it as a new SQL migration file in the migration directory:
+
+1. The desired state is built from the schema YAML
+2. The current state is computed by replaying the existing migration directory on a temporary local database (using the same local container tooling as `celerity dev run`)
+3. The difference becomes a new timestamped migration file in `migrationsPath`, ready for review
+
+You review the generated SQL, edit it if needed, and commit it with your schema YAML change. The migration plan is part of the pull request, so both application developers and data teams see exactly what will run against the database before it is approved.
 
 **Example: making a column NOT NULL with a default**
 
@@ -316,63 +361,79 @@ status:
   default: "'active'"
 ```
 
-Generated migration plan:
+Generated migration file (`sql/orders-db/20260628141500_make_status_not_null.sql`):
 ```sql
 -- Step 1: Set default for new rows
 ALTER TABLE orders ALTER COLUMN status SET DEFAULT 'active';
 
--- Step 2: Backfill existing NULL values
+-- Step 2: Backfill existing NULL values (added by Celerity's data-aware transition handling)
 UPDATE orders SET status = 'active' WHERE status IS NULL;
 
 -- Step 3: Apply NOT NULL constraint
 ALTER TABLE orders ALTER COLUMN status SET NOT NULL;
 ```
 
-The migration engine knows common transition patterns and generates the correct imperative sequence automatically.
+For common transition patterns that need data operations to succeed safely, such as backfilling NULLs before applying a NOT NULL constraint, Celerity augments the generated DDL automatically. And because the output is a plain SQL file, anything the generator didn't anticipate can be adjusted by hand before you commit.
 
 ### Transition Patterns
 
-| Transition | Generated Steps |
+| Transition | Generated Migration Content |
 |---|---|
 | Add nullable column | `ALTER TABLE ADD COLUMN` |
 | Add NOT NULL column with default | `ALTER TABLE ADD COLUMN ... DEFAULT ... NOT NULL` |
 | Make column NOT NULL (was nullable) | `UPDATE SET default WHERE NULL` → `ALTER SET NOT NULL` |
 | Make column nullable (was NOT NULL) | `ALTER DROP NOT NULL` |
 | Change column type (compatible) | `ALTER COLUMN TYPE ... USING` (PostgreSQL) / `MODIFY COLUMN` (MySQL) |
-| Change column type (incompatible) | **Warning**: requires migration script |
+| Change column type (incompatible) | **Warning**: edit the generated migration to define the conversion |
 | Add index | `CREATE INDEX CONCURRENTLY` (PostgreSQL) / `CREATE INDEX` (MySQL) |
 | Drop index | `DROP INDEX CONCURRENTLY` (PostgreSQL) / `DROP INDEX` (MySQL) |
 | Add foreign key | `ALTER TABLE ADD CONSTRAINT ... FOREIGN KEY` |
 | Add table | `CREATE TABLE` |
-| Drop table | Requires `celerity.sqlDatabase.allowDestructive: true` |
-| Drop column | Requires `celerity.sqlDatabase.allowDestructive: true` |
-| Rename column | **Warning**: requires migration script (ambiguous intent) |
+| Add extension | `CREATE EXTENSION IF NOT EXISTS` |
+| Drop table | `DROP TABLE` — classified `breaking`; see [Migration Risk Classification](#migration-risk-classification) |
+| Drop column | `ALTER TABLE DROP COLUMN` — classified `breaking`; see [Migration Risk Classification](#migration-risk-classification) |
+| Rename column | **Warning**: the diff sees a drop + add (ambiguous intent); edit the generated migration to use `RENAME COLUMN` instead |
 
-### Migration SQL
+### Migration Directory
 
 ✅ **Available in v0**
 
-Versioned SQL migration files for **structural** database operations that cannot be expressed in the schema YAML. These live in the directory specified by `migrationsPath` on the `celerity/sqlDatabase` resource. Each migration has separate **up** (apply) and **down** (rollback) files.
+All migrations, generated and hand-written alike, live in a single directory per database resource, specified by `migrationsPath` on the `celerity/sqlDatabase` resource. Files execute in timestamp order, forming one linear history:
 
-Migration scripts are for DDL and structural changes only, not for data backfills or data transformations. See [Data Migrations](#data-migrations) for how data changes are handled.
+```
+sql/orders-db/
+├── 20260601120000_init.sql                  # Generated from schema YAML
+├── 20260610093000_add_audit_trigger.sql     # Hand-written
+├── 20260628141500_make_status_not_null.sql  # Generated from schema YAML
+└── atlas.sum                                # Directory integrity file
+```
 
 #### File Naming Convention
 
 ```
-V<number>__<description>.up.sql    # Apply migration
-V<number>__<description>.down.sql  # Rollback migration
+<timestamp>_<description>.sql
 ```
 
-Examples:
-- `V001__add_audit_trigger.up.sql` / `V001__add_audit_trigger.down.sql`
-- `V002__add_gin_index_on_details.up.sql` / `V002__add_gin_index_on_details.down.sql`
-- `V003__create_notify_function.up.sql` / `V003__create_notify_function.down.sql`
+Generated files are named automatically (pass `--name <description>` to `celerity schema diff` to control the description). To start a hand-written migration, use `celerity schema new <description>`, which creates an empty timestamped file and updates the integrity file.
 
-The `.down.sql` file is optional but recommended; it enables clean rollback of the migration. If only the `.up.sql` file is present, the migration can be applied but not rolled back.
+#### Directory Integrity
 
-#### Use Cases
+The `atlas.sum` file records a hash of every migration file. It is updated automatically when Celerity generates or creates migration files, and verified before any migration is applied. This catches accidentally edited already-applied migrations, missing files, and conflicting migration histories from parallel branches. A merge conflict in `atlas.sum` is a signal that two branches added migrations concurrently and the directory needs to be corrected by re-running `celerity schema diff` after merging.
 
-Migration scripts are for structural DDL that the schema YAML cannot express:
+#### Keeping migrations in version control
+
+Migration files and `atlas.sum` are part of your source: commit the whole `migrationsPath` directory (including `atlas.sum`) alongside the schema YAML change that produced it. Two CI checks keep the committed directory honest:
+
+- **Integrity** — `celerity schema validate` requires `atlas.sum` to be present and to match the committed files (no database needed). It fails if a migration was added or edited without updating the sum.
+- **Completeness** — `celerity schema diff --check` writes nothing and exits non-zero if a migration *would* be generated, i.e. the committed migrations do not fully cover the committed schema YAML. This catches "the schema changed but no migration was generated or committed for it."
+
+Applying to a **deployed** environment additionally requires a valid committed `atlas.sum` (it is not auto-generated), so a live database is never migrated from an unverified directory.
+
+### Hand-Written Migrations
+
+✅ **Available in v0**
+
+Hand-written migration files cover structural SQL that the schema YAML cannot express:
 
 - Custom functions, stored procedures or triggers
 - Specialised index types beyond what the schema YAML supports (e.g. partial indexes, expression indexes)
@@ -381,61 +442,64 @@ Migration scripts are for structural DDL that the schema YAML cannot express:
 - Row-level security policies
 - Custom types or domains
 
-#### Execution Model
+They are plain SQL files in the same migration directory and the same linear history, with no separate execution phase and no special file type. Objects created by hand-written migrations are left untouched by generated migrations: the diff engine only manages what the schema YAML models (tables, columns, indexes, foreign keys, constraints and extensions), so it will never generate statements that drop or modify your triggers, functions or policies.
 
-1. Declarative schema DDL (generated from the schema YAML) runs **first**: both up (CREATE) and down (DROP) statements are generated from the schema definition
-2. Migration scripts run **after** schema DDL, in version order
-3. Each migration version is tracked in a `celerity_schema_migrations` table and runs only once, so re-running `dev run` or `deploy` skips already-applied versions
-4. Scripts are embedded into the resource spec by the transformer, so changes to scripts are detected during deployment
+If a generated change would break a hand-written object (e.g. dropping a column that a trigger references), the failure surfaces immediately when `celerity schema diff` replays the directory on the temporary local database, before anything reaches a real environment.
 
-#### Migration Tracking
+Hand-written migrations are for DDL and structural changes only, not for data backfills or data transformations. See [Data Migrations](#data-migrations) for how data changes are handled.
 
-Applied migrations are tracked in a `celerity_schema_migrations` table that is automatically created in each managed database:
+### Execution Model
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `version` | integer | Migration version number (from filename) |
-| `description` | text | Migration description (from filename) |
-| `applied_at` | timestamptz | When the migration was applied |
+1. Pending migration files are applied in timestamp order, generated and hand-written files alike
+2. Each migration is tracked in a revision table (`atlas_schema_revisions`) that is automatically created in each managed database, and runs only once; re-running `dev run`, `deploy` or `schema apply` skips already-applied migrations
+3. Directory integrity (`atlas.sum`) is verified before applying; a tampered or out-of-sync directory blocks execution
+4. Each migration file runs in a transaction by default; migrations that cannot run inside a transaction (such as `CREATE INDEX CONCURRENTLY`) are marked to run non-transactionally, with statement-level tracking in the revision table so a partial failure can be resumed safely
 
-This table ensures migrations are idempotent. Running `celerity dev run` or `celerity deploy` multiple times will only apply migrations that haven't been applied yet. During rollback, version records are removed as their corresponding down scripts are executed.
+### Rollback
 
-#### Schema DDL: Up and Down
+Schema migrations are **forward-only**. There are no down scripts to maintain, because reverting a schema change is itself just another schema change:
 
-The schema YAML declarative definitions generate both **up** and **down** DDL statements:
+1. Restore the previous version of the schema YAML (e.g. `git revert` the schema change)
+2. Run `celerity schema diff` to generate a new forward migration that transitions the database back
+3. Review and apply it like any other migration
 
-- **Up statements** (create): Extensions → Tables → Foreign keys → Indexes → Check constraints
-- **Down statements** (drop): Check constraints → Indexes → Foreign keys → Tables (reverse order) → Extensions (reverse order)
+This keeps the migration history append-only and truthful: the revision table always reflects what actually ran, in order, including reverts.
 
-This means both the declarative schema and the migration scripts support full rollback capability.
+#### Reverting Hand-Written Migrations
 
-#### Why Migration Scripts Run After Schema DDL
+The revert diff only covers what the schema YAML models. Since the diff engine deliberately doesn't manage triggers, functions, views or policies, it can't compute their inverse, so reverting a hand-written migration means writing the inverse as a new forward migration yourself:
 
-Schema DDL and migration scripts execute in two distinct phases: all schema DDL runs first, then all migration scripts run in version order. They are never interleaved. This is a deliberate design choice:
+1. Run `celerity schema new remove_audit_trigger` to scaffold a new timestamped file
+2. Write the inverse SQL (e.g. `DROP TRIGGER audit_trigger ON orders;`). For a changed rather than removed object, use `CREATE OR REPLACE` with the previous body, which you can copy from the original migration file in Git history
+3. Review, commit and apply it like any other migration
 
-- **The schema YAML is declarative end-state.** There is no natural place to express "create this table, then run a script, then alter this column." Interleaving would require ordering hints in the YAML, which fights the declarative model.
-- **Each phase is independently rollable.** Schema DDL has paired up/down statements; migrations have paired `.up.sql`/`.down.sql` files. Interleaving these would make rollback order ambiguous. If step 3 of 5 fails, which down scripts undo which up statements?
-- **Simpler mental model.** Developers reason about "what does my schema look like?" separately from "what custom operations need to run?" Mixing the two creates intermediate states that are harder to review and debug.
+This is not a capability the forward-only model takes away: no engine can derive the inverse of arbitrary custom SQL, so a down script for a trigger or function would have been hand-written anyway. Writing the inverse when you actually need it, rather than speculatively at creation time, means it is written with full knowledge of the situation being reverted, goes through the same review and local replay as any other migration, and avoids the classic trap of down scripts that are untested and forgotten until an emergency.
+
+The burden of a correct inverse does sit with you, and for stateful constructs it can be non-trivial (dropping a trigger is easy; reverting a partitioning scheme is a project in its own right). This is a good reason to keep hand-written migrations small and single-purpose.
+
+#### Deploy Safety
+
+For deploy safety, schema changes should be **backward-compatible with the currently running application** (often called expand/contract): add new columns and tables first, deploy application code that uses them, and only remove old structures in a later change once nothing depends on them. If an application deployment fails and rolls back, the previous application version keeps working against the already-migrated schema.
 
 ### Data Migrations
 
-Data backfills, data transformations and other DML operations tied to schema evolution are handled separately from structural migration scripts. This separation keeps the `migrationsPath` directory focused on structural DDL and avoids muddying the rollback semantics; a down script for a data backfill is often meaningless.
+Data backfills, data transformations and other DML operations tied to schema evolution are handled separately from structural migration files. This separation keeps the `migrationsPath` directory focused on structural DDL; a data backfill that takes hours to run has no place in a migration that deployments wait on.
 
 #### Automatic Data Transitions
 
-The migration engine handles common data-aware transitions automatically as part of its diff computation. When the schema YAML changes in ways that require data operations, the engine generates the correct imperative sequence:
+Celerity handles common data-aware transitions automatically when generating migrations. When the schema YAML changes in ways that require data operations, the generated migration file includes the correct imperative sequence:
 
-| Schema Change | What the Engine Does |
+| Schema Change | What the Generated Migration Includes |
 |---|---|
 | Make column NOT NULL (was nullable, has default) | `UPDATE SET default WHERE NULL` → `ALTER SET NOT NULL` |
 | Add NOT NULL column with default | `ALTER TABLE ADD COLUMN ... DEFAULT ... NOT NULL` |
 | Change column type (compatible cast) | `ALTER COLUMN TYPE ... USING` (PostgreSQL) |
 
-These transitions happen automatically. No migration script or manual intervention is needed.
+These transitions are included in the generated file automatically, and they remain visible and editable there like everything else in the migration.
 
 #### Complex Data Migrations
 
-For data migrations that the engine cannot handle automatically (column splits, complex data transforms, populating new foreign key columns from external sources), use a **two-phase deploy** approach with application-level tooling between deploys:
+For data migrations that cannot be handled automatically (column splits, complex data transforms, populating new foreign key columns from external sources), use a **two-phase deploy** approach with application-level tooling between deploys:
 
 **Example: splitting a `name` column into `first_name` and `last_name`**
 
@@ -478,23 +542,102 @@ first_name:
 last_name:
   type: "varchar(255)"
   nullable: false        # Safe: all rows populated
-# 'name' column removed (requires celerity.sqlDatabase.allowDestructive: true)
+# 'name' column removed — the drop is classified `breaking`; apply with --allow-breaking
 ```
 
 After deploy 2: the old column is dropped, new columns are NOT NULL.
 
-**Why not put data migrations in migration scripts?**
+**Why not put data migrations in migration files?**
 
-- **Rollback semantics are unclear.** What does a down script for `UPDATE customers SET first_name = split_part(name, ...)` do? You can't meaningfully reverse a data transform.
-- **Data migrations are environment-specific.** Production might need batched updates with progress tracking; local dev doesn't need them at all (the database starts from scratch). Migration scripts run identically everywhere.
+- **Reversal semantics are unclear.** You can't meaningfully reverse `UPDATE customers SET first_name = split_part(name, ...)`. A revert migration can undo structure, not a data transform.
+- **Data migrations are environment-specific.** Production might need batched updates with progress tracking; local dev doesn't need them at all (the database starts from scratch). Migration files run identically everywhere.
 - **Data migrations are transient.** Once all environments have run the backfill, the script serves no purpose. Structural migrations (triggers, functions, indexes) are permanent parts of the schema.
-- **Separation enables flexibility.** Application-level tooling can batch large updates, add progress logging, run dry-run modes, or integrate with monitoring, none of which fit in a SQL file.
+- **Separation enables flexibility.** Application-level tooling can batch large updates, add progress logging, run dry-run modes, or integrate with monitoring, none of which fit in a SQL file that deployments wait on.
 
 ### Safety
 
-- **Destructive changes blocked by default**: Dropping tables or columns requires the `celerity.sqlDatabase.allowDestructive: true` annotation on the resource
-- **Migration scripts visible in diff**: All pending scripts are shown in `celerity schema diff` output for review
-- **Changeset review**: The deploy pipeline shows the full migration plan before execution
+- **Risk-gated apply**: every migration is classified `safe`, `risky` or `breaking`; `celerity schema apply` applies only `safe` migrations by default and stops before a riskier one unless explicitly allowed. See [Migration Risk Classification](#migration-risk-classification)
+- **Destructive changes blocked by default**: dropping a table or column is classified `breaking`, so `celerity schema apply` will not apply it without `--allow-breaking`. This is enforced by an un-spoofable floor that scans each migration's actual SQL statements — a hand-edited `safe` header on a migration that drops data is still treated as breaking
+- **Migrations reviewed before they run**: Every migration is a committed SQL file, so the full plan is reviewed in the pull request rather than approved at deploy time
+- **Directory integrity enforced**: The `atlas.sum` check prevents applying a tampered or inconsistent migration directory
+- **Pre-apply drift check**: Before applying migrations, Celerity verifies the live database matches the expected starting state. See [Drift Detection](#drift-detection)
+
+### Migration Risk Classification
+
+✅ **Available in v0**
+
+Every migration is classified by how safe it is to apply against a live database, and `celerity schema apply` uses that classification as a safety gate. The class is recorded in a header comment at the top of the migration file (written by `celerity schema diff`), so it is visible in review and deterministic at apply time — no re-analysis against the target database is needed.
+
+| Class | Meaning | Examples |
+|---|---|---|
+| `safe` | Additive, backward-compatible with running code | add table; add a nullable column or a column with a default; add a non-unique index; drop an index or constraint |
+| `risky` | Data-dependent — may fail or lock depending on existing data | make a column `NOT NULL`; add a unique index; add a foreign key or check constraint; change a column type; add a `NOT NULL` column without a default |
+| `breaking` | Destructive / backward-incompatible with running code | drop a table, column or schema |
+
+```sql
+-- celerity:risk breaking  (drops column customers.legacy_tier)
+ALTER TABLE customers DROP COLUMN legacy_tier;
+```
+
+**The apply gate.** `celerity schema apply` applies pending migrations in order but **stops before the first migration whose risk exceeds what is allowed**, exiting non-zero (migrations already applied before it remain committed):
+
+- default — apply only `safe` migrations;
+- `--allow-risky` — also apply data-dependent migrations;
+- `--allow-breaking` — also apply destructive migrations (implies `--allow-risky`).
+
+This is what makes an automated `celerity schema apply` step safe in CI: the step stays in the pipeline unconditionally, `safe` migrations flow straight through, and a `risky` or `breaking` change **halts the pipeline** — signalling that a backfill, a data script, or an [expand/contract](#deploy-safety) split is needed — instead of silently applying a change that could break the running application. It composes with the expand/contract discipline in [Data Migrations](#data-migrations).
+
+The header is not the only line of defence. Because a header could be wrong — a generated `safe` migration hand-edited to add a destructive statement, for example — `schema apply` also scans each migration's actual SQL and treats any migration that **drops a table, column or schema as `breaking` regardless of its header**. The safety-critical floor is therefore derived from what the migration actually does, not only from what it claims.
+
+Hand-written migrations (`celerity schema new`) default to `risky`, since their intent cannot be inferred from a diff; downgrade the header to `safe` when the migration is additive and backward-compatible.
+
+## Drift Detection
+
+✅ **Available in v0** (PostgreSQL)
+
+Migrations assume a known starting state. When someone changes a database out-of-band, whether through a hotfix `ALTER TABLE` in production, an index added by hand or a permissions script gone wrong, that assumption breaks silently and the schema YAML stops being the truth. Drift detection is what keeps the "single source of truth" claim honest, and it is the foundation the product ↔ data team sync features are built on.
+
+`celerity schema drift <resource> --env <env>` checks a live database against the expected state at three layers:
+
+1. **History drift**: compares the revision table against the migration directory to find migrations applied out-of-band, missing from the directory, or applied out of order.
+2. **Structural drift**: inspects the live database and diffs it against the expected state for everything the schema YAML models (tables, columns, indexes, foreign keys and constraints), reported as a full object-level diff.
+3. **Advanced-object drift**: objects created by hand-written migrations (triggers, functions, views, row-level security policies) are fingerprinted from the database catalog. Changed, missing or unexpected objects are flagged. This layer is deliberately coarse in that it tells you *that* an object changed, not line-by-line *what* changed, but it means out-of-band changes never go unseen.
+
+Drift output is **contract-aware**: drifted tables are matched against [`schema-contracts.yaml`](#schema-contracts), so the report shows which downstream consumers are affected:
+
+```
+$ celerity schema drift ordersDb --env production
+
+ordersDb (postgres: orders) — drift detected:
+
+  Structural drift:
+    ~ table orders: column discount_cents (integer, nullable) exists in database but not in schema
+    ~ index idx_orders_discount exists in database but not in schema
+
+  Contracts affected:
+    ⛔ revenue-pipeline — orders table drifted (blocking)
+
+  Resolution:
+    - To adopt the change: add the column and index to schemas/orders.yaml, run
+      celerity schema diff (the generated statements are guarded with IF NOT EXISTS
+      so they no-op where the objects already exist), then apply with --allow-drift
+    - To remove the change: create a hand-written migration dropping the column and
+      index (celerity schema new remove_discount_drift), then apply with --allow-drift
+```
+
+The command exits non-zero when drift is found, so it can run as a scheduled CI job for continuous checking.
+
+The same command covers NoSQL datastores, where drift is about data shape rather than structure. See [NoSQL Drift Detection](/docs/framework/applications/nosql-datastore-schema-management#drift-detection).
+
+### Pre-Apply Drift Check
+
+`celerity schema apply` and the deploy pipeline run a structural drift check before applying pending migrations. If the live database does not match the expected starting state, the apply is blocked with a drift report (override with `--allow-drift` once the drift is understood). This prevents migrations from running against a database in an unexpected state, where even correct data definitions can do the wrong thing.
+
+### Scheduled Drift Monitoring
+
+<Callout title="Future Capability" type="info">
+Hosted, scheduled drift monitoring with notifications routed to contract owners is projected as part of the paid Schema Service for a future release after v1 (post-July 2027). The v0 `celerity schema drift` command is the free, on-demand building block it is built on. Run it from a scheduled CI job for continuous checking today.
+</Callout>
 
 ## Deploy Pipeline Integration
 
@@ -512,9 +655,9 @@ celerity deploy
   │
   ├─ Phase 2: Schema Migration
   │   Connect to database directly
-  │   Generate imperative migration plan from diff
-  │   Display plan and prompt for confirmation
-  │   Execute migration (auto-generated DDL + migration scripts)
+  │   Verify directory integrity (atlas.sum) and check for drift
+  │   Display pending migrations and prompt for confirmation
+  │   Apply pending migration files in order (tracked in the revision table)
   │   Write updated schema state
   │
   └─ Phase 3: Application
@@ -537,10 +680,11 @@ Deploy-time contract enforcement (blocking deploys and dispatching webhook notif
 When `celerity dev run` starts an application with SQL database resources:
 
 1. A local PostgreSQL or MySQL container is started based on `engine` in the spec, **_only PostgreSQL is supported in v0_**
-2. The full schema DDL (up statements) is applied from the schema YAML: extensions, tables, foreign keys, indexes, and constraints are created
-3. Migration scripts (`.up.sql` files) are executed in version order, skipping any already tracked in `celerity_schema_migrations`
-4. Connection environment variables are injected, pointing to the local container
-5. The runtime starts and handlers receive connection configuration
+2. All migration files are applied in timestamp order, skipping any already tracked in the revision table
+3. Connection environment variables are injected, pointing to the local container
+4. The runtime starts and handlers receive connection configuration
+
+If the schema YAML has changed but no migration has been generated for it yet, `dev run` warns and prompts to run `celerity schema diff` first, so local databases always come up from the same migration history that other environments run.
 
 For **persistent local development** (opt-in): diff-based migration is used instead of full recreate, preserving data between restarts.
 
@@ -562,28 +706,31 @@ The `celerity schema` command group provides all the tools for working with data
 
 | Command | Description |
 |---|---|
-| [`celerity schema diff`](/docs/cli/reference#diff-1) | Show migration plan and contract impact without applying |
-| [`celerity schema apply`](/docs/cli/reference#apply) | Apply migrations outside of a full deployment |
+| [`celerity schema diff`](/docs/cli/reference#diff-1) | Generate a migration file from schema YAML changes, showing the plan and contract impact (`--check` writes nothing and fails if a migration is missing — a CI completeness gate) |
+| [`celerity schema new`](/docs/cli/reference#new) | Create an empty migration file for hand-written SQL |
+| [`celerity schema apply`](/docs/cli/reference#apply) | Apply pending migrations outside of a full deployment (only `safe` migrations by default — see [Migration Risk Classification](#migration-risk-classification)) |
+| [`celerity schema drift`](/docs/cli/reference#drift) | Check a live database for out-of-band changes |
 | [`celerity schema validate`](/docs/cli/reference#validate-1) | Validate schema files, foreign keys, migration SQL, contracts and optionally codegen freshness |
 | [`celerity schema export`](/docs/cli/reference#export) | Export schema as SQL DDL, markdown, JSON Schema or Mermaid ERD |
 | [`celerity schema codegen`](/docs/cli/reference#codegen) | Generate type-safe code from schema definitions |
-| [`celerity schema show`](/docs/cli/reference#show) | Show currently deployed schema for a given environment |
-| [`celerity schema history`](/docs/cli/reference#history) | Show schema change history for a given environment |
+| [`celerity schema show`](/docs/cli/reference#show) | Inspect a live database (`--url` / `--instance-name`) and print its current schema |
+| [`celerity schema history`](/docs/cli/reference#history) | Show the applied-migration history of a live database from its revision table |
 
 ### Example: `celerity schema diff`
 
-The diff output displays the engine alongside the database name (e.g. `postgres: orders` or `mysql: orders`). The generated DDL uses engine-appropriate syntax.
+The diff output displays the engine alongside the database name (e.g. `postgres: orders` or `mysql: orders`). The generated migration uses engine-appropriate syntax.
 
 ```
-$ celerity schema diff
+$ celerity schema diff --name add_customer_tier
 
 ordersDb (postgres: orders):
-  Auto-generated:
+  Generated sql/orders-db/20260713102400_add_customer_tier.sql  [risk: safe]:
     [1] ALTER TABLE customers ADD COLUMN tier varchar(20) NOT NULL DEFAULT 'free';
     [2] CREATE INDEX CONCURRENTLY idx_customers_tier ON customers (tier);
 
-  Migrations (pending):
-    [3] V003__add_status_audit_trigger.up.sql (new, not yet applied)
+  Pending (not yet applied to any environment):
+    20260710093000_add_status_audit_trigger.sql (hand-written)
+    20260713102400_add_customer_tier.sql (generated above)
 
   Contracts:
     ⛔ revenue-pipeline — orders table changed (blocking)
@@ -593,9 +740,11 @@ ordersDb (postgres: orders):
     - Column 'users.name' removed and 'users.first_name' + 'users.last_name' added.
       This looks like a column split — use a two-phase deploy to migrate data.
       See: https://celerityframework.io/docs/framework/applications/sql-database-schema-management#data-migrations
-      Auto-generated DDL will NOT drop 'users.name' until you confirm with:
-        celerity.sqlDatabase.allowDestructive: true
+      No DROP statement was generated for 'users.name' (ambiguous split vs drop). Once the
+      data is migrated, remove the column from the schema and apply the generated drop —
+      it will be classified `breaking` and needs `celerity schema apply --allow-breaking`.
 
+  Review the generated file, then commit it with your schema change.
   Apply with: celerity schema apply
 ```
 
@@ -603,7 +752,12 @@ ordersDb (postgres: orders):
 
 ✅ **Available in v0** (TypeScript, Python)
 
-Generate types from the schema YAML: TypeScript interfaces or Python Pydantic models representing table rows, plus column name constants. No ORM coupling. Combine with whatever library you prefer.
+Generate types from the schema YAML: a TypeScript `type` alias or Python Pydantic model for each table's row, plus column-name and table-name constants. There is no ORM coupling, you can combine with whatever library you prefer.
+
+Two conventions make the output predictable:
+
+- **Types are named as singular entities.** A table is a collection; a row is one of them, so `customers` generates `Customer`, `order_events` generates `OrderEvent`. The name is the table name singularised and PascalCased. For irregular plurals the singulariser cannot infer, set `typeName` on the table in the schema YAML to override it.
+- **Field names mirror the database columns exactly.** They are kept verbatim (snake_case), *not* camelCased, in both languages. The generated type describes the shape your driver returns for a plain query, so keeping the keys identical to the columns means the type stays honest at runtime — no hidden translation layer. If you prefer camelCase in your application, map it in your own layer. (Teams using an ORM that already maps columns to camelCase typically will not use codegen.)
 
 For SDK usage examples with generated types, see the [Node.js SDK - SQL Database](/docs/node-runtime/sql-database) and [Python SDK - SQL Database](/docs/python-runtime/sql-database) documentation.
 
@@ -616,44 +770,49 @@ celerity schema codegen --lang typescript --out ./src/generated/
 Generated output:
 
 ```typescript
-// generated/orders-db.ts — auto-generated, do not edit
+// orders-db.ts — auto-generated by `celerity schema codegen`, do not edit.
+// Field names mirror the database columns exactly (what your driver returns for a
+// plain query); only type names are stylised. Map to camelCase in your own layer
+// if you want it — codegen keeps the shape faithful to the database.
 
-/** customers table row */
-export type CustomersRow {
+/** A customer account */
+export type Customer = {
   id: string;
+  created_at: Date;
   email: string;
   name: string;
   tier: string;
-  created_at: Date;
 }
 
-/** orders table row */
-export type OrdersRow {
+/** A row from the "orders" table */
+export type Order = {
   id: string;
+  created_at: Date;
   customer_id: string;
+  line_items: unknown;
   status: string;
   total_cents: number;
-  line_items: unknown;
-  created_at: Date;
   updated_at: Date;
 }
 
 export const Tables = {
   customers: "customers",
-  orders: "orders",
   order_events: "order_events",
+  orders: "orders",
 } as const;
 
-export const OrdersColumns = {
+export const OrderColumns = {
   id: "id",
+  created_at: "created_at",
   customer_id: "customer_id",
+  line_items: "line_items",
   status: "status",
   total_cents: "total_cents",
-  line_items: "line_items",
-  created_at: "created_at",
   updated_at: "updated_at",
 } as const;
 ```
+
+Row shapes use `type` rather than `interface` (structural data, not behaviour). Columns are ordered primary keys first, then alphabetically, so the output is deterministic — `celerity schema codegen --check` fails CI if the committed code no longer matches the schema.
 
 ### Python
 
@@ -664,25 +823,29 @@ celerity schema codegen --lang python --out ./src/generated/
 Generated output:
 
 ```python
-# generated/orders_db.py — auto-generated, do not edit
+# orders_db.py — auto-generated by `celerity schema codegen`, do not edit.
+# Field names mirror the database columns exactly (what your driver returns for a
+# plain query); only class names are stylised.
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Any
 
-class CustomersRow(BaseModel):
+
+class Customer(BaseModel):
     id: str
+    created_at: datetime
     email: str
     name: str
     tier: str
-    created_at: datetime
 
-class OrdersRow(BaseModel):
+
+class Order(BaseModel):
     id: str
+    created_at: datetime
     customer_id: str
+    line_items: Any
     status: str
     total_cents: int
-    line_items: Any
-    created_at: datetime
     updated_at: datetime
 ```
 
@@ -702,7 +865,7 @@ class OrdersRow(BaseModel):
 
 Schema contracts allow data teams to declare which tables they depend on, so they are automatically informed when schema changes affect them. Instead of manually tracking column-level dependencies, contracts operate at the table level: any structural change to a watched table triggers the contract's policy.
 
-The migration engine already knows exactly what changed (columns added, dropped, type changes, etc.), so contracts don't need to duplicate that information. They simply declare: "I care about these tables. Tell me when they change."
+The schema diff already knows exactly what changed (columns added, dropped, type changes, etc.), so contracts don't need to duplicate that information. They simply declare: "I care about these tables. Tell me when they change."
 
 ### Contracts File Format
 
@@ -758,6 +921,7 @@ See [NoSQL Datastore Schema Contracts](/docs/framework/applications/nosql-datast
 | `dependencies[].database` | Name of the `celerity/sqlDatabase` resource in the blueprint (for SQL databases) |
 | `dependencies[].tables` | Tables this contract watches for changes (SQL databases only) |
 | `dependencies[].datastore` | Name of the `celerity/datastore` resource in the blueprint (for NoSQL datastores) |
+| `dependencies[].entities` | Optional list of entities to watch on a datastore dependency, for [single-table designs](/docs/framework/applications/nosql-datastore-schema-management#multiple-entities-single-table-design) |
 | `dependencies[].policy` | `blocking` (non-zero exit code) or `notify` (warning only, zero exit code) |
 
 When a schema change touches any table listed in a contract, the diff output includes the full details of what changed: columns added, dropped, renamed, type changes, etc. The contract itself doesn't need to enumerate these; it just identifies which tables matter.
@@ -766,22 +930,35 @@ When a schema change touches any table listed in a contract, the diff output inc
 
 ✅ **Available in v0**
 
-Contract checking is built into `celerity schema validate`. When a `schema-contracts.yaml` file exists and deployed state is available, validate evaluates contracts as part of its checks:
+Contract handling splits across two places, depending on whether a *change set* is known:
 
-- **`blocking` contracts affected**: `validate` exits with a **non-zero exit code**, failing your CI pipeline
-- **`notify` contracts affected**: `validate` prints warnings but does not affect the exit code
+- **`celerity schema validate` checks the contracts file itself** — that every dependency names a real `celerity/sqlDatabase` resource and only tables that exist in its schema, with a valid policy. This needs no database connection, so it stays a fast, no-DB CI gate alongside schema correctness, foreign-key integrity and migration SQL parsing. It does *not* evaluate change impact (validate has no baseline to diff against).
 
-This means a single `celerity schema validate` step in CI covers everything: schema correctness, foreign key integrity, migration SQL parsing, and contract impact:
+- **Change impact is reported wherever the change is known** — `celerity schema diff` (the pending change you are about to commit) and `celerity schema drift` (out-of-band changes to a live database). Both list the affected contracts:
+  - **`blocking` contracts affected**: the command exits with a **non-zero exit code**, failing your CI pipeline.
+  - **`notify` contracts affected**: printed as a warning; the exit code is unaffected.
+
+A single `celerity schema validate` step keeps the contracts file honest:
 
 ```yaml
 # Example CI step (GitHub Actions)
-- name: Validate schema
+- name: Validate schema and contracts
   run: celerity schema validate
 ```
 
-When a blocking contract fires, the CI output shows exactly what changed, giving the data team the information they need to review the PR. Use your platform's existing notification mechanisms (CODEOWNERS, required reviewers, Slack integrations on CI failure) to alert the right people.
+And the diff/drift steps already in your pipeline surface who is affected by an actual change:
 
-Contract impact is also shown in `celerity schema diff` output, giving visibility into downstream effects during local development.
+```
+$ celerity schema diff
+
+Generated db/migrations/20260721115109_add_discount.sql  [risk: safe]
+
+  Contracts affected:
+    ⛔ revenue-pipeline (data-team) — ordersDb.orders changed [blocking]
+    ⚠ customer-analytics (data-team) — ordersDb.customers, orders changed [notify]
+```
+
+When a blocking contract fires, the output shows exactly which tables changed, giving the data team the information they need to review the PR. Use your platform's existing notification mechanisms (CODEOWNERS, required reviewers, Slack integrations on CI failure) to alert the right people.
 
 ### Deploy-Time Enforcement and Webhook Notifications
 
@@ -790,7 +967,7 @@ In v0, contract validation runs via `celerity schema validate` as a CI gate; it 
 
 Deploy-time contract enforcement (automatically blocking deploys when contracts are affected) and webhook notifications (dispatching to Slack, email or custom endpoints when contracts fire) are projected as paid tier features for a future release after v1 (post-July 2027). These are future projections, not committed features.
 
-The paid Schema Service would add a `notify` field to contracts for webhook configuration, integrate contract checks directly into the deploy pipeline, and dispatch notifications automatically.
+The paid Schema Service would add a `notify` field to contracts for webhook configuration, integrate contract checks directly into the deploy pipeline, and dispatch notifications automatically. The service is centred on the contract layer that connects product teams and their data-team consumers, with [scheduled drift monitoring](#scheduled-drift-monitoring) as a supporting capability built on the same contracts.
 </Callout>
 
 ### Programmatic Schema API
@@ -820,5 +997,6 @@ The schema YAML files serve as always-accurate documentation because they are wh
 - **Schema exports** (`celerity schema export --format markdown`) generate human-readable documentation
 - **Git history** of schema files (`git log schemas/orders.yaml`) provides full change history with PR review
 - **Contract definitions** in `schema-contracts.yaml` let data teams declare and protect their dependencies
+- **Drift detection** (`celerity schema drift`) surfaces out-of-band database changes, with affected contracts called out in the report
 - **Machine-readable exports** (`celerity schema export --format json-schema`) integrate with pipeline tools
 - **ERD diagrams** (`celerity schema export --format mermaid`) visualise table relationships

@@ -25,7 +25,7 @@ Celerity applications can be deployed as both serverless[^2] and traditional app
 ### Product & data team friction
 
 - **Pain point**: The teams that build a product and the teams that analyse its data are constantly out of sync. The data model is scattered across application code and tribal knowledge, and with NoSQL stores there is no database-level schema to introspect at all, so data teams build pipelines effectively blind. When product teams evolve the schema, breaking changes surprise downstream consumers with no warning, and keeping documentation, types and pipelines aligned is a manual, error-prone effort.
-- **Solution**: Celerity makes the schema a first-class, version-controlled source of truth shared by both teams. [Schema-as-code](/docs/framework/applications/nosql-datastore-schema-management) YAML describes the intended structure with rich ownership and classification metadata; [type generation](/docs/framework/applications/nosql-datastore-schema-management#type-generation) keeps application code type-safe in supported languages; [schema contracts](/docs/framework/applications/nosql-datastore-schema-management#schema-contracts) let data teams declare the dependencies they rely on so breaking changes are flagged in CI before they ship; and [data team exports](/docs/framework/applications/nosql-datastore-schema-management#for-data-teams) (Markdown, JSON Schema, Avro and Mermaid ERD) feed documentation and pipeline tooling directly. See the [NoSQL datastore](/docs/framework/applications/nosql-datastore-schema-management) and [SQL database](/docs/framework/applications/sql-database-schema-management) schema management guides for the full picture.
+- **Solution**: Celerity makes the schema a first-class, version-controlled source of truth shared by both teams. [Schema-as-code](/docs/framework/applications/nosql-datastore-schema-management) YAML describes the intended structure with rich ownership and classification metadata; [type generation](/docs/framework/applications/nosql-datastore-schema-management#type-generation) keeps application code type-safe in supported languages; [schema contracts](/docs/framework/applications/nosql-datastore-schema-management#schema-contracts) let data teams declare the dependencies they rely on so breaking changes are flagged in CI before they ship; [drift detection](/docs/framework/applications/nosql-datastore-schema-management#drift-detection) surfaces where live data or databases have diverged from the schema; and [data team exports](/docs/framework/applications/nosql-datastore-schema-management#for-data-teams) (Markdown, JSON Schema, Avro and Mermaid ERD) feed documentation and pipeline tooling directly. See the [NoSQL datastore](/docs/framework/applications/nosql-datastore-schema-management) and [SQL database](/docs/framework/applications/sql-database-schema-management) schema management guides for the full picture.
 
 ## Application building blocks
 
@@ -49,6 +49,8 @@ The channel building block ([`celerity/channel`](/docs/framework/applications/re
 
 The workflow building block ([`celerity/workflow`](/docs/framework/applications/resources/celerity-workflow)) is used to define a workflow that orchestrates the execution of multiple handlers in a blueprint as a series of steps. Workflows can be deployed to different target environments. Serverless environments will use the cloud provider's workflow service, such as AWS Step Functions, Google Cloud Workflows, or Azure Logic Apps. Containerised and custom server environments will use the Celerity workflow runtime to execute the workflow steps.
 
+🚀 **Planned for v1**
+
 [Read more about Celerity Workflows](/docs/framework/applications/resources/celerity-workflow).
 
 ### Handler
@@ -65,13 +67,13 @@ The config/secret store building block ([`celerity/config`](/docs/framework/appl
 
 ### SQL Database
 
-The SQL database building block ([`celerity/sql-database`](/docs/framework/applications/resources/celerity-sql-database)) is used to define a SQL database that can be used to store structured data. This includes support for multiple providers such as AWS RDS, Azure SQL Database and GCP Cloud SQL. Celerity provides [built-in schema management](/docs/framework/applications/sql-database-schema-management) for SQL databases, covering schema-as-code with an automated migration engine, type generation, schema contracts and data team exports, giving development and data teams a single, versioned source of truth for the database structure.
+The SQL database building block ([`celerity/sql-database`](/docs/framework/applications/resources/celerity-sql-database)) is used to define a SQL database that can be used to store structured data. This includes support for multiple providers such as AWS RDS, Azure SQL Database and GCP Cloud SQL. Celerity provides [built-in schema management](/docs/framework/applications/sql-database-schema-management) for SQL databases, covering schema-as-code with generated, reviewable migrations (powered by the open-source core of [Atlas](https://atlasgo.io)), type generation, schema contracts, drift detection and data team exports, giving development and data teams a single, versioned source of truth for the database structure.
 
 [Read more about Celerity SQL Databases](/docs/framework/applications/resources/celerity-sql-database).
 
 ### NoSQL Database
 
-The NoSQL database building block ([`celerity/datastore`](/docs/framework/applications/resources/celerity-datastore)) is used to define a NoSQL database that can be used to store unstructured data. This includes support for multiple providers such as AWS DynamoDB, Azure Cosmos DB and GCP Firestore. Celerity provides [built-in schema management](/docs/framework/applications/nosql-datastore-schema-management) for NoSQL datastores — including schema-as-code, type generation, schema contracts and data team exports — bridging the gap where NoSQL databases have no database-level schema to introspect.
+The NoSQL database building block ([`celerity/datastore`](/docs/framework/applications/resources/celerity-datastore)) is used to define a NoSQL database that can be used to store unstructured data. This includes support for multiple providers such as AWS DynamoDB, Azure Cosmos DB and GCP Firestore. Celerity provides [built-in schema management](/docs/framework/applications/nosql-datastore-schema-management) for NoSQL datastores — including schema-as-code, type generation, schema contracts, data-shape drift detection and data team exports — bridging the gap where NoSQL databases have no database-level schema to introspect.
 
 [Read more about Celerity NoSQL Databases](/docs/framework/applications/resources/celerity-datastore).
 

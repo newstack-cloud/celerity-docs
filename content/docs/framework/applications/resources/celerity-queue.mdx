@@ -100,14 +100,78 @@ The only supported relationship between queues is that the parent queue (definin
 
 #### celerity.queue.deadLetterMaxAttempts
 
-The maximum number of attempts to process a message before it is sent to the dead letter queue. This is an optional annotation and if not specified, the default value will be used based on the target environment.
-This is **only** applicable to the linked to queue that is used as a dead-letter queue for the parent queue.
+The maximum number of attempts to process a message before it is moved to the linked dead-letter queue. This is an optional annotation and if not specified, the default value will be used based on the target environment.
+This annotation is set on the **parent** (source) queue — the one that defines the `linkSelector` pointing at its dead-letter queue — and configures that queue's redrive behaviour. (On AWS, for example, it maps to the `maxReceiveCount` of the source queue's redrive policy.)
 
 ✅ **Available in v0**
 
 **type**
 
 integer
+
+___
+
+### `celerity/bucket` 🔗 `celerity/queue`
+
+The following annotations configure which object storage events (and key filters) from a linked `celerity/bucket` are delivered to the queue.
+
+#### celerity.queue.bucket.events
+
+The object storage events from the linked bucket that should be delivered to the queue.
+
+✅ **Available in v0**
+
+**type**
+
+string - Comma-separated list of events
+
+**allowed values**
+
+`created` | `deleted` | `metadataUpdated`
+
+**default value**
+
+`created`
+
+**examples**
+
+`created,deleted`
+
+<Callout title="Note" type="info">
+On FaaS/serverless target environments (e.g. `aws-serverless`), the `metadataUpdated` event has no equivalent and is ignored; the queue receives the `created` events by default.
+</Callout>
+
+___
+
+#### celerity.queue.bucket.filterPrefix
+
+Restricts notifications delivered to the queue to object keys that begin with the given prefix.
+
+✅ **Available in v0**
+
+**type**
+
+string
+
+**examples**
+
+`uploads/`
+
+___
+
+#### celerity.queue.bucket.filterSuffix
+
+Restricts notifications delivered to the queue to object keys that end with the given suffix.
+
+✅ **Available in v0**
+
+**type**
+
+string
+
+**examples**
+
+`.jpg`
 
 ___
 
@@ -145,7 +209,7 @@ When a queue is linked from a handler, the handler will be configured with permi
 
 ## Links To
 
-#### `celerity/queue`
+### `celerity/queue`
 
 A queue can link to another queue. The target queue will be used as a dead-letter queue for messages that cannot be processed after the maximum number of attempts have been reached by the parent queue.
 
@@ -154,6 +218,15 @@ In some target environments, the dead-letter queue must match the FIFO configura
 </Callout>
 
 ✅ **Available in v0**
+
+### `celerity/topic`
+
+When a queue links to a topic, messages received by the queue will be published to the topic. Intermediary serverless functions (if necessary) will be provisioned to enable message forwarding from the queue to the topic.
+This can be useful if a queue is used as the endpoint of a specific task that should be published to a topic for further processing or to send out notifications. 
+
+✅ **Available in v0**
+
+[Read more about Celerity topics](/docs/framework/applications/resources/celerity-topic)
 
 ### `celerity/consumer`
 
@@ -559,8 +632,6 @@ integer
 }
 ```
 
-TODO: add more configuration options for AWS SQS queues.
-
 ### Google Cloud Configuration Options
 
 🚀 **Planned for v1** - This target environment is likely to be available in a future v0 evolution.
@@ -644,9 +715,3 @@ string
   }
 }
 ```
-
-TODO: add more configuration options for Google Cloud Pub/Sub and Cloud Tasks queues.
-
-### Azure Configuration Options
-
-TODO: add configuration options for Azure Service Bus queues and Azure Storage queues.

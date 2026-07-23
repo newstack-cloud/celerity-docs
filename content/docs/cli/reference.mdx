@@ -122,7 +122,7 @@ When this flag is set, the provider and transformer configuration sourced from d
 The "app deploy config" file provides a convenient way to set up the deploy configuration specifically for a Celerity application.
 All configuration in the `deployTarget` section of the app deploy config file will be used to generate the final configuration organised by the underlying provider and transformer plugins.
 
-This means that when `--check-deploy-config` is set, the CLI will validate the configuration in the `deployTarget` section of the app deploy config file.
+This means that when `--check-plugin-config` is set, the CLI will validate the configuration in the `deployTarget` section of the app deploy config file.
 </Callout>
 
 ### `--transform-spec`
@@ -154,11 +154,149 @@ This catches resource-level issues that only surface once abstract resources hav
 which is typically useful when diagnosing deployment-time issues.
 Has no effect unless `--transform-spec` is also `true`.
 
-## `stage-changes`
+## `build`
+
+Builds a Celerity application into deployable artifacts (for the AWS serverless
+target: a shared app-code archive, an entry point, and dependency layers) and
+writes a build manifest to `.celerity/build-manifest.json`. The build target and
+app environment come from the app deploy config. `build` runs automatically
+before `stage` and `deploy` unless `--skip-build` is set.
+
+### `--blueprint-file`
+
+**Type**: `string`
+
+The blueprint file to read handler and runtime information from. Auto-detected
+(`app.bp`, `app.blueprint.yaml`, or `app.blueprint.jsonc`) when not provided.
+
+## `stage`
+
+Creates a change set by computing the difference between a blueprint and the
+current state of an instance (or empty state for a new deployment). The change
+set is streamed and presented for review, and can then be applied with `deploy`.
+
+<Callout title="Note">
+This command was previously referred to as `stage-changes`; `stage` is the
+canonical name.
+</Callout>
+
+### `--blueprint-file`
+
+**Type**: `string`
+
+**Default Value**: `app.blueprint.yaml`
+
+The blueprint file to stage. This can be a local file, a public `https://` URL,
+or an object storage path (`s3://`, `gcs://`, `azureblob://`).
+
+### `--instance-id`
+
+**Type**: `string`
+
+The ID of an existing blueprint instance to stage changes for. When neither
+`--instance-id` nor `--instance-name` is provided, changes are staged for a new
+deployment.
+
+### `--instance-name`
+
+**Type**: `string`
+
+The user-defined name of an existing blueprint instance to stage changes for.
+
+### `--destroy`
+
+**Type**: `boolean`
+
+Stage changes for destroying an existing instance. Requires `--instance-id` or
+`--instance-name`.
 
 ## `deploy`
 
+Applies a change set to a blueprint instance (new or existing) and streams
+deployment events in real time.
+
+### `--change-set-id`
+
+**Type**: `string`
+
+The change set to deploy. When omitted, use `--stage` to stage and deploy in one
+step.
+
+### `--stage`
+
+**Type**: `boolean`
+
+Stage changes first, then deploy the resulting change set.
+
+### `--instance-id` / `--instance-name`
+
+**Type**: `string`
+
+The existing blueprint instance to deploy to. When neither is provided, a new
+instance is created.
+
+### `--auto-approve`
+
+**Type**: `boolean`
+
+Automatically approve staged changes without prompting. Intended for CI/CD.
+Only applicable with `--stage`.
+
+### `--auto-approve-code-only`
+
+**Type**: `boolean`
+
+Automatically approve staged changes when only code-hosting resources are
+modified. Requires `--stage`; denied when any creates, deletes, or
+infrastructure changes are present.
+
+### `--auto-rollback`
+
+**Type**: `boolean`
+
+Automatically roll back on deployment failure.
+
+### `--force`
+
+**Type**: `boolean`
+
+Override a drift check that would otherwise block the deployment.
+
 ## `destroy`
+
+Destroys a deployed blueprint instance, removing its resources, child
+blueprints, and links, streaming events in real time.
+
+### `--change-set-id`
+
+**Type**: `string`
+
+The destroy change set to apply. When omitted, use `--stage` to stage a destroy
+change set first.
+
+### `--stage`
+
+**Type**: `boolean`
+
+Stage destroy changes first, then execute.
+
+### `--instance-id` / `--instance-name`
+
+**Type**: `string`
+
+The instance to destroy. One of these is required.
+
+### `--auto-approve`
+
+**Type**: `boolean`
+
+Automatically approve the staged destroy. Only applicable with `--stage`.
+
+### `--force`
+
+**Type**: `boolean`
+
+Override a state/drift conflict that would otherwise block the destroy.
 
 ## `init`
 
@@ -821,17 +959,26 @@ See the [SQL Database Schema Management](/docs/framework/applications/sql-databa
 
 ### `diff`
 
-Show the migration plan and contract impact for pending schema changes without applying them. This compares the schema YAML (desired state) against the current deployed state and generates the changes that would be applied.
+Show pending schema changes and their contract impact and, for SQL databases, generate a migration file capturing them.
 
-The output includes:
-- **SQL databases**: Auto-generated DDL statements from the schema diff, pending escape hatch SQL scripts
-- **NoSQL datastores**: Field-level changes (added, removed, type changed), pending escape hatch data scripts. No DDL is generated — field changes are application-layer only.
+- **SQL databases**: Compares the desired state (schema YAML) against the current state (computed by replaying the migration directory on a temporary local database) and writes the difference as a new timestamped SQL migration file in `migrationsPath`, ready for review and commit. Diffing is powered by the embedded open-source [Atlas](https://atlasgo.io) engine; Celerity augments the generated SQL with data-aware transitions (e.g. backfills before NOT NULL constraints) and emits `CREATE EXTENSION` statements for extensions declared in the schema YAML. If there is no difference, no file is written.
+- **NoSQL datastores**: Shows field-level changes (added, removed, type changed), reported per entity for single-table schemas, and pending escape hatch data scripts. No migration file or DDL is generated — field changes are application-layer only.
+
+The output also includes:
+- Pending migration files not yet applied to the target environment
 - Contract impact analysis (which contracts would be satisfied or broken)
-- Warnings for ambiguous or destructive changes
+- Warnings for ambiguous or destructive changes; a generated destructive migration (drop table/column) is classified `breaking` and is not applied by `celerity schema apply` without `--allow-breaking`
 
 ```bash
 celerity schema diff
+celerity schema diff --name add_customer_tier
 ```
+
+#### `--name`
+
+**Type**: `string`
+
+Description used in the generated migration file name (SQL databases only). Defaults to a summary derived from the changes.
 
 #### `--env`
 
@@ -841,13 +988,29 @@ celerity schema diff
 
 **Type**: `string`
 
-The target environment to diff against. When specified, the current state is read from the deployed schema state for that environment.
+The target environment to diff against. When specified, pending migrations are reported relative to the deployed schema state for that environment.
+
+### `new`
+
+Create an empty timestamped migration file for hand-written SQL (SQL databases only) and update the migration directory integrity file (`atlas.sum`). Use this for structural SQL the schema YAML cannot express — triggers, functions, row-level security policies, partitioning, specialised indexes.
+
+```bash
+celerity schema new add_audit_trigger
+```
+
+The first positional argument is the description used in the migration file name.
+
+#### `--database`
+
+**Type**: `string`
+
+The name of the `celerity/sqlDatabase` resource to create the migration for. Required when the blueprint contains more than one SQL database resource.
 
 ### `apply`
 
 Apply schema changes outside of a full deployment.
 
-- **SQL databases**: Executes the auto-generated DDL and escape hatch SQL scripts against the target database.
+- **SQL databases**: Verifies migration directory integrity (`atlas.sum`), runs a [pre-apply drift check](#drift) against the target database, then applies pending migration files in timestamp order, recording each in the revision table.
 - **NoSQL datastores**: Updates the schema state only — no database connection is made. Field-level changes are enforced at the application layer via SDK validation and generated types, not via database operations. Escape hatch data scripts are NOT auto-executed (they may take hours for large datasets).
 
 ```bash
@@ -872,13 +1035,91 @@ The target environment to apply migrations to.
 
 Skip the interactive confirmation prompt and apply migrations immediately. Use with caution.
 
+#### `--allow-drift`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+Proceed with applying migrations even if the pre-apply drift check detects that the live database does not match the expected starting state. Use only once the drift has been reviewed and understood.
+
+### `drift`
+
+Check a live SQL database or NoSQL datastore for drift against the schema. The command exits with a non-zero exit code when drift is detected, making it suitable for scheduled CI jobs, and matches drifted tables/datastores against `schema-contracts.yaml` so the report shows which downstream contracts are affected.
+
+**SQL databases** — out-of-band structural changes, checked at three layers (see [Drift Detection](/docs/framework/applications/sql-database-schema-management#drift-detection)):
+- **History drift**: The revision table is compared against the migration directory — migrations applied out-of-band, missing or applied out of order
+- **Structural drift**: The live database is inspected and diffed against the expected state for everything the schema YAML models (tables, columns, indexes, foreign keys, constraints), reported as a full object-level diff
+- **Advanced-object drift**: Objects created by hand-written migrations (triggers, functions, views, row-level security policies) are fingerprinted from the database catalog and flagged when changed, missing or unexpected
+
+**NoSQL datastores** — data-shape drift via a sampled read-only scan of live items (see [Drift Detection](/docs/framework/applications/nosql-datastore-schema-management#drift-detection)):
+- **Conformance drift**: items not conforming to the schema (missing required fields, type mismatches, unexpected nulls) with per-field conformance percentages
+- **Unknown-field drift**: fields present in sampled items but absent from the schema YAML
+- When the schema defines entities, items are bucketed by discriminator value and reported per entity
+
+```bash
+celerity schema drift ordersDb --env production
+celerity schema drift userStore --env production --sample 10000
+```
+
+The first positional argument is the name of the `celerity/sqlDatabase` or `celerity/datastore` resource in the blueprint.
+
+#### `--env`
+
+**Environment Variable**: `CELERITY_CLI_SCHEMA_DRIFT_ENV`
+
+**Configuration Key**: `schemaDriftEnv`
+
+**Type**: `string`
+
+The target environment to check for drift. Required.
+
+#### `--sample`
+
+**Type**: `integer`
+
+**Default Value**: `1000`
+
+The number of items to sample in the scan (NoSQL datastores only).
+
+### `scripts run`
+
+Run pending escape hatch data scripts for a NoSQL datastore against a target environment. Lists the pending scripts (tracked by name and content hash in schema state), prompts for confirmation, executes them in version order with connection config injected as environment variables, and records each completion in schema state.
+
+```bash
+celerity schema scripts run userStore --env production
+celerity schema scripts run userStore --env production --mark-only
+```
+
+The first positional argument is the name of the `celerity/datastore` resource in the blueprint.
+
+See [Escape Hatch Data Scripts](/docs/framework/applications/nosql-datastore-schema-management#escape-hatch-data-scripts) for the script format and execution model.
+
+#### `--env`
+
+**Environment Variable**: `CELERITY_CLI_SCHEMA_SCRIPTS_RUN_ENV`
+
+**Configuration Key**: `schemaScriptsRunEnv`
+
+**Type**: `string`
+
+The target environment to run scripts against. Required.
+
+#### `--mark-only`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+Record pending scripts as complete in schema state without executing them. Use for scripts that were run out-of-band (e.g. through a batch processing system).
+
 ### `validate`
 
 Validate schema files, blueprint references and contracts for both SQL databases and NoSQL datastores:
 
 - Schema YAML files parse correctly
-- **SQL databases**: Foreign keys reference valid tables and columns; escape hatch SQL files parse as valid SQL for the target engine
-- **NoSQL datastores**: Field types are valid (`string`, `number`, `boolean`, `object`, `array`); nested `fields`/`items` match their parent type; `required` fields exist in the `fields` map
+- **SQL databases**: Foreign keys reference valid tables and columns; migration SQL files parse as valid SQL for the target engine; the migration directory is consistent with its integrity file (`atlas.sum`)
+- **NoSQL datastores**: Field types are valid (`string`, `number`, `boolean`, `object`, `array`); nested `fields`/`items` match their parent type; `required` fields exist in the `fields` map; blueprint `keys`, `indexes` and `timeToLive` fields exist in the schema with scalar types (key fields must be in shared `fields` and required); entity definitions reference a valid `discriminator` field
 - Handlers linked to a `celerity/sqlDatabase` or `celerity/datastore` have the resource in their label scope
 - Schema contracts are evaluated against pending changes — exits with a non-zero exit code if any `blocking` contracts are affected, prints warnings for `notify` contracts (if a `schema-contracts.yaml` file exists and deployed state is available)
 - Generated types are up-to-date with the schema (when `--check-codegen` is set)
@@ -948,7 +1189,7 @@ The target language for code generation. Go, Java and C# support is planned for 
 | Language | Output | Status |
 |---|---|---|
 | `typescript` | Interfaces, column constants, table name constants | ✅ Available in v0 |
-| `python` | TypedDict classes | ✅ Available in v0 |
+| `python` | Pydantic model classes | ✅ Available in v0 |
 | `go` | Struct types | 🚀 Planned for v1 |
 | `java` | Record classes | 🚀 Planned for v1 |
 | `csharp` | Record types | 🚀 Planned for v1 |
@@ -1002,3 +1243,9 @@ The first positional argument is the name of the `celerity/sqlDatabase` or `cele
 The target environment to show history for. Required.
 
 ## `version`
+
+Prints the version of the Celerity CLI.
+
+```bash
+celerity version
+```

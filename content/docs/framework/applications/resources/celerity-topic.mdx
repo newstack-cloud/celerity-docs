@@ -88,9 +88,71 @@ string
 
 ## Annotations
 
-There are no annotations required for linking other resources to a `celerity/topic` resource or modifying the behaviour of a topic resource.
+No annotations are required to modify the behaviour of a topic resource itself.
 
 `linkSelector.byLabel` can be used to target topics from other resource types.
+
+### `celerity/bucket` 🔗 `celerity/topic`
+
+The following annotations configure which object storage events (and key filters) from a linked `celerity/bucket` are delivered to the topic.
+
+#### celerity.topic.bucket.events
+
+The object storage events from the linked bucket that should be delivered to the topic.
+
+✅ **Available in v0**
+
+**type**
+
+string - Comma-separated list of events
+
+**allowed values**
+
+`created` | `deleted` | `metadataUpdated`
+
+**default value**
+
+`created`
+
+**examples**
+
+`created,deleted`
+
+<Callout title="Note" type="info">
+On FaaS/serverless target environments (e.g. `aws-serverless`), the `metadataUpdated` event has no equivalent and is ignored; the topic receives the `created` events by default.
+</Callout>
+
+___
+
+#### celerity.topic.bucket.filterPrefix
+
+Restricts notifications delivered to the topic to object keys that begin with the given prefix.
+
+✅ **Available in v0**
+
+**type**
+
+string
+
+**examples**
+
+`uploads/`
+
+___
+
+#### celerity.topic.bucket.filterSuffix
+
+Restricts notifications delivered to the topic to object keys that end with the given suffix.
+
+✅ **Available in v0**
+
+**type**
+
+string
+
+**examples**
+
+`.jpg`
 
 ## Outputs
 

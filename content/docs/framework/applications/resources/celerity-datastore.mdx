@@ -63,7 +63,7 @@ For target environments that do not support composite keys, sort keys will be co
 
 An inline schema to document the structure of items in the data store. This is optional, however, it should be considered essential for providing a single source of truth for the structure of the data that can be used by consumers of the data such as data teams that build data pipelines and internal systems (in your company) that make use of the data.
 
-When `schemaPath` is provided, the external schema file takes precedence and this inline schema is ignored.
+When `schemaPath` is provided, the external schema file takes precedence and this inline schema is ignored. The inline schema always describes a single item shape; [multi-entity schemas](/docs/framework/applications/nosql-datastore-schema-management#multiple-entities-single-table-design) for single-table designs are supported in external schema files only.
 
 ✅ **Available in v0**
 
@@ -73,7 +73,7 @@ When `schemaPath` is provided, the external schema file takes precedence and thi
 
 ### schemaPath
 
-The path to an external YAML schema definition file, relative to the blueprint file. When provided, Celerity manages the datastore schema through its [built-in schema management](/docs/framework/applications/nosql-datastore-schema-management) system. The external schema file supports rich metadata (`owner`, `tags`, `classification`, `default`) and integrates with schema contracts, type generation and export systems.
+The path to an external YAML schema definition file, relative to the blueprint file. When provided, Celerity manages the datastore schema through its [built-in schema management](/docs/framework/applications/nosql-datastore-schema-management) system. The external schema file supports rich metadata (`owner`, `tags`, `classification`, `default`) and [multiple entities for single-table designs](/docs/framework/applications/nosql-datastore-schema-management#multiple-entities-single-table-design), and integrates with schema contracts, type generation, drift detection and export systems.
 
 When `schemaPath` is provided, any inline `schema` on the same resource is ignored — the external file takes precedence.
 
@@ -91,7 +91,7 @@ string
 
 The path to a directory containing escape hatch data scripts, relative to the blueprint file. These are versioned scripts for data operations that cannot be expressed in the schema YAML (backfilling new fields, migrating data formats, cleaning up deprecated fields).
 
-Scripts follow the naming convention `V<number>__<description>.<ext>` and can be written in any language. They are tracked in schema state and surfaced in `celerity schema diff`, but are NOT automatically executed during deployment. See [Escape Hatch Data Scripts](/docs/framework/applications/nosql-datastore-schema-management#escape-hatch-data-scripts) for details.
+Scripts follow the naming convention `V<number>__<description>.<ext>` and can be written in any language. They are tracked in schema state and surfaced in `celerity schema diff`, but are NOT automatically executed during deployment; run them with [`celerity schema scripts run`](/docs/cli/reference#scripts-run), which also records their completion in schema state. See [Escape Hatch Data Scripts](/docs/framework/applications/nosql-datastore-schema-management#escape-hatch-data-scripts) for details.
 
 ✅ **Available in v0**
 
@@ -130,7 +130,31 @@ TTL functionality is only supported for some target environments.
 
 ## Annotations
 
-There are no annotations required for linking other resources to a `celerity/datastore` resource or modifying the behaviour of a data store resource.
+### celerity.datastore.validationMode
+
+Controls how the Celerity SDK validates items against the schema on writes at runtime. Only applies when a schema is defined for the data store.
+
+| Value | Behavior |
+|---|---|
+| `warn` (default) | Non-conforming writes succeed but are logged with structured details of each violation and surfaced as metrics |
+| `strict` | Non-conforming writes are rejected with a validation error |
+| `off` | No write validation |
+
+The `warn` default means tightening a schema (such as making a field required) can never break production writes for items that predate the change. Since the annotation is per resource, `off` serves as an escape hatch for extreme high-throughput write paths without disabling validation for other datastores; drift scans still observe the datastore's data shape from the outside. See [Runtime Validation](/docs/framework/applications/nosql-datastore-schema-management#runtime-validation-sdk-abstraction) for the full model.
+
+✅ **Available in v0**
+
+**type**
+
+string
+
+**default value**
+
+`warn`
+
+---
+
+No annotations are required for linking other resources to a `celerity/datastore` resource.
 
 `linkSelector.byLabel` can be used to target data stores from other resource types.
 
@@ -282,7 +306,7 @@ ___
 
 <FieldHeading fieldName="default" />
 
-A default value for the field. This is used by type generation and SDK validation but is not enforced by the database. When a new item is written without this field, the application should use this default.
+A default value for the field. Defaults are applied at item construction time by generated code (Pydantic field defaults in Python, an exported defaults constant in TypeScript) and are never silently injected by the SDK on write, nor enforced by the database. See [Defaults](/docs/framework/applications/nosql-datastore-schema-management#defaults) for details.
 
 **field type**
 
@@ -909,12 +933,14 @@ Celerity provides built-in schema management for NoSQL data stores that makes sc
 
 Celerity solves this by treating the schema YAML as the single source of truth:
 
-- **Schema-as-code**: Declarative YAML definitions with rich metadata (`description`, `owner`, `tags`, `classification`) that are version-controlled alongside your application
+- **Schema-as-code**: Declarative YAML definitions with rich metadata (`description`, `owner`, `tags`, `classification`) that are version-controlled alongside your application, including [multi-entity schemas](/docs/framework/applications/nosql-datastore-schema-management#multiple-entities-single-table-design) for single-table designs
 - **Type generation**: Generate TypeScript interfaces and Python Pydantic models from the schema for type-safe development (`celerity schema codegen`)
-- **Schema validation**: Layered validation — runtime (SDK validates on writes), build-time (generated types) and CI (`celerity schema validate`)
+- **Schema validation**: Layered validation — runtime (SDK validates on writes, in `warn` mode by default per the [`validationMode` annotation](#celeritydatastorevalidationmode)), build-time (generated types) and CI (`celerity schema validate`)
+- **Drift detection**: Sampled scans of live data report per-field conformance against the schema and surface unknown fields (`celerity schema drift`)
 - **Schema contracts**: Data teams declare which data stores they depend on and get CI-level protection when schemas change
 - **Schema exports**: Export as markdown, JSON Schema or Avro for pipeline tool integration (`celerity schema export`)
 - **Schema diff**: See what changed between the current and desired schema state (`celerity schema diff`)
+- **Data scripts**: Versioned escape hatch scripts for backfills and data transforms, run and tracked via `celerity schema scripts run`
 
 To use schema management, set the `schemaPath` field on the data store resource to point to an external YAML schema file. See the [Data Store with External Schema and Indexes](#data-store-with-external-schema-and-indexes) example above.
 
@@ -927,7 +953,7 @@ This is especially useful to provide a source of truth for data teams that need 
 
 NoSQL databases are often preferred for their flexibility and ability to handle unstructured data, however, when you are building systems for a company, there will come a point where you will want to make sense of the data to help your company make decisions based on how your customers are using your product. There are plenty of reasons other than flexibility of data to opt for NoSQL databases over SQL databases such as scalability, performance and cost.
 
-The key benefits of defining a schema for a NoSQL data store is to be able to provide a single source of truth for the structure of the data in the data store. Tools in the Celerity ecosystem that have a tight integration with Celerity applications will be able to use the schema to understand the intended structure of the data in the data store, identify drift where source code or the actual data in the data store does not match the schema, and provide a way to keep all parties that need to make use of the data in sync.
+The key benefits of defining a schema for a NoSQL data store is to be able to provide a single source of truth for the structure of the data in the data store. Tools in the Celerity ecosystem that have a tight integration with Celerity applications will be able to use the schema to understand the intended structure of the data in the data store, identify [drift](/docs/framework/applications/nosql-datastore-schema-management#drift-detection) where the actual data in the data store does not match the schema, and provide a way to keep all parties that need to make use of the data in sync.
 
 Defining schemas for NoSQL data stores is not required. When experimenting, you may not yet know the shape of the data you will be storing, in which case you may not want to define a schema until further down the line.
 

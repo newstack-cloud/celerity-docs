@@ -718,6 +718,8 @@ When a bucket is linked to a queue, the queue will be configured to receive noti
 
 In cases where you deploy your application to a target environment that is not FaaS-based[^1], a queue will be used to receive notifications from the bucket that the Celerity runtime will poll for events and trigger handlers accordingly.
 
+Which events are delivered (and any object key prefix/suffix filters) is configured with the `celerity.queue.bucket.*` annotations set on the receiving queue.
+
 ✅ **Available in v0**
 
 [Read more about Celerity Queues](/docs/framework/applications/resources/celerity-queue)
@@ -725,6 +727,8 @@ In cases where you deploy your application to a target environment that is not F
 ### `celerity/topic`
 
 When a bucket is linked to a topic, the topic will be configured to receive notifications from the bucket for events such as object creation, deletion, and updates. This is useful for publishing events to a topic that can be subscribed to by consumers such as handlers in applications of the `celerity/consumer` resource type.
+
+Which events are delivered (and any object key prefix/suffix filters) is configured with the `celerity.topic.bucket.*` annotations set on the receiving topic.
 
 ✅ **Available in v0**
 

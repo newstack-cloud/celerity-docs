@@ -150,23 +150,9 @@ string
 Local development always uses `password` authentication regardless of the `authMode` setting, since the local PostgreSQL container has no IAM infrastructure. Your application code does not need to change — the SDK handles the difference transparently.
 </Callout>
 
-## Annotations
+## Destructive changes
 
-### celerity.sqlDatabase.allowDestructive
-
-When set to `true`, allows destructive schema changes (dropping tables, dropping columns). Without this annotation, Celerity's analysis of pending migrations — both generated and hand-written — blocks destructive statements: `celerity schema diff` will not generate them, and applying a migration containing them fails with a warning.
-
-This annotation is a safety mechanism to prevent accidental data loss. It should only be set when you explicitly intend to remove tables or columns.
-
-✅ **Available in v0**
-
-**type**
-
-boolean
-
-**default value**
-
-`false`
+Destructive schema changes (dropping tables or columns) are not gated by a resource annotation. Instead, `celerity schema diff` generates the migration and classifies it `breaking`, and `celerity schema apply` will not apply a `breaking` migration without `--allow-breaking`. This is enforced by an un-spoofable floor that inspects each migration's actual SQL, so a hand-edited risk header cannot bypass it. See [Migration Risk Classification](/docs/framework/applications/sql-database-schema-management#migration-risk-classification).
 
 ## Outputs
 

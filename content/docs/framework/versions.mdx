@@ -10,40 +10,40 @@ This section provides an overview of the versioning strategy for Celerity spanni
 ## Version Strategy
 
 ### v0 (Current) - Evolving Capabilities
-**Initial Release**: July 29th, 2026
-**Evolution Period**: July 2026 - July 2027
+**Initial Release**: October 30th, 2026
+**Evolution Period**: October 2026 - October 2027
 
 v0 represents the initial release of Celerity with limited but functional capabilities that will continuously evolve until the release of v1.
 
 The current v0 release supports deploying Celerity applications to AWS serverless environments with application handlers running in AWS Lambda:
 
-#### Current v0 Components (July 2026)
+#### Current v0 Components (October 2026)
 - **Celerity CLI**: Full set of commands for starting projects along with the development and deployment lifecycle.
 - **Celerity Core Runtimes & SDKs**: Node.js and Python runtimes only, supporting HTTP APIs, WebSocket APIs, consumers, schedules, SQL databases, NoSQL datastores and caches.
 - **Client SDK for WebSocket APIs**: A single TypeScript package for browsers and Node.js to interact with WebSocket APIs adhering to the [WebSocket Runtime Protocol](/docs/framework/runtime/websocket-runtime-protocol), that are also compatible with AWS API Gateway v2 WebSocket APIs.
 - [**Bluelink Deploy Engine**](https://bluelink.dev/docs/bluelink/overview): The engine that powers deployments of Celerity applications, initially supporting only a subset of AWS services that enable serverless deployments.
 - [**Bluelink Blueprint Language Server**](https://bluelink.dev/docs/bluelink/overview): Diagnostics, validation and auto-complete support for blueprints used to define Celerity applications.
 
-#### Current v0 Resource Types (July 2026)
+#### Current v0 Resource Types (October 2026)
 - `celerity/api` - AWS API Gateway deployments and the Celerity runtime locally - HTTP and WebSocket APIs, full CORS support and authentication.
 - `celerity/handler` - AWS Lambda functions
 - `celerity/handlerConfig` - Helper type for shared handler configuration translating to AWS Lambda function configuration.
 - `celerity/config` - AWS SSM Parameter Store and AWS Secrets Manager
-- `celerity/datastore` - AWS DynamoDB tables with built-in schema management (schema-as-code, type generation, schema contracts, data team exports).
+- `celerity/datastore` - AWS DynamoDB tables with built-in schema management (schema-as-code, type generation, schema contracts, data-shape drift detection, data team exports).
 - `celerity/queue` - AWS SQS queues
 - `celerity/topic` - AWS SNS topics
 - `celerity/consumer` - AWS SQS Lambda triggers
 - `celerity/schedule` - AWS EventBridge rules
 - `celerity/bucket` - AWS S3 buckets
 - `celerity/vpc` - AWS VPCs hosting lambda functions and using VPC endpoints to interact with other AWS services.
-- `celerity/sqlDatabase` - AWS RDS for PostgreSQL with built-in schema management (migration engine, schema-as-code, type generation).
+- `celerity/sqlDatabase` - AWS RDS for PostgreSQL with built-in schema management (schema-as-code with generated migrations, drift detection, type generation).
 - `celerity/cache` - AWS ElastiCache for Redis with an SDK abstraction covering all core Redis data structures (strings, hashes, lists, sets, sorted sets), atomic counters, transactions and a credentials provider for direct Redis client access.
 
 #### Cloud Provider Support
 - **AWS only** (initially)
 
 ### v1 (Preview) - Full Capabilities
-**Target Release**: July 2027
+**Target Release**: October 2027
 
 v1 represents the full vision of Celerity with complete multi-cloud capabilities:
 
@@ -184,7 +184,7 @@ The Celerity-wide documentation uses a simple versioning approach:
 
 ### Simple Timeline
 1. **Current**: `v2026-02-27-draft` (single evolving spec)
-2. **v1 Release**: `v2027-05-31` (stable, no draft suffix)
+2. **v1 Release**: `v2027-10-30` (stable, no draft suffix)
 
 This approach allows us to:
 - **Keep it simple** - Single evolving spec per resource type

@@ -3,9 +3,9 @@ title: NoSQL Datastore Schema Management
 description: Managing NoSQL datastore schemas with Celerity
 ---
 
-Celerity makes NoSQL datastore schemas a first-class concern, bridging the gap between development and data teams. With SQL databases, data teams can introspect `information_schema` to discover what exists. With NoSQL databases (DynamoDB, Cosmos DB, Firestore), there is no database-level schema to introspect — the "schema" exists only in application code, scattered across handler functions and tribal knowledge. Data teams building pipelines on top of a DynamoDB table are flying blind.
+Celerity makes NoSQL datastore schemas a first-class concern, bridging the gap between development and data teams. With SQL databases, data teams can introspect `information_schema` to discover what exists. With NoSQL databases (DynamoDB, Cosmos DB, Firestore), there is no database-level schema to introspect. The "schema" exists only in application code, scattered across handler functions and tribal knowledge, and data teams building pipelines on top of a NoSQL table are flying blind.
 
-Celerity solves this by providing a declarative schema definition that serves as a single source of truth for the intended structure of your data, with tooling for validation, type generation, contracts and exports.
+Celerity solves this by providing a declarative schema definition that serves as a single source of truth for the intended structure of your data, with tooling for validation, type generation, contracts, data-shape drift detection and exports.
 
 For SQL database schema management, see the [SQL Database Schema Management](/docs/framework/applications/sql-database-schema-management) guide.
 
@@ -17,7 +17,7 @@ For SQL database schema management, see the [SQL Database Schema Management](/do
 
 ## How It Works
 
-Unlike SQL schema management, there is no migration engine and no DDL. NoSQL databases are schemaless by design — field-level changes do not require database operations. Instead, Celerity's schema management for NoSQL focuses on **visibility, validation, contracts and data team tooling**.
+Unlike SQL schema management, there are no migrations and no DDL. NoSQL databases are schemaless by design, so field-level changes do not require database operations. Instead, Celerity's schema management for NoSQL focuses on **visibility, validation, contracts and data team tooling**.
 
 ```
 Schema YAML (desired state) ──► Schema Manager ──► Diff + Contracts ──► State Update
@@ -33,18 +33,18 @@ The schema manager computes the difference between the current schema (from the 
 | Concern | SQL Database | NoSQL Datastore |
 |---|---|---|
 | Schema enforcement | Database engine enforces schema | Application layer enforces schema (SDK + generated types) |
-| Schema changes | Require DDL (`ALTER TABLE`, etc.) | No database operation needed for field changes |
-| Index changes | DDL (`CREATE INDEX`) — migration engine | Infrastructure operation — Bluelink provider handles |
-| Key changes | `ALTER` / recreate table — migration engine | Table recreation — Bluelink provider (destructive) |
-| Data drift | Not possible (schema enforced) | Common (old items may lack new fields) |
-| Introspection | `information_schema` / `pg_catalog` | None — must scan data |
-| Migration engine | Generates imperative DDL | No DDL to generate for field changes |
+| Schema changes | Require DDL (`ALTER TABLE`, etc.) via migration files | No database operation needed for field changes |
+| Index changes | DDL (`CREATE INDEX`) in a generated migration | Infrastructure operation handled by the Bluelink provider |
+| Key changes | `ALTER` / recreate table via migration files | Table recreation by the Bluelink provider (destructive) |
+| Drift | Structural drift from out-of-band changes, detected by [`celerity schema drift`](/docs/framework/applications/sql-database-schema-management#drift-detection) | Data-shape drift common (old items may lack new fields), detected by [`celerity schema drift`](#drift-detection) via sampled scans |
+| Introspection | `information_schema` / `pg_catalog` | None; data must be scanned |
+| Migrations | Generated + hand-written SQL migration files | No DDL to generate for field changes |
 
 ### Bluelink / Celerity Split
 
 The split between Bluelink and Celerity is different from SQL:
 
-- **Bluelink provider handles**: Table creation, keys, indexes (GSIs), TTL config, capacity settings — these are infrastructure concerns defined in the blueprint `spec`
+- **Bluelink provider handles**: Table creation, keys, secondary indexes, TTL config and capacity settings, the infrastructure concerns defined in the blueprint `spec`
 - **Celerity handles**: Schema definition (the field-level YAML), SDK validation, data team contracts, type codegen, schema state tracking, exports
 
 ## Schema Definition Format
@@ -148,16 +148,16 @@ resources:
         enabled: true
 ```
 
-Note that `keys`, `indexes` and `timeToLive` remain in the blueprint `spec` — they are infrastructure concerns that the Bluelink provider needs to create the DynamoDB table and GSIs. The `schemaPath` points to the field-level schema that describes the _data_, which is a Celerity concern.
+Note that `keys`, `indexes` and `timeToLive` remain in the blueprint `spec`. They are infrastructure concerns that the Bluelink provider needs to create the table and its secondary indexes on the deploy target (e.g. a DynamoDB table and GSIs on AWS). The `schemaPath` points to the field-level schema that describes the _data_, which is a Celerity concern.
 
 ### What Goes Where
 
 | Concern | Where it lives | Why |
 |---|---|---|
-| Keys (partition, sort) | Blueprint `spec.keys` | Infrastructure — provider needs this to create the table |
-| Indexes (GSIs) | Blueprint `spec.indexes` | Infrastructure — provider needs this to create GSIs |
-| TTL config | Blueprint `spec.timeToLive` | Infrastructure — provider needs this to configure TTL |
-| Field schema | External `schemaPath` YAML | Celerity concern — contracts, validation, codegen, data team tooling |
+| Keys (partition, sort) | Blueprint `spec.keys` | Infrastructure: the provider needs this to create the table |
+| Secondary indexes | Blueprint `spec.indexes` | Infrastructure: the provider needs this to create the indexes |
+| TTL config | Blueprint `spec.timeToLive` | Infrastructure: the provider needs this to configure TTL |
+| Field schema | External `schemaPath` YAML | Celerity concern: contracts, validation, codegen, data team tooling |
 | Capacity / billing | `app.deploy.jsonc` | Deploy-target-specific infrastructure config |
 
 ### Schema YAML Format
@@ -253,12 +253,12 @@ fields:
 
 **Design choices:**
 
-- **Field types are Celerity-native**: `string`, `number`, `boolean`, `object`, `array` — mapping naturally to DynamoDB, Cosmos DB and Firestore types. Unlike SQL schemas which use engine-native types (`varchar`, `jsonb`, etc.), NoSQL field types are portable.
+- **Field types are Celerity-native**: `string`, `number`, `boolean`, `object` and `array` map naturally to DynamoDB, Cosmos DB and Firestore types. Unlike SQL schemas which use engine-native types (`varchar`, `jsonb`, etc.), NoSQL field types are portable across providers.
 - **`required` list at the top level**: Required means "every item MUST have this field" from the application's perspective.
 - **`nullable`**: A field can exist but be null. Different from "not required" (field may not exist at all).
-- **`default`**: The value the application should write if none is provided. Not enforced by the database — used for codegen and SDK validation.
+- **`default`**: The value the application should write if none is provided. Not enforced by the database; used for codegen and SDK validation.
 - **Nested objects and arrays**: Recursive structure supporting deeply nested documents.
-- **Data evolution notes in descriptions**: e.g., "Added 2025-03. Items before this date may not have this field." This is a NoSQL reality — old items don't automatically get new fields.
+- **Data evolution notes in descriptions**: e.g., "Added 2025-03. Items before this date may not have this field." This is a NoSQL reality: old items don't automatically get new fields.
 
 ### Field Types
 
@@ -272,7 +272,7 @@ fields:
 
 ### Rich Metadata
 
-The following fields have no effect on validation — they exist for documentation, data governance and tooling:
+The following fields have no effect on validation. They exist for documentation, data governance and tooling:
 
 | Field | Applies to | Description |
 |---|---|---|
@@ -282,6 +282,63 @@ The following fields have no effect on validation — they exist for documentati
 | `classification` | Fields | Data classification label (e.g. `pii`, `sensitive`, `public`) |
 
 These fields make the schema YAML self-documenting for data team consumption. They are included in [schema exports](/docs/cli/reference#export) and used by [schema contracts](#schema-contracts) for dependency tracking.
+
+### Multiple Entities (Single-Table Design)
+
+✅ **Available in v0**
+
+Storing multiple entity types in a single table is a common NoSQL pattern, particularly with DynamoDB. The flat schema format above describes a single item shape; for single-table designs, a schema file can instead declare a `discriminator` field and an `entities` map:
+
+```yaml
+# schemas/app-store.yaml
+description: "Application data. Single-table design with users and sessions."
+owner: "platform-team"
+
+discriminator: "entityType"          # Field whose value selects the entity
+
+fields:                              # Shared fields, present on every entity (keys live here)
+  pk:
+    type: "string"
+    description: "Partition key"
+  sk:
+    type: "string"
+    description: "Sort key"
+  entityType:
+    type: "string"
+    description: "Entity discriminator: user | session"
+
+entities:
+  user:
+    description: "User account"
+    required: ["pk", "sk", "entityType", "email"]
+    fields:
+      email:
+        type: "string"
+        classification: "pii"
+      name:
+        type: "string"
+        nullable: true
+        classification: "pii"
+
+  session:
+    description: "Login session"
+    required: ["pk", "sk", "entityType", "expiresAt"]
+    fields:
+      expiresAt:
+        type: "number"
+        description: "Unix timestamp (s) for TTL"
+      device:
+        type: "string"
+        nullable: true
+```
+
+- The flat format (top-level `fields`/`required` only) remains valid and is the common case; it is an implicit single entity
+- Shared top-level `fields` apply to every entity; each entity adds its own `fields` and `required` list
+- [Type generation](#type-generation) emits one item type per entity plus a discriminated union (`AppStoreItem = UserItem | SessionItem`)
+- [Contracts](#schema-contracts) can scope a datastore dependency to specific entities
+- [Drift detection](#drift-detection) buckets sampled items by discriminator value and reports per entity, flagging items with unknown discriminator values
+
+Entities are supported in external schema files (`schemaPath`) only; the inline `schema` field on the resource keeps the flat format.
 
 ## Schema Evolution
 
@@ -296,11 +353,11 @@ NoSQL doesn't have migrations in the SQL sense. Field-level changes don't requir
 | Change a field type | None | Update schema YAML, warn about existing data non-conformance |
 | Make a field required (was optional) | None | Update schema YAML, warn about existing items missing this field |
 | Make a field optional (was required) | None | Update schema YAML, update state |
-| Add an index (GSI) | Bluelink provider adds GSI | Handled by Bluelink, not the schema manager |
-| Remove an index | Bluelink provider removes GSI | Handled by Bluelink, not the schema manager |
+| Add a secondary index | Bluelink provider adds the index | Handled by Bluelink, not the schema manager |
+| Remove a secondary index | Bluelink provider removes the index | Handled by Bluelink, not the schema manager |
 | Change TTL config | Bluelink provider updates TTL | Handled by Bluelink, not the schema manager |
 | Change keys | **Table recreation** | Bluelink provider (destructive, requires confirmation) |
-| Rename a field | None (at DB level) | Update schema YAML, warn — old items still have old field name |
+| Rename a field | None (at DB level) | Update schema YAML, warn (old items still have the old field name) |
 
 ### Escape Hatch Data Scripts
 
@@ -319,18 +376,18 @@ Examples:
 - `V002__migrate_legacy_roles.py`
 - `V003__cleanup_deprecated_fields.ts`
 
-Scripts can be written in any language — they just need to be executable and accept connection config via environment variables.
+Scripts can be written in any language, as long as they are executable and accept connection config via environment variables.
 
 #### Execution Model
 
 <Callout title="Key difference from SQL" type="warning">
-Unlike SQL escape hatch scripts which are automatically executed during deployment, NoSQL data scripts are **tracked but not auto-executed** during deploy. This is because NoSQL data operations can take hours on large tables (full table scans), may need specific throughput limits to avoid impacting production, and should not block deployment.
+Unlike SQL migration files, which are applied automatically during deployment, NoSQL data scripts are **tracked but not auto-executed** during deploy. This is because NoSQL data operations can take hours on large tables (full table scans), may need specific throughput limits to avoid impacting production, and should not block deployment.
 </Callout>
 
 1. Scripts are tracked by `name + content_hash` in schema state
 2. `celerity schema diff` shows pending scripts
-3. Scripts are executed manually by the developer against the target datastore
-4. Each script's completion is recorded in schema state
+3. Scripts are executed via [`celerity schema scripts run`](/docs/cli/reference#scripts-run), which lists pending scripts, runs them with connection config injected as environment variables, and records each completion in schema state
+4. Scripts executed out-of-band (e.g. through a batch system) can be recorded without running via `celerity schema scripts run --mark-only`
 
 For **local development**: scripts run automatically during `celerity dev run` since local data is ephemeral.
 
@@ -341,6 +398,28 @@ For **local development**: scripts run automatically during `celerity dev run` s
 - Cleaning up deprecated fields
 - Transforming field values (e.g., string-to-number conversion on existing items)
 
+### Evolving a Schema Safely
+
+The core NoSQL evolution workflow is tightening a schema over data that predates it. The safe sequence for adding a required field:
+
+**Step 1: Add the field as optional.** Update the schema YAML with the new field (not in `required`, or `nullable: true`). Deploy. New writes can include the field; old items are unaffected, and nothing enforces its presence yet.
+
+**Step 2: Backfill existing items.** Write a data script (e.g. `V004__backfill_tier.js`) that scans and updates items missing the field, then run it:
+
+```bash
+celerity schema scripts run userStore --env production
+```
+
+**Step 3: Verify with a drift scan.** Confirm the backfill reached everything before tightening:
+
+```bash
+celerity schema drift userStore --env production --sample 10000
+```
+
+The per-field conformance report shows whether any sampled items still lack the field.
+
+**Step 4: Make the field required.** Update `required` in the schema YAML and deploy. Under the default `warn` [validation mode](#runtime-validation-sdk-abstraction) this is safe even if stragglers remain: non-conforming writes are logged, not rejected. Teams running `strict` mode should only take this step once the drift scan reports full conformance, since read-modify-write operations on non-conforming items would otherwise fail.
+
 ## Schema Validation Strategy
 
 ✅ **Available in v0**
@@ -349,24 +428,47 @@ Since the database doesn't enforce schema, Celerity provides a layered validatio
 
 ### Runtime Validation (SDK Abstraction)
 
-The Celerity datastore SDK provides a cloud-agnostic abstraction (`putItem`, `batchWriteItems`, `query`, `scan`, etc.) with comprehensive functionality coverage. When a schema is defined for a datastore, the SDK validates items against it on writes:
+The Celerity datastore SDK provides a cloud-agnostic abstraction (`putItem`, `batchWriteItems`, `query`, `scan`, etc.). When a schema is defined for a datastore, the SDK validates items against it on writes:
 
 - **Type mismatches**: Writing a number where the schema expects a string
 - **Missing required fields**: Omitting a field that's in the `required` list
 - **Unexpected nulls**: Writing null to a field that isn't marked `nullable`
 - **Nested structure**: Validating nested objects and arrays recursively
 
-Developers who use the Celerity SDK get runtime validation automatically — no additional setup needed.
+#### How the Schema Reaches the Runtime
+
+The schema is bound to the deployment at build time, in two parts:
+
+- The transformer embeds a **schema hash** into the datastore resource spec, so a schema change is a spec change: the deploy engine sees the diff and deployment state records exactly which schema version shipped
+- The CLI validates and normalises the schema (YAML to JSON) during the build and includes it as a **generated asset in the build artifacts** (Lambda packages, container images), alongside the resource configuration the CLI already generates. The SDK loads it from the artifact when the datastore client is initialised
+
+Handlers therefore always validate against **the schema they shipped with**: there is no runtime schema fetch, no version skew between handlers and schema state, and `celerity schema apply` never changes the behavior of running handlers. Schema updates reach handlers on their next deployment. A malformed schema fails the build rather than surfacing as a startup error in production, and the SDKs consume pre-validated JSON with no YAML parsing at runtime.
+
+#### Validation Modes
+
+The write-validation behavior is controlled by the `celerity.datastore.validationMode` annotation on the resource:
+
+| Mode | Behavior |
+|---|---|
+| `warn` (default) | Non-conforming writes succeed but are logged with structured details of each violation and surfaced as metrics |
+| `strict` | Non-conforming writes are rejected with a validation error |
+| `off` | No write validation |
+
+The `warn` default is deliberate: tightening a schema (e.g. making a field required) can never break production writes, because existing items that predate the change would otherwise fail read-modify-write operations. Teams that want hard enforcement opt into `strict` once a [drift scan](#drift-detection) confirms conformance. See [Evolving a Schema Safely](#evolving-a-schema-safely) for the workflow.
+
+Because the annotation is set per resource, `off` also serves as an escape hatch for extreme high-throughput write paths: a single hot-path datastore can skip write validation while every other datastore keeps it, and [drift scans](#drift-detection) still observe that datastore's data shape from the outside.
+
+Developers who use the Celerity SDK get runtime validation automatically in `warn` mode, with no additional setup needed.
 
 <Callout title="Direct provider SDK access" type="info">
-Developers who bypass the Celerity SDK and use the native DynamoDB/Cosmos DB/Firestore SDK directly will not get runtime validation. They still get build-time and CI validation via generated types.
+Developers who bypass the Celerity SDK and use the target provider's native SDK directly will not get runtime validation. They still get build-time and CI validation via generated types, and drift scans observe the resulting data shape either way.
 </Callout>
 
 ### Build-Time Validation (Generated Types)
 
 Generated types from `celerity schema codegen` shift schema enforcement to compile/type-check time:
 
-- **TypeScript**: Generated interfaces make the compiler catch type mismatches, missing required fields and incorrect nested structures — regardless of whether the developer uses the Celerity SDK or the native provider SDK.
+- **TypeScript**: Generated interfaces make the compiler catch type mismatches, missing required fields and incorrect nested structures, regardless of whether the developer uses the Celerity SDK or the native provider SDK.
 - **Python**: Generated Pydantic models provide runtime validation, IDE autocomplete and type checking via mypy/pyright.
 
 See [Type Generation](#type-generation) for details and examples.
@@ -379,11 +481,56 @@ See [Type Generation](#type-generation) for details and examples.
 
 | Layer | What it catches | How |
 |---|---|---|
-| Runtime (SDK) | Wrong field types, missing required fields, unexpected nulls | Celerity SDK validates on writes |
+| Runtime (SDK) | Wrong field types, missing required fields, unexpected nulls | Celerity SDK validates on writes, per the configured [validation mode](#validation-modes) (`warn` by default) |
 | Build time (types) | Type mismatches, missing fields, incorrect nesting | Generated types + TypeScript compiler / mypy |
 | CI (`validate`) | Schema YAML errors, stale codegen, contract violations | CLI validation command |
-| Deploy (contracts) | Breaking changes to contracted datastores | Contract evaluation via CI gate |
-| After the fact (conformance) | Data drift in existing items | Sampled scan — _post-v0 / paid tier_ |
+| CI (contracts) | Breaking changes to contracted datastores | Contract evaluation via `celerity schema validate` as a CI gate |
+| After the fact (drift) | Data-shape drift in existing items | [`celerity schema drift`](#drift-detection) sampled scan |
+
+## Drift Detection
+
+✅ **Available in v0**
+
+Since the database doesn't enforce schema, the actual shape of stored data can silently diverge from the schema YAML: items written before a field existed, other services writing to the same table, or writes bypassing validation entirely. For NoSQL, this data-shape drift is the central risk, and it's what keeps the "single source of truth" claim honest.
+
+`celerity schema drift <datastore> --env <env>` performs a point-in-time **sampled scan** of the live datastore (default 1,000 items, configurable with `--sample`) and reports drift in both directions:
+
+1. **Conformance drift** (schema → data): sampled items that don't conform to the schema, with per-field conformance percentages: missing required fields, type mismatches, unexpected nulls
+2. **Unknown-field drift** (data → schema): fields present in sampled items but absent from the schema YAML, the undocumented shape changes introduced by other writers
+
+When [entities](#multiple-entities-single-table-design) are defined, items are bucketed by discriminator value and reported per entity; items with an unknown discriminator value are flagged.
+
+```
+$ celerity schema drift userStore --env production --sample 10000
+
+userStore (datastore: users) — sampled 10,000 of ~1.2M items:
+
+  Conformance drift:
+    tier         87.3%  ⚠ 12.7% of items missing (required field; likely pre-2025-03 items)
+    roles        78.4%  ⚠ 21.6% missing (field added later)
+    tier types   99.8%  ⚠ 0.2% number instead of string (12 items; legacy tier IDs)
+
+  Unknown fields (in data, not in schema):
+    ~ legacySource — present on 4.1% of sampled items
+
+  Contracts affected:
+    ⛔ user-analytics-pipeline — userStore shape drifted (blocking)
+
+  Resolution:
+    - Backfill missing fields: create a data script, then celerity schema scripts run
+    - Adopt unknown fields: add them to schemas/user-store.yaml
+    - Legacy type mismatches: transform via a data script, then re-scan
+```
+
+Drift output is **contract-aware**: drifted datastores are matched against [`schema-contracts.yaml`](#schema-contracts) so the report shows which downstream consumers are affected. The command exits non-zero when drift is found, so a scheduled CI job gives continuous shape tracking.
+
+Because this is a sampled read-only scan, it needs no runtime plumbing: it observes what's actually in the datastore regardless of which SDK or service wrote it, making it the complement to [runtime validation](#runtime-validation-sdk-abstraction), which only sees new writes made through the Celerity SDK.
+
+### Scheduled Drift Monitoring
+
+<Callout title="Future Capability" type="info">
+Hosted, scheduled drift scans with conformance trends over time, full-table scan support and notifications routed to contract owners are projected as part of the paid Schema Service for a future release after v1 (post-July 2027). The v0 `celerity schema drift` command is the free, on-demand building block it is built on. Run it from a scheduled CI job for continuous checking today.
+</Callout>
 
 ## Deploy Pipeline Integration
 
@@ -395,9 +542,9 @@ Schema management is integrated into the `celerity deploy` pipeline:
 celerity deploy
   │
   ├─ Phase 1: Infrastructure
-  │   Transformer converts celerity/datastore → AWS DynamoDB table
-  │   Provider creates/updates table, indexes (GSIs), TTL
-  │   Stabilise (table + all GSIs active)
+  │   Transformer converts celerity/datastore → provider-specific table (e.g. AWS DynamoDB)
+  │   Provider creates/updates table, secondary indexes, TTL
+  │   Stabilise (table + all indexes active)
   │
   ├─ Phase 2: Schema State Update
   │   Read desired schema from YAML
@@ -408,11 +555,13 @@ celerity deploy
   │
   └─ Phase 3: Application
       Deploy handler resources with datastore connection configuration
-      Handlers start with schema validation enabled in the SDK
+      Build artifacts include the normalised schema (hash tracked in the
+      resource spec); handlers start with SDK validation in the
+      configured mode (warn by default)
 ```
 
 <Callout title="Contract validation in v0" type="info">
-In v0, contract validation is not built into the deploy pipeline. Use `celerity schema validate` in your CI pipeline to catch contract violations before deployment — see [Schema Contracts](#schema-contracts) for details.
+In v0, contract validation is not built into the deploy pipeline. Use `celerity schema validate` in your CI pipeline to catch contract violations before deployment. See [Schema Contracts](#schema-contracts) for details.
 
 Deploy-time contract enforcement (blocking deploys and dispatching webhook notifications automatically) is projected as a paid tier feature for a future release after v1 (post-July 2027).
 </Callout>
@@ -429,7 +578,7 @@ When `celerity dev run` starts an application with datastore resources:
 2. Tables are created with keys and indexes from the blueprint spec
 3. Escape hatch data scripts are executed automatically (local data is ephemeral)
 4. Connection environment variables are injected, pointing to the local emulator
-5. The runtime starts with schema validation enabled in the SDK
+5. The runtime starts with SDK schema validation in the configured mode (`warn` by default)
 
 ### Testing
 
@@ -445,13 +594,15 @@ When `celerity dev test` runs an application with datastore resources:
 
 ✅ **Available in v0**
 
-The `celerity schema` command group works for both SQL databases and NoSQL datastores. For full command reference including all flags and configuration options, see the [CLI Reference — schema](/docs/cli/reference#schema).
+The `celerity schema` command group works for both SQL databases and NoSQL datastores. For full command reference including all flags and configuration options, see the [CLI Reference: schema](/docs/cli/reference#schema).
 
 | Command | Description |
 |---|---|
 | [`celerity schema diff`](/docs/cli/reference#diff-1) | Show schema changes, contract impact and pending data scripts |
 | [`celerity schema apply`](/docs/cli/reference#apply) | Update schema state (no database operations for NoSQL) |
-| [`celerity schema validate`](/docs/cli/reference#validate-1) | Validate schema files, contracts and optionally codegen freshness |
+| [`celerity schema drift`](/docs/cli/reference#drift) | Sampled scan of a live datastore for data-shape drift |
+| [`celerity schema scripts run`](/docs/cli/reference#scripts-run) | Run pending data scripts and record their completion |
+| [`celerity schema validate`](/docs/cli/reference#validate-1) | Validate schema files, blueprint key/index references, contracts and optionally codegen freshness |
 | [`celerity schema export`](/docs/cli/reference#export) | Export schema as markdown or JSON Schema |
 | [`celerity schema codegen`](/docs/cli/reference#codegen) | Generate type-safe code from schema definitions |
 | [`celerity schema show`](/docs/cli/reference#show) | Show currently deployed schema for a given environment |
@@ -459,7 +610,7 @@ The `celerity schema` command group works for both SQL databases and NoSQL datas
 
 ### Example: `celerity schema diff`
 
-The diff output for NoSQL datastores shows field-level changes and data conformance warnings. Unlike the SQL diff, there is no auto-generated DDL section — field changes do not require database operations.
+The diff output for NoSQL datastores shows field-level changes and data conformance warnings. Unlike the SQL diff, no migration file is generated, since field changes do not require database operations.
 
 ```
 $ celerity schema diff
@@ -475,7 +626,7 @@ userStore (datastore: users):
 
   Infrastructure changes (handled by Bluelink):
     [+] Index 'tierCreatedIndex' added (fields: [tier, createdAt])
-        This will be created as a DynamoDB GSI by the provider.
+        This will be created as a secondary index by the deploy target's provider.
 
   Data scripts (pending):
     V003__cleanup_deprecated_fields.js (not yet run)
@@ -490,7 +641,7 @@ userStore (datastore: users):
 
 ✅ **Available in v0** (TypeScript, Python)
 
-Generate types from the schema YAML — TypeScript interfaces or Python Pydantic models representing datastore items, plus field name and index constants. No ORM coupling — combine with whatever library you prefer.
+Generate types from the schema YAML: TypeScript interfaces or Python Pydantic models representing datastore items, plus field name and index constants. No ORM coupling. Combine with whatever library you prefer.
 
 For SDK usage examples with generated types, see the [Node.js SDK - Datastore](/docs/node-runtime/datastore) and [Python SDK - Datastore](/docs/python-runtime/datastore) documentation.
 
@@ -568,8 +719,8 @@ export const UserStoreKeys = {
 ```
 
 Note the generated types reflect NoSQL realities:
-- Non-required fields are optional (`?`) — items may not have them
-- Nullable fields are `| null` — items may have the field set to null
+- Non-required fields are optional (`?`), since items may not have them
+- Nullable fields are `| null`, since items may have the field set to null
 - Required fields are always present
 - Index names and key schema are exported as constants for use with query operations
 
@@ -602,13 +753,30 @@ class UserStoreItem(BaseModel):
     email: str
     name: str
     # Optional fields
-    tier: Optional[str] = None
+    tier: Optional[str] = "free"
     is_active: Optional[bool] = None
-    roles: list[str] = Field(default_factory=list)
+    roles: Optional[list[str]] = None
     profile: Optional[UserStoreProfile] = None
     last_login: Optional[float] = None
     expires_at: Optional[float] = None
 ```
+
+### Defaults
+
+Schema `default` values are applied at item construction time by generated code and are never silently injected by the SDK on write. Python surfaces them directly as Pydantic field defaults (`tier: Optional[str] = "free"` above). TypeScript types cannot carry values, so defaults are exported as a constant for explicit use:
+
+```typescript
+/** Schema defaults */
+export const UserStoreDefaults = {
+  tier: "free",
+} as const;
+```
+
+A field that is absent stays absent across languages: optional fields without an explicit default generate as `None`/`?` rather than materialising empty values, so an item round-tripped through one language's generated types has the same shape in the other.
+
+### Entities
+
+When a schema defines [entities](#multiple-entities-single-table-design), codegen emits one item type per entity plus a discriminated union, so `AppStoreItem = UserItem | SessionItem` in TypeScript and a Pydantic discriminated union (on the `discriminator` field) in Python, along with per-entity field constants.
 
 ### Go
 
@@ -626,9 +794,9 @@ class UserStoreItem(BaseModel):
 
 Schema contracts allow data teams to declare which datastores they depend on, so they are automatically informed when schema changes affect them. Any structural change to a watched datastore's schema triggers the contract's policy.
 
-The schema manager already knows exactly what changed (fields added, removed, type changes, etc.), so contracts don't need to duplicate that information. They simply declare: "I care about this datastore — tell me when its schema changes."
+The schema manager already knows exactly what changed (fields added, removed, type changes, etc.), so contracts don't need to duplicate that information. They simply declare: "I care about this datastore. Tell me when its schema changes."
 
-Contracts work the same way for SQL databases — see [SQL Database Schema Contracts](/docs/framework/applications/sql-database-schema-management#schema-contracts).
+Contracts work the same way for SQL databases. See [SQL Database Schema Contracts](/docs/framework/applications/sql-database-schema-management#schema-contracts).
 
 ### Contracts File Format
 
@@ -657,9 +825,22 @@ contracts:
 | `name` | Human-readable contract name |
 | `owner` | Team or individual that owns the downstream dependency |
 | `dependencies[].datastore` | Name of the `celerity/datastore` resource in the blueprint |
+| `dependencies[].entities` | Optional list of [entities](#multiple-entities-single-table-design) to watch, for single-table datastores. Omitted = whole datastore |
 | `dependencies[].policy` | `blocking` (non-zero exit code) or `notify` (warning only, zero exit code) |
 
-When a schema change touches a datastore listed in a contract, the diff output includes the full details of what changed — fields added, removed, type changes, etc. The contract itself just identifies which datastores matter.
+For single-table datastores, scoping a dependency to specific entities keeps contracts quiet when unrelated entities change:
+
+```yaml
+contracts:
+  - name: "session-analytics"
+    owner: "data-team"
+    dependencies:
+      - datastore: "appStore"
+        entities: ["session"]    # Only fires when the session entity's schema changes
+        policy: "blocking"
+```
+
+When a schema change touches a datastore listed in a contract, the diff output includes the full details of what changed: fields added, removed, type changes, etc. The contract itself just identifies which datastores matter.
 
 ### Validation and CI Integration
 
@@ -670,7 +851,7 @@ Contract checking is built into `celerity schema validate`. When a `schema-contr
 - **`blocking` contracts affected**: `validate` exits with a **non-zero exit code**, failing your CI pipeline
 - **`notify` contracts affected**: `validate` prints warnings but does not affect the exit code
 
-This means a single `celerity schema validate` step in CI covers everything — schema correctness, field type validation, and contract impact:
+This means a single `celerity schema validate` step in CI covers everything: schema correctness, field type validation, and contract impact:
 
 ```yaml
 # Example CI step (GitHub Actions)
@@ -685,7 +866,7 @@ Contract impact is also shown in `celerity schema diff` output, giving visibilit
 ### Deploy-Time Enforcement and Webhook Notifications
 
 <Callout title="Future Capability" type="info">
-In v0, contract validation runs via `celerity schema validate` as a CI gate — it does not run automatically during `celerity deploy`.
+In v0, contract validation runs via `celerity schema validate` as a CI gate; it does not run automatically during `celerity deploy`.
 
 Deploy-time contract enforcement (automatically blocking deploys when contracts are affected) and webhook notifications (dispatching to Slack, email or custom endpoints when contracts fire) are projected as paid tier features for a future release after v1 (post-July 2027). These are future projections, not committed features.
 
@@ -711,44 +892,9 @@ Pipeline tools would integrate with this API to auto-generate configs, sync data
 Auto-sync to data catalog services (AWS Glue Data Catalog, DataHub, Atlan, etc.) is projected as a paid tier feature for a future release after v1 (post-July 2027).
 </Callout>
 
-## Data Conformance
-
-<Callout title="Future Capability" type="info">
-Data conformance checking is a unique NoSQL concern. Since the database doesn't enforce schema, old items may not conform to the current schema definition (missing fields, wrong types, etc.).
-
-A `celerity schema conformance` command is projected for a future release. It would perform a sampled scan of the live datastore and compare item structure against the schema:
-
-```
-$ celerity schema conformance userStore --env production --sample 10000
-
-userStore (datastore: users) — sampled 10,000 of ~1.2M items:
-
-  Field conformance:
-    id          100.0%  ✓ (all items have this field)
-    createdAt   100.0%  ✓
-    email       100.0%  ✓
-    name        100.0%  ✓
-    tier         87.3%  ⚠ (12.7% of items missing — likely pre-2025-03 items)
-    isActive     95.1%  ⚠
-    roles        78.4%  ⚠ (21.6% missing — field added later)
-    profile      62.0%  (nullable, so absence is expected)
-    lastLogin    89.7%  (nullable)
-    expiresAt     3.2%  (nullable — only trial accounts)
-
-  Type conformance:
-    tier: 99.8% string, 0.2% number (12 items have numeric tier IDs — legacy data)
-
-  Recommendation:
-    Run V001__backfill_tier_field.js to backfill tier on 127,000 items
-    Investigate 12 items with numeric tier values
-```
-
-This is explicitly opt-in and expensive — data teams or developers run it when they need to understand data quality, not as part of every deploy. This is projected as a paid tier feature for a future release after v1 (post-July 2027).
-</Callout>
-
 ## For Data Teams
 
-The schema YAML files serve as always-accurate documentation because they are what Celerity uses for validation, type generation and contract evaluation. For NoSQL datastores, this is even more critical than for SQL databases — there is **no database-level schema to introspect**. The schema YAML is the only reliable source of truth for what fields exist, their types, and who owns them.
+The schema YAML files serve as always-accurate documentation because they are what Celerity uses for validation, type generation and contract evaluation. For NoSQL datastores, this is even more critical than for SQL databases because there is **no database-level schema to introspect**. The schema YAML is the only reliable source of truth for what fields exist, their types, and who owns them.
 
 Data teams benefit from:
 
@@ -756,4 +902,5 @@ Data teams benefit from:
 - **Schema exports** (`celerity schema export --format markdown`) generate human-readable documentation
 - **Git history** of schema files (`git log schemas/user-store.yaml`) provides full change history with PR review
 - **Contract definitions** in `schema-contracts.yaml` let data teams declare and protect their dependencies
+- **Drift scans** (`celerity schema drift`) report per-field conformance of live data against the schema, with affected contracts called out
 - **Machine-readable exports** (`celerity schema export --format json-schema`) integrate with pipeline tools

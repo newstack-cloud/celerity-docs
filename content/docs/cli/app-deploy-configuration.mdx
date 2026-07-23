@@ -29,6 +29,7 @@ This file is expected to contain the following structure:
 
 ```javascript
 {
+  "appName": "<app-name>",
   "deployTarget": {
     "name": "<deploy-target-name>",
     "appEnv": "<app-environment>",
@@ -44,6 +45,12 @@ This file is expected to contain the following structure:
   }
 }
 ```
+
+### App Name
+
+`appName` is a **required** field that holds the name of the application. It is used for resource naming and configuration store paths (for example, the SSM parameter path prefix `/celerity/<appName>/<configName>` when deploying to AWS) and is surfaced to the Celerity transformer as the `celerity.appName` context variable.
+
+The app name must start with a letter or digit and contain only letters, digits, hyphens, and underscores (matching the pattern `^[a-zA-Z0-9][a-zA-Z0-9-_]*$`).
 
 ### Deploy Target
 
@@ -91,6 +98,7 @@ The `blueprintVariables` section provides overrides for variables defined in the
 
 ```javascript
 {
+  "appName": "my-app",
   "deployTarget": {
     "name": "aws",
     "appEnv": "production",
@@ -116,6 +124,7 @@ The `blueprintVariables` section provides overrides for variables defined in the
 ```
 
 In this example:
+- `my-app` is the application name used for resource naming and configuration store paths.
 - `accessKeyId` and `secretAccessKey` are sent to the AWS provider for authentication.
 - `aws.ecs.containerService`, `aws.ecs.compute`, and `aws.sqs.messageRetentionPeriod` are sent to the Celerity transformer for resource-specific deployment configuration.
 - `region` is a blueprint variable override.
@@ -127,6 +136,7 @@ The Celerity CLI automatically converts the app deploy configuration to the [Blu
 
 | App Deploy Config | Bluelink Deploy Config |
 |---|---|
+| `appName` | `contextVariables.celerity.appName` |
 | `deployTarget.name` | `transformers.celerity.deployTarget` |
 | `deployTarget.appEnv` | `contextVariables.appEnv` |
 | `deployTarget.config` (prefixed keys) | `transformers.celerity.*` |
@@ -152,6 +162,7 @@ When you want to commit configuration in the app deploy configuration file to ve
 
 ```javascript title="app.deploy.jsonc"
 {
+  "appName": "my-app",
   "deployTarget": {
     "name": "aws",
     "appEnv": "production",
@@ -179,6 +190,7 @@ You can then copy this template file to the final file used with the Celerity CL
 
 ```javascript title="app.deploy.template.jsonc"
 {
+  "appName": "my-app",
   "deployTarget": {
     "name": "aws",
     "appEnv": "production",
