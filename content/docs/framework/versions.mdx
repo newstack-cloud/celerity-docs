@@ -145,15 +145,18 @@ v1 represents the full vision of Celerity with complete multi-cloud capabilities
 - **AWS** - Full support
 - **Azure** - Full support
 - **Google Cloud** - Full support
-- **On-premise** - No support planned for v1, considered for the future.
 
 ### v1+ (Future) - Post-v1 Features
 
-v1+ represents features that are planned for after the v1 release in July 2027. These are features that have been designed but are not part of the v1 roadmap.
+v1+ represents features that are planned for after the v1 release in July 2027. These are features that have been designed and or considered of but are not part of the v1 roadmap.
 
 #### Planned Resource Types
 
 - `celerity/channel` - An opt-in real-time channel layer on top of WebSocket APIs providing pub/sub messaging, presence tracking, per-channel auth, and rate limiting. Channels are declared as resources in the blueprint and linked from a `celerity/api` with the WebSocket protocol. The runtime handles subscription management, message fan-out, and cross-node delivery in cluster deployments. A client SDK (`@celerity-sdk/channels`) provides channel subscription, presence, and automatic re-subscription on reconnect.
+
+#### Planned Provider Support
+
+- **Self-hosted/on-premise** - Support for self-hosted deployments is planned for v1+ with a focus on a Kubernetes-based deployment of the Celerity stack, control plane and your workloads powered by open source software.
 
 ## Documentation Versioning Strategy
 
