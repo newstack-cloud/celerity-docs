@@ -1,0 +1,153 @@
+---
+title: Developing Applications
+description: The end-to-end workflow for building and shipping a Celerity application
+---
+
+## Overview
+
+This guide walks through the full lifecycle of a Celerity application with the
+CLI, from scaffolding a project to running it locally and deploying it. Each
+step links to the [command reference](/docs/cli/reference) for the complete set
+of flags.
+
+The typical flow is:
+
+```
+init  →  dev run / dev test  →  build  →  stage  →  deploy  →  config
+```
+
+<Callout title="Prerequisites">
+Install Celerity via the framework [Quick Start](/docs/framework). This installs
+the CLI, the Bluelink Deploy Engine, and a set of core Deploy Engine plugins.
+The Deploy Engine runs as a background service; the CLI talks to it over a unix
+socket (default) or TCP — see the [global options](/docs/cli/reference#global-options).
+</Callout>
+
+## 1. Scaffold a project
+
+Generate a new project from a template. You are prompted for a language
+(Python or Node.js/TypeScript in v0) unless you pass `--language`.
+
+```bash
+celerity init --template simple-api my-app
+cd my-app
+```
+
+See [`init`](/docs/cli/reference#init) for the available options.
+
+## 2. Run it locally
+
+`dev run` stands up the full local environment in containers — the Celerity
+runtime hosting your handlers, plus emulators for the infrastructure your
+blueprint declares (a queue/topic/cache/config store on Valkey, object storage
+on MinIO, a NoSQL datastore on DynamoDB Local, a SQL database on PostgreSQL) —
+and wires them together.
+
+```bash
+celerity dev run
+```
+
+The API is served on `http://localhost:8080` by default (override with
+`--port`). Editing handler source **reloads the runtime automatically**. If your
+blueprint declares a JWT auth guard, the dev environment substitutes a local
+dev auth server for the issuer so you can obtain tokens locally; disable this
+with `--no-local-auth`.
+
+Useful companions while it runs:
+
+- [`celerity dev status`](/docs/cli/reference#status) — container status, handlers, port, uptime.
+- [`celerity dev logs`](/docs/cli/reference#logs) — stream/filter runtime logs by handler and level.
+- [`celerity dev stop`](/docs/cli/reference#stop) — tear the environment down.
+
+## 3. Test it
+
+`dev test` runs your test suites with the right infrastructure brought up and
+torn down automatically:
+
+```bash
+celerity dev test --suite unit          # no containers (mocks/in-memory)
+celerity dev test --suite integration   # dependency emulators only
+celerity dev test --suite api           # full stack incl. the app container
+```
+
+The runner is auto-detected (vitest/jest/ava for Node.js, pytest for Python) and
+test ports are isolated from `dev run`, so both can run at once. See
+[`dev test`](/docs/cli/reference#test).
+
+## 4. Build deployable artifacts
+
+`build` packages your application for the deploy target (AWS serverless in v0:
+a shared app-code archive, an entry point, and dependency layers) and writes a
+build manifest to `.celerity/build-manifest.json`.
+
+```bash
+celerity build
+```
+
+You rarely need to run this by hand — `stage` and `deploy` run it automatically
+unless you pass `--skip-build`. Build behaviour is driven by the
+[app deploy configuration](/docs/cli/app-deploy-configuration). See
+[`build`](/docs/cli/reference#build).
+
+## 5. Stage changes
+
+`stage` computes a **change set** — the difference between your blueprint and the
+current state of an instance (or empty state for a new deployment) — and presents
+it for review before anything is applied.
+
+```bash
+# Stage a new deployment
+celerity stage
+
+# Stage against an existing instance
+celerity stage --instance-name my-app
+```
+
+The change set is streamed and grouped so you can see exactly what will be
+created, updated, deleted, or replaced. Drift (external changes to already-
+deployed resources) is surfaced here too. See [`stage`](/docs/cli/reference#stage).
+
+## 6. Deploy
+
+`deploy` applies a change set and streams deployment events in real time. You
+can stage and deploy in one step with `--stage`:
+
+```bash
+# Stage, review, then deploy
+celerity deploy --stage --instance-name my-app
+
+# Deploy a specific, already-staged change set
+celerity deploy --change-set-id <id> --instance-name my-app
+```
+
+For CI/CD, `--auto-approve` skips the review prompt, and
+`--auto-approve-code-only` approves automatically **only** when the change set
+touches nothing but code-hosting resources (no creates, deletes, or
+infrastructure changes). `--json` implies non-interactive mode. See
+[`deploy`](/docs/cli/reference#deploy).
+
+<Callout title="Tearing down">
+Use [`celerity destroy --stage --instance-name my-app`](/docs/cli/reference#destroy)
+to stage and review the removal of an instance's resources before executing it.
+</Callout>
+
+## 7. Manage configuration and secrets
+
+`config` manages a deployed application's runtime configuration and secrets
+(backed by SSM Parameter Store and Secrets Manager on AWS). Run it interactively,
+or use subcommands for scripting:
+
+```bash
+celerity config                                   # interactive browser
+celerity config set my-store API_KEY --secret     # masked prompt
+celerity config list my-store
+```
+
+Values are namespaced per environment via `--env`. See the
+[`config`](/docs/cli/reference#config) reference.
+
+## Where next
+
+- [Command reference](/docs/cli/reference) — every command and flag.
+- [App deploy configuration](/docs/cli/app-deploy-configuration) — the `app.deploy.jsonc` format.
+- [CLI configuration](/docs/cli/configuration) — config precedence and the CLI config file.

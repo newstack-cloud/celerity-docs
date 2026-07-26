@@ -33,7 +33,7 @@ Relative paths are expected to be relative to the current working directory.
 The path to the app deploy configuration file that contains blueprint variable overrides and configuration for the target environment for a Celerity application.
 This file is expected to be in the JSON with Commas and Comments format described in the [App Deploy Configuration](/docs/cli/app-deploy-configuration) doc.
 
-This file is used by the `stage-changes`, `deploy`, `destroy` and `validate` commands.
+This file is used by the `stage`, `deploy`, `destroy` and `validate` commands.
 
 ### `--connect-protocol`
 
@@ -210,6 +210,20 @@ The user-defined name of an existing blueprint instance to stage changes for.
 Stage changes for destroying an existing instance. Requires `--instance-id` or
 `--instance-name`.
 
+### `--skip-drift-check`
+
+**Type**: `boolean`
+
+Skip detection of external resource changes (drift) during staging.
+
+### `--json`
+
+**Type**: `boolean`
+
+Output the result as a single JSON object when the operation completes. Implies
+non-interactive mode (no TUI, no streaming text output), which is useful for
+CI/CD pipelines and scripting.
+
 ## `deploy`
 
 Applies a change set to a blueprint instance (new or existing) and streams
@@ -262,6 +276,22 @@ Automatically roll back on deployment failure.
 
 Override a drift check that would otherwise block the deployment.
 
+### `--skip-prompts`
+
+**Type**: `boolean`
+
+Skip interactive prompts and use flag values directly. Requires all necessary
+flags to be provided (`--instance-name` or `--instance-id`, and either
+`--stage` or `--change-set-id`).
+
+### `--json`
+
+**Type**: `boolean`
+
+Output the result as a single JSON object when the operation completes. Implies
+non-interactive mode. In `--json` mode staged changes are auto-approved, so it
+is intended for CI/CD.
+
 ## `destroy`
 
 Destroys a deployed blueprint instance, removing its resources, child
@@ -298,11 +328,43 @@ Automatically approve the staged destroy. Only applicable with `--stage`.
 
 Override a state/drift conflict that would otherwise block the destroy.
 
+### `--skip-prompts`
+
+**Type**: `boolean`
+
+Skip interactive prompts and use flag values directly. Requires all necessary
+flags to be provided (`--instance-name` or `--instance-id`, and either
+`--stage` or `--change-set-id`).
+
+### `--json`
+
+**Type**: `boolean`
+
+Output the result as a single JSON object when the operation completes. Implies
+non-interactive mode, with staged destroy changes auto-approved.
+
 ## `init`
 
 This command initialises a new Celerity application project.
 It will take you through a series of prompts to create a new application project.
 You can provide command line options to skip parts of the interactive process of setting up a new application project.
+
+```bash
+celerity init [--template <template>] [--language <language>] [project-name]
+```
+
+The optional `project-name` argument is the directory the new project is created
+in. When omitted, you are prompted for it (or the current directory is used).
+
+### `--template`
+
+**Environment Variable**: `CELERITY_CLI_INIT_TEMPLATE`
+
+**Configuration Key**: `initTemplate`
+
+The project template to generate from (for example `simple-api`). Templates
+scaffold a ready-to-run application with a blueprint and handler code. When
+omitted, you are prompted to choose a template.
 
 ### `--language`
 
