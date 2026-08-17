@@ -95,8 +95,9 @@ Appropriate security groups are managed by the VPC to schedule link.
 
 When a VPC is not defined for the container-backed AWS, Google Cloud and Azure target environments, the default VPC for the account will be used.
 
-VPC annotations and links do not have any effect for serverless environments.
-Serverless schedules are no more than configuration of a schedule trigger for a serverless function.
+Serverless schedules are no more than configuration of a schedule trigger for a serverless function, so the schedule itself is not deployed to a VPC.
+A VPC linked to the schedule instead places the schedule's handlers, and `celerity.schedule.vpc.subnetType` selects the subnet tier for them; `celerity.schedule.vpc.ingressType` has no effect.
+See [placing an application component in a VPC](/docs/framework/applications/resources/celerity-vpc#placing-an-application-component-in-a-vpc) for the precedence rules and how an individual handler opts out.
 
 <Callout title="Warning" type="warning">
 When a VPC is not defined for container-backed cloud environments, annotations in the `celerity/schedule` will apply to the default VPC for the account.
@@ -104,7 +105,9 @@ When a VPC is not defined for container-backed cloud environments, annotations i
 
 <FieldHeading fieldName="celerity.schedule.vpc.subnetType" />
 
-🚀 **Planned for v1** - This annotation will be applicable when schedules can be deployed to a containerised environment, it may become available in a future v0 evolution.
+✅ **Available in v0** for serverless targets, where it selects the subnet tier for the handlers that inherit the schedule's VPC placement. Overridden by a handler's own `celerity.handler.vpc.subnetType` annotation.
+
+🚀 **Planned for v1** - Placement of the schedule application itself when schedules can be deployed to a containerised environment, it may become available in a future v0 evolution.
 
 The kind of subnet that the schedule application should be deployed to.
 
@@ -118,7 +121,30 @@ string
 
 **default value**
 
-`public` - When a VPC links to a schedule, the schedule will be deployed to a public subnet.
+`private` for serverless targets, matching the default for a handler linked to a VPC directly. See [subnet placement in serverless environments](/docs/framework/applications/resources/celerity-vpc#subnet-placement-in-serverless-environments) for why `private` is the right default for a VPC-attached function.
+
+`public` - When a VPC links to a containerised schedule, the schedule will be deployed to a public subnet.
+
+___
+
+<FieldHeading fieldName="celerity.schedule.vpc.egress" />
+
+The outbound destinations the schedule's handlers are allowed to reach outside the VPC.
+This narrows outbound access; it is not needed to enable it, since a VPC-attached handler already reaches the internet wherever the VPC provides an outbound path. See [outbound internet access](/docs/framework/applications/resources/celerity-vpc#outbound-internet-access) for which [presets](/docs/framework/applications/resources/celerity-vpc#preset) provide one.
+
+✅ **Available in v0** for serverless targets, where it applies to every handler that inherits the schedule's VPC placement. Overridden by a handler's own `celerity.handler.vpc.egress` annotation.
+
+**type**
+
+string
+
+**allowed values**
+
+`internet` | `none` | a comma-separated list of CIDR ranges
+
+**default value**
+
+Unset, which resolves to `internet` where the VPC provides an outbound path and `none` where it does not.
 
 ___
 
@@ -168,9 +194,11 @@ string | null
 Depending on the target environment, a schedule application may be deployed to a VPC.
 When a schedule is combined into a single application with an API, consumer or other triggers for handlers,
 a single VPC will be created for the application and all resource types that make up the application will be deployed into the VPC.
-When deploying to serverless environments, a schedule is a placeholder for a connection between a scheduler, possible queue or pub/sub subscription and a handler, which does not require a VPC.
+When deploying to serverless environments, a schedule is a placeholder for a connection between a scheduler, possible queue or pub/sub subscription and a handler, which does not require a VPC of its own; the link instead places the schedule's handlers in the VPC.
 
-🚀 **Planned for v1** - This link will be applicable when schedules can be deployed to a containerised environment, it may become available in a future v0 evolution.
+✅ **Available in v0** for serverless targets, where the link places the schedule's handlers. See [placing an application component in a VPC](/docs/framework/applications/resources/celerity-vpc#placing-an-application-component-in-a-vpc).
+
+🚀 **Planned for v1** - Placement of the schedule application itself when schedules can be deployed to a containerised environment, it may become available in a future v0 evolution.
 
 [Read more about Celerity VPCs](/docs/framework/applications/resources/celerity-vpc)
 

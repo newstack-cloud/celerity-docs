@@ -476,7 +476,30 @@ string
 
 **default value**
 
-`private`
+`private`, unless the handler inherits its placement from a `celerity/api`, `celerity/consumer` or `celerity/schedule` that sets its own subnet-type annotation, in which case that tier applies. This annotation always overrides an inherited tier.
+
+<FieldHeading fieldName="celerity.handler.vpc.egress" />
+
+The outbound destinations a VPC-attached handler is allowed to reach outside the VPC.
+This narrows the handler's outbound access; it is not needed to enable it, since a VPC-attached handler already reaches the internet wherever the VPC provides an outbound path. See [outbound internet access](/docs/framework/applications/resources/celerity-vpc#outbound-internet-access) for which [presets](/docs/framework/applications/resources/celerity-vpc#preset) provide one.
+
+Setting this to `internet` or a CIDR list in a VPC that provides no outbound path is reported as an error before anything is deployed. Leaving it unset is never an error.
+
+This does not affect what the handler can reach *inside* the VPC, which is determined by the handler's links.
+
+✅ **Available in v0**
+
+**type**
+
+string
+
+**allowed values**
+
+`internet` | `none` | a comma-separated list of CIDR ranges
+
+**default value**
+
+Unset, which resolves to `internet` where the VPC provides an outbound path and `none` where it does not. If the handler inherits its placement from a `celerity/api`, `celerity/consumer` or `celerity/schedule` that sets its own egress annotation, that value applies. This annotation always overrides an inherited value.
 
 ## Outputs
 
@@ -546,6 +569,9 @@ When a handler is linked to a workflow, it will be used to execute a step in the
 
 When deploying handlers as serverless functions, individual handlers may be deployed to specific VPCs for private access.
 When handlers are a part of a containerised or custom server application, the VPC associated with the application will be used and any links from VPCs to handlers will be ignored.
+
+A handler is also placed in a VPC when the `celerity/api`, `celerity/consumer` or `celerity/schedule` it is linked to is placed in one. See [placing an application component in a VPC](/docs/framework/applications/resources/celerity-vpc#placing-an-application-component-in-a-vpc).
+A direct link from a `celerity/vpc` to the handler takes precedence over any inherited placement, and a handler belongs to at most one VPC.
 
 ✅ **Available in v0**
 

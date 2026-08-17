@@ -83,6 +83,12 @@ When `mode` is `referenced`:
 - Target-environment networking options in the [app deploy configuration](#app-deploy-configuration) (for example `aws.vpc.cidrBlock`) are ignored, for the same reason.
 - The referenced VPC must be one that Celerity created in `managed` mode, identified by the Celerity VPC `name`. Referencing a VPC provisioned outside of Celerity is not supported by this field.
 
+Celerity does not provision or modify the **shared network topology** of a referenced VPC: its subnets, routing, gateways and network access controls belong to the application that declared it in `managed` mode.
+It does create the network access controls that this application's own handlers, databases and caches need, scoped to this application so they are never adopted or removed by the VPC's owner or by another application sharing it.
+This is what allows each application sharing a VPC to be deployed and destroyed independently.
+
+Sharing a VPC is supported within a single cloud account. Cross-account sharing is not supported, since an application would need permission to create network access controls in an account it does not deploy into.
+
 ✅ **Available in v0**
 
 **allowed values**
@@ -134,7 +140,12 @@ VPC resources can not be linked to from other resources.
 
 When a VPC resource links to a `celerity/api` resource, the VPC will be used to place the API in the target environment when the API is deployed as a containerised application.
 
-🚀 **Planned for v1** - A VPC resource will be able to link to `celerity/api` resources when containerised deployments are supported, this will likely be available in a future v0 evolution.
+In serverless environments the API itself is managed by the cloud provider and is never deployed to a customer-managed network, so the placement [cascades to the API's handlers](#placing-an-application-component-in-a-vpc): every handler linked to the API is attached to the VPC as though it were linked to the `celerity/vpc` directly.
+The `celerity.api.vpc.egress` annotation narrows their outbound access, and on serverless targets that support it the `celerity.api.vpc.subnetType` annotation selects the subnet tier.
+
+✅ **Available in v0** for serverless targets, where the link places the API's handlers.
+
+🚀 **Planned for v1** - Placement of the API itself when containerised deployments are supported, this will likely be available in a future v0 evolution.
 
 [Read more about Celerity APIs](/docs/framework/applications/resources/celerity-api)
 
@@ -145,26 +156,18 @@ A link between a VPC and handler will have no effect on handlers in a containeri
 
 ✅ **Available in v0**
 
-#### Subnet placement in serverless environments
-
-The handler's `celerity.handler.vpc.subnetType` annotation selects which subnet a VPC-attached serverless function is placed in. It accepts `public` or `private` and **defaults to `private`**.
-
-It is only considered by serverless targets that support placing functions in specific subnets of a customer-managed VPC, which is currently limited to **AWS Lambda**. It has no effect on other serverless targets: Google Cloud (Cloud Functions / Cloud Run) attaches functions to a VPC through a Serverless VPC Access connector and egress settings, and Azure Functions use VNet integration — neither offers a public/private subnet choice for the function.
-
-On AWS, a VPC-attached Lambda never receives a public IP address, which makes subnet choice behave differently than it does for a typical instance:
-
-- **`private`** (default): the function can reach private resources in the VPC (such as a linked `celerity/sqlDatabase` or `celerity/cache`) and, where the VPC provides a NAT gateway, the public internet. This default requires the VPC to provide a private subnet; on the `public` and `light-public` [presets](#preset), which provision none, set `subnetType` to `public` explicitly.
-- **`public`**: the function can reach private resources in the VPC but has **no outbound internet access**. A VPC-attached function has no public IP, so it cannot use the public subnet's internet gateway. This is the appropriate choice for cost-optimised VPCs that are provisioned without a NAT gateway, such as the `public` and `light-public` [presets](#preset): the function reaches other in-VPC resources, for example a database or cache secured by security groups without incurring NAT gateway charges. In a VPC that already provisions a NAT gateway (such as the `standard` preset), `public` offers no advantage over `private`.
-
-A handler that is not linked to a VPC is not VPC-attached and retains full outbound internet access by default.
-
 [Read more about Celerity handlers](/docs/framework/applications/resources/celerity-handler)
 
 ### `celerity/consumer`
 
 When a VPC resource links to a `celerity/consumer` resource, the VPC will be used to place the consumer in the target environment when the consumer is deployed as a containerised application.
 
-🚀 **Planned for v1** - A VPC resource will be able to link to `celerity/consumer` resources when containerised deployments are supported, this will likely be available in a future v0 evolution.
+In serverless environments the consumer is a binding between an event source and a handler with no compute of its own, so the placement [cascades to the consumer's handlers](#placing-an-application-component-in-a-vpc).
+The `celerity.consumer.vpc.egress` annotation narrows their outbound access, and on serverless targets that support it the `celerity.consumer.vpc.subnetType` annotation selects the subnet tier.
+
+✅ **Available in v0** for serverless targets, where the link places the consumer's handlers.
+
+🚀 **Planned for v1** - Placement of the consumer application itself when containerised deployments are supported, this will likely be available in a future v0 evolution.
 
 [Read more about Celerity consumers](/docs/framework/applications/resources/celerity-consumer)
 
@@ -172,7 +175,12 @@ When a VPC resource links to a `celerity/consumer` resource, the VPC will be use
 
 When a VPC resource links to a `celerity/schedule` resource, the VPC will be used to place the schedule application component in the target environment when the schedule is deployed as a containerised application.
 
-🚀 **Planned for v1** - A VPC resource will be able to link to `celerity/schedule` resources when containerised deployments are supported, this will likely be available in a future v0 evolution.
+In serverless environments the schedule is a binding between a scheduler and a handler with no compute of its own, so the placement [cascades to the schedule's handlers](#placing-an-application-component-in-a-vpc).
+The `celerity.schedule.vpc.egress` annotation narrows their outbound access, and on serverless targets that support it the `celerity.schedule.vpc.subnetType` annotation selects the subnet tier.
+
+✅ **Available in v0** for serverless targets, where the link places the schedule's handlers.
+
+🚀 **Planned for v1** - Placement of the schedule application component itself when containerised deployments are supported, this will likely be available in a future v0 evolution.
 
 [Read more about Celerity schedules](/docs/framework/applications/resources/celerity-schedule)
 
@@ -199,6 +207,107 @@ When a VPC resource links to a `celerity/sqlDatabase` resource, the VPC will be 
 ✅ **Available in v0**
 
 [Read more about Celerity SQL databases](/docs/framework/applications/resources/celerity-sql-database)
+
+## Placing an application component in a VPC
+
+Which resource carries the compute depends on the target environment.
+In containerised environments the `celerity/api`, `celerity/consumer` and `celerity/schedule` resources are the unit of compute and the VPC places them directly.
+In serverless environments they are trigger bindings with no compute of their own, and the handlers are the compute.
+
+So that the same blueprint expresses "run this component's compute in this network" on either target, a VPC linked to a `celerity/api`, `celerity/consumer` or `celerity/schedule` in a serverless environment places **the handlers linked to that component**.
+Each inheriting handler is attached to the VPC exactly as though it were linked to the `celerity/vpc` directly.
+
+This means you can place an application in a VPC by labelling the components you already declare in the blueprint, rather than by selecting the handlers, which are commonly derived from code:
+
+```blueprintlang
+resource appVpc: celerity/vpc {
+    spec {
+        name = "app-network"
+        preset = "standard"
+    }
+
+    select by label {
+        network = "app-network"
+    }
+}
+
+resource ordersApi: celerity/api {
+    metadata {
+        labels = {
+            network = "app-network"
+        }
+    }
+
+    spec {
+        protocols = ["http"]
+    }
+}
+```
+
+A label on the component is all that is required. The following rules apply to inherited placements:
+
+- A `celerity/vpc` linked to a handler **directly** takes precedence; the handler does not inherit a placement from any component it is bound to. This is how a single handler opts into a different VPC, or out of the component's placement settings.
+- A handler belongs to at most one VPC. Inheriting **different** VPCs from more than one component (for example an API placed in one VPC and a consumer placed in another, both linked to the same handler) is an error. Link that handler to the intended `celerity/vpc` directly to resolve it.
+- A component's `celerity.<component>.vpc.*` placement annotations apply to every handler inheriting its placement, and a handler's own `celerity.handler.vpc.*` annotation of the same name overrides it. Which annotations exist depends on the target environment; see [outbound internet access](#outbound-internet-access) and, for serverless targets, [subnet placement](#subnet-placement-in-serverless-environments).
+- Only the label the VPC's link selector matched the component on is carried onto the handler's compute; the component's other labels are not.
+
+## Reach within a VPC
+
+Inside the VPC, a handler can reach exactly the resources it is **linked to**. Placing a handler in a VPC grants it a network location, not access; each link to a `celerity/sqlDatabase`, `celerity/cache` or other resource in that VPC opens the access that link needs. Two handlers placed in the same VPC therefore cannot reach each other's databases unless each is linked to them.
+
+This applies to reach within the network. Calls out of your application are covered by [outbound internet access](#outbound-internet-access) below.
+
+## Outbound internet access
+
+Placing a handler in a VPC does not, by itself, take away its ability to call out of your application. Where the VPC provides an outbound path, the handler keeps it, so a third-party HTTP API or OIDC discovery for a `jwt` [guard](/docs/framework/applications/resources/celerity-api) keeps working. Placement restricts what the handler can reach *inside* the network, which is covered above.
+
+Whether an outbound path exists is a property of the [preset](#preset), and needs no configuration either way. `standard` and `light` provide one; `isolated` deliberately provides none. `public` and `light-public` provide one without any gateway to pay for, at the cost of what they can reach: the details depend on the target environment and on how the handler is deployed. For AWS, see [outbound internet access from serverless handlers](#outbound-internet-access-from-serverless-handlers).
+
+✅ **Available in v0**
+
+### Restricting outbound access
+
+Outbound access is on by default wherever the VPC provides it, and the `celerity.handler.vpc.egress` annotation narrows it. It accepts `internet`, `none`, or a comma-separated list of CIDR ranges. It can also be set on the containing `celerity/api`, `celerity/consumer` or `celerity/schedule` as `celerity.<component>.vpc.egress`, applying to every handler that inherits the component's placement.
+
+```blueprintlang
+resource ordersApi: celerity/api {
+    metadata {
+        labels = {
+            network = "app-network"
+        }
+        annotations = {
+            "celerity.api.vpc.egress" = "none"
+        }
+    }
+
+    spec {
+        protocols = ["http"]
+    }
+}
+```
+
+Setting this annotation to `internet` or a CIDR list in a VPC that provides no outbound path is reported as an error before anything is deployed, rather than surfacing as a handler that times out at runtime. Leaving it unset is never an error: it resolves to whatever the VPC supports.
+
+✅ **Available in v0**
+
+A handler that is not linked to a VPC is not VPC-attached and retains full outbound internet access.
+
+## Subnet placement in serverless environments
+
+The handler's `celerity.handler.vpc.subnetType` annotation selects which subnet a VPC-attached serverless function is placed in. It accepts `public` or `private` and **defaults to `private`**.
+
+<Callout title="This annotation is target-specific" type="info">
+`subnetType` is only considered by serverless targets that place functions in specific subnets of a customer-managed VPC, which today means **AWS Lambda** alone. It has no effect on other serverless targets: Google Cloud (Cloud Functions / Cloud Run) attaches functions to a VPC through a Serverless VPC Access connector and egress settings, and Azure Functions use VNet integration. Neither offers a public/private subnet choice for the function, so setting the annotation for those targets does nothing rather than something different.
+
+The rest of this section describes AWS behaviour.
+</Callout>
+
+A VPC-attached Lambda never receives a public IPv4 address, which makes subnet choice behave differently than it does for a typical instance:
+
+- **`private`** (default): the function can reach the resources it is linked to in the VPC, such as a `celerity/sqlDatabase` or `celerity/cache`, and where the VPC provides a NAT gateway it has a route to the public internet over both IPv4 and IPv6. This default requires the VPC to provide a private subnet; on the `public` and `light-public` [presets](#preset), which provision none, set `subnetType` to `public` explicitly.
+- **`public`**: the function can reach the resources it is linked to in the VPC, and reaches the public internet **over IPv6 only**. A VPC-attached function is never assigned a public IPv4 address, so it cannot use the internet gateway for IPv4 the way an instance or a Fargate task can. It is assigned an IPv6 address, which is globally routable, so IPv6 destinations are reachable without a NAT gateway.
+
+  On a preset that provisions private subnets, `public` is rarely the right choice: the NAT gateway is provisioned and billed either way, so the only effect is to lose IPv4 access.
 
 ## Examples
 
@@ -291,6 +400,28 @@ VPCs are not provisioned in the local development environment.
 Celerity VPCs are provisioned in AWS using the EC2 VPCs and associated networking resources. The Celerity VPC presets map to configurations of subnets, routing and access controls required for resources such as applications, databases and caches to be placed in the VPC.
 
 A `managed` VPC is tagged with its Celerity `name`. A [`referenced`](#mode) VPC is resolved by looking up that same name tag in the target AWS account, so a VPC shared across applications is matched without any cross-blueprint reference. Because AWS VPCs are regional, the referenced VPC must be in the same region as the resources being placed into it.
+
+#### Outbound internet access from serverless handlers
+
+Whether a VPC-attached serverless handler has an outbound path follows from the [preset](#preset), and needs no configuration:
+
+| Preset | Outbound internet |
+| --- | --- |
+| `standard`, `light` | ✅ IPv4 and IPv6 |
+| `public`, `light-public` | ✅ IPv6 only, with no gateway charges |
+| `isolated` | ❌ the preset deliberately provides no outbound path |
+
+✅ **Available in v0**
+
+<Callout title="IPv6-only egress is not a general substitute for a NAT gateway" type="warn">
+The `public` and `light-public` presets are the cost-optimised choice: a serverless handler placed in them reaches the internet over IPv6 through the internet gateway, and no NAT gateway is provisioned or billed.
+
+The limit is that this only reaches destinations that publish an IPv6 address. A third-party API that is IPv4-only is unreachable from these presets, and there is no way to reach it without a NAT gateway. Choose them when you know what your handlers call out to; choose `standard` or `light` when you do not, or when you depend on a service that has not published IPv6 addresses.
+
+If a handler needs the internet and nothing inside the VPC, the cheapest answer remains to leave it out of the VPC entirely: a handler that is not VPC-attached has full outbound access over both protocols and costs nothing in gateways.
+</Callout>
+
+Handlers in a private subnet reach the internet over IPv6 through an egress-only path, so IPv6 traffic can leave the VPC but nothing on the internet can open a connection to a handler.
 
 ### Google Cloud
 

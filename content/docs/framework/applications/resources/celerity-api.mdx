@@ -235,9 +235,10 @@ Appropriate security groups are managed by the VPC to API link.
 
 When a VPC is not defined for the container-backed AWS, Google Cloud and Azure target environments, the default VPC for the account will be used.
 
-VPC annotations and links do not have any effect for serverless environments.
-Serverless APIs are managed by the cloud provider and are not deployed to a customer-managed VPC,
+Serverless APIs are managed by the cloud provider and are not themselves deployed to a customer-managed VPC;
 only handlers can be deployed to VPCs in serverless environments.
+A VPC linked to the API therefore places the API's handlers, and `celerity.api.vpc.subnetType` selects the subnet tier for them; `celerity.api.vpc.lbSubnetType` has no effect.
+See [placing an application component in a VPC](/docs/framework/applications/resources/celerity-vpc#placing-an-application-component-in-a-vpc) for the precedence rules and how an individual handler opts out.
 
 <Callout title="Warning" type="warning">
 When a VPC is not defined for container-backed cloud environments, annotations in the `celerity/api` will apply to the default VPC for the account.
@@ -247,7 +248,9 @@ When a VPC is not defined for container-backed cloud environments, annotations i
 
 The kind of subnet that the API should be deployed to.
 
-🚀 **Planned for v1** - This annotation will be applicable when APIs can be deployed to a containerised environment, it may become available in a future v0 evolution.
+✅ **Available in v0** for serverless targets, where it selects the subnet tier for the handlers that inherit the API's VPC placement. Overridden by a handler's own `celerity.handler.vpc.subnetType` annotation.
+
+🚀 **Planned for v1** - Placement of the API itself when APIs can be deployed to a containerised environment, it may become available in a future v0 evolution.
 
 **type**
 
@@ -259,7 +262,30 @@ string
 
 **default value**
 
-`public` - When a VPC links to an API, the API will be deployed to a public subnet.
+`private` for serverless targets, matching the default for a handler linked to a VPC directly. See [subnet placement in serverless environments](/docs/framework/applications/resources/celerity-vpc#subnet-placement-in-serverless-environments) for why `private` is the right default for a VPC-attached function.
+
+`public` - When a VPC links to a containerised API, the API will be deployed to a public subnet.
+
+___
+
+<FieldHeading fieldName="celerity.api.vpc.egress" />
+
+The outbound destinations the API's handlers are allowed to reach outside the VPC.
+This narrows outbound access; it is not needed to enable it, since a VPC-attached handler already reaches the internet wherever the VPC provides an outbound path. See [outbound internet access](/docs/framework/applications/resources/celerity-vpc#outbound-internet-access) for which [presets](/docs/framework/applications/resources/celerity-vpc#preset) provide one.
+
+✅ **Available in v0** for serverless targets, where it applies to every handler that inherits the API's VPC placement. Overridden by a handler's own `celerity.handler.vpc.egress` annotation.
+
+**type**
+
+string
+
+**allowed values**
+
+`internet` | `none` | a comma-separated list of CIDR ranges
+
+**default value**
+
+Unset, which resolves to `internet` where the VPC provides an outbound path and `none` where it does not.
 
 ___
 
@@ -970,9 +996,11 @@ ___
 ### `celerity/vpc`
 
 Depending on the target environment, the API may be deployed to a VPC for private access.
-When deploying to serverless environments such as AWS API Gateway, the API itself is not deployed to a VPC.
+When deploying to serverless environments such as AWS API Gateway, the API itself is not deployed to a VPC; the link instead places the API's handlers in the VPC.
 
-🚀 **Planned for v1** - This link will be applicable when APIs can be deployed to containerised environments, it may become available in a future v0 evolution.
+✅ **Available in v0** for serverless targets, where the link places the API's handlers. See [placing an application component in a VPC](/docs/framework/applications/resources/celerity-vpc#placing-an-application-component-in-a-vpc).
+
+🚀 **Planned for v1** - Placement of the API itself when APIs can be deployed to containerised environments, it may become available in a future v0 evolution.
 
 [Read more about Celerity VPCs](/docs/framework/applications/resources/celerity-vpc)
 
@@ -1437,7 +1465,16 @@ resources:
 ### Celerity Binary Message Format
 
 Celerity provides a binary message format that is used to route binary WebSocket messages to the correct handler.
-This format is purely for messages sent from a client to the server, messages sent from the server to the client can be in any format as per the API designed for a specific application.
+Routing through this format is for messages sent from a client to the server.
+Binary messages sent from the server to the client must also use this format, because a client cannot otherwise tell a payload from a framed message, or find the message ID that acknowledgement, deduplication and lost message notification all depend on.
+A server to client binary message that carries no ID sets `messageIdLength` to `0` and `requireAck` to `0x0`, and everything after those bytes is the payload.
+See [Server Requested Acknowledgements](/docs/framework/runtime/websocket-runtime-protocol#server-requested-acknowledgements) for messages that opt into acknowledgement.
+
+Text messages sent from the server to the client remain unconstrained, beyond the reserved object keys.
+
+The runtime enforces this. A binary message it cannot read as a frame is refused rather than sent, since a client has no way to read it as anything other than a framed message and would otherwise be handed a truncated payload under a route nothing serves. Handlers should compose the frame with the encoder their SDK provides, `encodeBinaryMessage` in Node.js and `encode_binary_message` in Python, rather than laying out the bytes by hand.
+
+The check is a matter of what can be read rather than what was intended, so a payload that happens to begin like a valid header can still pass it. There is no byte that separates a framed message from an unframed one, which is why the format is required of every binary message rather than detected per message.
 
 <Callout title="Caution" type="warning">
 WebSocket binary messages are only supported by the Celerity runtime. The runtime is used when deploying a Celerity application to a custom server or a containerised environment.
