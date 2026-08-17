@@ -64,6 +64,52 @@ To use a `unix` socket on windows, you will need to use WSL 2 or above.
 
 The endpoint of the deploy engine api, this is used if `--connect-protocol` is set to `tcp`.
 
+### `--engine-auth-config-file`
+
+**Environment Variable**: `CELERITY_CLI_ENGINE_AUTH_CONFIG_FILE`
+
+**Configuration Key**: `engineAuthConfigFile`
+
+**Type**: `string`
+
+**Default Value**: `$HOME/.bluelink/config/engine.auth.json` on Linux and macOS, `%LOCALAPPDATA%\NewStack\Bluelink\config\engine.auth.json` on Windows (override the install location with the `BLUELINK_INSTALL_DIR` environment variable)
+
+The path to the deploy engine authentication config file (JSON) holding the credentials the CLI uses to authenticate with the deploy engine. This file is prepared by the Bluelink Manager on install; the default points at the manager's global config location.
+
+The file is a JSON document whose `method` field selects the auth method:
+
+| Method | Description |
+|---|---|
+| `apiKey` | API key authentication (`apiKey` field) |
+| `oauth2` | OAuth2 client credentials (`clientId`, `clientSecret`, `providerBaseURL`, `tokenEndpoint`) |
+| `bluelinkSignatureV1` | Bluelink Signature v1 key pair (`keyPair.keyId`, `keyPair.secretKey`, optional `customHeaders`) |
+
+Used by the `stage`, `deploy`, `destroy` and `validate` commands.
+
+### `--skip-plugin-config-validation`
+
+**Environment Variable**: `CELERITY_CLI_SKIP_PLUGIN_CONFIG_VALIDATION`
+
+**Configuration Key**: `skipPluginConfigValidation`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+Skip validation of the plugin-specific entries in the deploy configuration file for commands that interact with the deploy engine.
+
+### `--skip-build`
+
+**Environment Variable**: `CELERITY_CLI_SKIP_BUILD`
+
+**Configuration Key**: `skipBuild`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+Skip the automatic build step before the `deploy` and `stage` commands. Use this when build artifacts already exist from a prior `celerity build`.
+
 ## `help`
 
 For information on all the available commands and global options, run the following:
@@ -242,6 +288,16 @@ step.
 
 Stage changes first, then deploy the resulting change set.
 
+### `--blueprint-file`
+
+**Type**: `string`
+
+**Default Value**: `app.blueprint.yaml`
+
+The blueprint file used for staging (with `--stage`) and for resolving runtime
+substitutions during deployment. This can be a local file, a public `https://`
+URL, or an object storage path (`s3://`, `gcs://`, `azureblob://`).
+
 ### `--instance-id` / `--instance-name`
 
 **Type**: `string`
@@ -310,6 +366,16 @@ change set first.
 
 Stage destroy changes first, then execute.
 
+### `--blueprint-file`
+
+**Type**: `string`
+
+**Default Value**: `app.blueprint.yaml`
+
+The blueprint file used to stage the destroy changes. Only used with `--stage`.
+This can be a local file, a public `https://` URL, or an object storage path
+(`s3://`, `gcs://`, `azureblob://`).
+
 ### `--instance-id` / `--instance-name`
 
 **Type**: `string`
@@ -342,6 +408,218 @@ flags to be provided (`--instance-name` or `--instance-id`, and either
 
 Output the result as a single JSON object when the operation completes. Implies
 non-interactive mode, with staged destroy changes auto-approved.
+
+## `instances`
+
+This is the command category for managing and viewing blueprint instances managed by the deploy engine.
+
+### `list`
+
+Lists the blueprint instances managed by the deploy engine. In interactive mode, the list can be paginated and filtered, and selecting an instance navigates to its inspect view.
+
+```bash
+celerity instances list
+celerity instances list --search orders
+```
+
+#### `--search`
+
+**Environment Variable**: `CELERITY_CLI_INSTANCES_LIST_SEARCH`
+
+**Configuration Key**: `instancesListSearch`
+
+**Type**: `string`
+
+Filter instances by name using a case-insensitive substring match.
+
+#### `--json`
+
+**Environment Variable**: `CELERITY_CLI_INSTANCES_LIST_JSON`
+
+**Configuration Key**: `instancesListJson`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+Output the instance list (IDs, names, status, last deployment timestamps) as JSON. Implies non-interactive mode.
+
+### `inspect`
+
+Displays the current state of a blueprint instance: resources, links, child blueprints and status. If a deployment or destroy operation is in progress for the instance, updates are streamed in real time.
+
+```bash
+celerity instances inspect --instance-name orders-api-production
+```
+
+#### `--instance-id` / `--instance-name`
+
+**Environment Variables**: `CELERITY_CLI_INSTANCES_INSPECT_INSTANCE_ID` / `CELERITY_CLI_INSTANCES_INSPECT_INSTANCE_NAME`
+
+**Configuration Keys**: `instancesInspectInstanceId` / `instancesInspectInstanceName`
+
+**Type**: `string`
+
+The instance to inspect, by system-generated ID or user-defined name. Exactly one of the two must be provided.
+
+#### `--json`
+
+**Environment Variable**: `CELERITY_CLI_INSTANCES_INSPECT_JSON`
+
+**Configuration Key**: `instancesInspectJson`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+Output the full instance state as a single JSON object. Implies non-interactive mode.
+
+## `state`
+
+This is the command category for managing deploy engine state. State is imported and exported in a backend-agnostic JSON format (an array of blueprint instances), allowing state to be moved between environments and storage backends (e.g. memfile, PostgreSQL). These commands work with a local deploy engine only.
+
+### `--engine-config-file`
+
+**Environment Variable**: `CELERITY_CLI_STATE_ENGINE_CONFIG_FILE`
+
+**Configuration Key**: `stateEngineConfigFile`
+
+**Type**: `string`
+
+**Default Value**: `$HOME/.bluelink/engine/config.json` on Linux and macOS, `%LOCALAPPDATA%\NewStack\Bluelink\engine\config.json` on Windows
+
+The path to the deploy engine configuration file, used to determine the storage backend for import and export. The default points at the config location used by the Bluelink Manager installation of the deploy engine. Applies to both `state` subcommands.
+
+### `import`
+
+Imports blueprint instances into the deploy engine's state storage from a local file or object storage. The input must be a JSON array of blueprint instances; existing instances with matching IDs are overwritten.
+
+```bash
+celerity state import --file ./state-export.json
+celerity state import --file s3://my-bucket/state-export.json
+```
+
+#### `--file`
+
+**Environment Variable**: `CELERITY_CLI_STATE_IMPORT_FILE`
+
+**Configuration Key**: `stateImportFile`
+
+**Type**: `string`
+
+The input file path. This can be a local file or an object storage path (`s3://`, `gcs://`, `azureblob://`); credentials for object storage are sourced from the environment's standard SDK mechanisms. Required.
+
+#### `--json`
+
+**Environment Variable**: `CELERITY_CLI_STATE_IMPORT_JSON`
+
+**Configuration Key**: `stateImportJson`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+Output the result as a single JSON object for programmatic use.
+
+### `export`
+
+Exports the deploy engine's entire state, or specific instances, to a local file or object storage as a JSON array of blueprint instances.
+
+```bash
+celerity state export --file ./state-export.json
+celerity state export --file ./orders.json --instances orders-api-production,orders-api-staging
+```
+
+#### `--file`
+
+**Environment Variable**: `CELERITY_CLI_STATE_EXPORT_FILE`
+
+**Configuration Key**: `stateExportFile`
+
+**Type**: `string`
+
+The output file path. This can be a local file or an object storage path (`s3://`, `gcs://`, `azureblob://`). Required.
+
+#### `--instances`
+
+**Environment Variable**: `CELERITY_CLI_STATE_EXPORT_INSTANCES`
+
+**Configuration Key**: `stateExportInstances`
+
+**Type**: `string`
+
+A comma-separated list of instance names or IDs to export. When omitted, the entire state is exported.
+
+#### `--json`
+
+**Environment Variable**: `CELERITY_CLI_STATE_EXPORT_JSON`
+
+**Configuration Key**: `stateExportJson`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+Output the result as a single JSON object for programmatic use.
+
+## `cleanup`
+
+Triggers cleanup of temporary deploy engine resources that are past their configured retention periods. The deploy engine does not clean these up on a schedule by itself; run this command periodically (e.g. via cron) to keep state storage lean. Works with both local and remote deploy engines.
+
+When no type flags are provided, all resource types are cleaned up. In interactive mode, an options form is shown to select the types.
+
+```bash
+celerity cleanup
+celerity cleanup --changesets --events
+```
+
+### `--validations`
+
+**Environment Variable**: `CELERITY_CLI_CLEANUP_VALIDATIONS`
+
+**Configuration Key**: `cleanupValidations`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+Clean up blueprint validation results past their retention period.
+
+### `--changesets`
+
+**Environment Variable**: `CELERITY_CLI_CLEANUP_CHANGESETS`
+
+**Configuration Key**: `cleanupChangesets`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+Clean up change sets past their retention period.
+
+### `--reconciliation-results`
+
+**Environment Variable**: `CELERITY_CLI_CLEANUP_RECONCILIATION_RESULTS`
+
+**Configuration Key**: `cleanupReconciliationResults`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+Clean up drift and interrupted reconciliation check results past their retention period.
+
+### `--events`
+
+**Environment Variable**: `CELERITY_CLI_CLEANUP_EVENTS`
+
+**Configuration Key**: `cleanupEvents`
+
+**Type**: `boolean`
+
+**Default Value**: `false`
+
+Clean up streaming events past their retention period. These events are retained to support resuming event streams.
 
 ## `init`
 
@@ -831,6 +1109,19 @@ Dump all logs to per-handler files in `.celerity/logs/` and exit without streami
 
 Manage over-the-wire HTTP service stubs backed by mountebank.
 
+Each stub service is a directory under `stubs/` with a `service.yaml` describing where the stub runs and how the application finds it:
+
+```yaml
+# stubs/enrichment-service/service.yaml
+port: 4001
+configKey: ENRICHMENT_SERVICE_BASE_URL
+configNamespace: appConfig
+```
+
+The dev environment seeds `configKey` with the stub's URL when it starts, so the application reads the address from config rather than hardcoding it. The seeded value differs by how your code reaches the stub — `localhost` for host-run integration tests, the compose service address for the runtime container — which is why a fixed value in a config file works for only one of them.
+
+`configNamespace` names the `celerity/config` store to seed into. It may be omitted when the blueprint defines exactly one config resource; with more than one it is required, since seeding the wrong store leaves the application calling the real service with no error at startup.
+
 #### `validate`
 
 Load and validate all stub YAML files in the `stubs/` directory. Checks for YAML syntax errors, missing required fields, port conflicts, and duplicate config keys.
@@ -1067,6 +1358,26 @@ The first positional argument is the description used in the migration file name
 **Type**: `string`
 
 The name of the `celerity/sqlDatabase` resource to create the migration for. Required when the blueprint contains more than one SQL database resource.
+
+### `hash`
+
+Recompute the migration directory integrity file (`atlas.sum`) from the migration files currently on disk (SQL databases only).
+
+Run this after editing a migration by hand — typically the empty file [`celerity schema new`](#new) created. Every other command treats a checksum mismatch as an error, because on a migration that has already been applied it means the recorded history no longer matches what actually ran.
+
+```bash
+celerity schema hash
+```
+
+<Callout title="Only re-hash unapplied migrations" type="warning">
+  Only re-hash migrations that have not been applied anywhere. Editing an applied migration and re-hashing hides the divergence instead of fixing it — add a new forward migration instead.
+</Callout>
+
+#### `--database`
+
+**Type**: `string`
+
+The name of the `celerity/sqlDatabase` resource whose migration directory to re-hash. Required when the blueprint contains more than one SQL database resource.
 
 ### `apply`
 
