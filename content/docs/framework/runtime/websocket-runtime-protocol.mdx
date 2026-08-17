@@ -25,6 +25,9 @@ The Celerity runtime supports two types of messages for WebSocket applications:
 These formats are important for messages sent from the client to the server so that the runtime can correctly route the messages to the appropriate handlers.
 For server-to-client messages, the only limitation is that reserved object keys and binary prefixes can not be used for application level messages, other than that, the message format can be any text or binary data that the client application can handle.
 
+A message that opts into acknowledgement is the exception. Acknowledgement identifies a message by its id, so a server to client message that asks to be acknowledged must carry one, in one of the two forms described under [Custom Message IDs](#custom-message-ids).
+Messages that do not ask to be acknowledged are unconstrained beyond the reserved keys and prefixes below.
+
 ### Reserved JSON Keys
 
 The following top-level object keys are reserved for the Celerity runtime and should not be used in application level messages:
@@ -424,9 +427,45 @@ There is no special behaviour needed for multi-node deployments for client-reque
 
 #### Server Requested Acknowledgements
 
-When a message is sent from the client to the server, the server will need to listen for an acknowledgement that the message has been received by the client. The client is then expected to send an acknowledgement message to the server with the message ID and the timestamp of the acknowledgement.
+When a message is sent from the server to the client, the server will need to listen for an acknowledgement that the message has been received by the client.
+The client is then expected to send an acknowledgement message to the server with the message ID and the timestamp of the acknowledgement.
+
+Because a server to client message may otherwise be in any format, asking for an acknowledgement means adopting the protocol's conventions for that message.
+A JSON message must carry the id as the top level `messageId` key and opt in with `"ack": true`.
+A binary message must use the [Celerity Binary Message Format](/docs/framework/applications/resources/celerity-api#celerity-binary-message-format),
+with the `requireAck` byte set to `0x1` and a non-zero `messageIdLength`.
+
+A message sent in any other shape cannot be acknowledged, because the client has no id to acknowledge it by and no way to know that one was wanted.
+Servers should treat a request to acknowledge such a message as a programming error rather than sending it unacknowledged and waiting for a reply that cannot come.
+
+This includes a JSON message whose body is not an object. An array, a string or a number has nowhere to carry a top level `messageId` or `ack` key, so it cannot opt in.
 
 The server will need to track the status of the message in-memory and if an acknowledgement has not been received after a configurable timeout, the server will need to resend the message up to a configurable maximum number of attempts. When the client has disconnected, the server should consider the message lost as client sessions are not persisted at the runtime protocol layer, a client is tracked by the connection ID which only lasts the lifetime of a single connection.
+
+##### Across a cluster
+
+Client-requested acknowledgements do not need special handling across a cluster, as described above, because a client sends to the node it is connected to and that node answers.
+Server-requested acknowledgements do cross the cluster, because an application calls `send_message` or equivalent on whichever node it is running on and the target connection may be held by another one.
+
+When the target connection is held by another node, the message is forwarded to that node and the acknowledgement travels back the same way, in two stages that mean different things.
+
+The **forwarding node** confirms to the sending node that it has taken responsibility for the message.
+Until it does, the sending node retries the forward, since a node that never received the message can neither deliver it nor report on it.
+This confirmation says nothing about the client.
+
+The **holding node** owns the acknowledgement from that point.
+It waits for the client, resends to the client on timeout up to the maximum attempts, and decides when the message is lost.
+Only the node holding a connection can do this, since only it can send to that client and only it will receive the acknowledgement.
+
+The holding node reports the outcome, acknowledged or lost, back to the sending node.
+An application that asked to wait for an acknowledgement is waiting for that outcome, so `waitForAck` or its equivalent means the same thing wherever the application runs and wherever the client is connected.
+
+Acknowledgement tracking is held in memory on the node holding the connection and is not written to a shared store.
+A client is tracked by a connection ID that lasts one connection, so the state cannot outlive the connection that would satisfy it.
+This is unlike [deduplication](#deduplication), which does use a shared store in a cluster precisely because it has to survive a client reconnecting to a different node.
+
+A message may reach a client more than once as a result of this.
+A forward that is retried because its confirmation was slow can be delivered twice, which is one of the reasons clients deduplicate by message ID.
 
 ### Lost Messages
 
