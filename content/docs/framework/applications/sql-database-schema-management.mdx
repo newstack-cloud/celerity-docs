@@ -242,8 +242,60 @@ Indexes are defined at the table level with a `name`, `columns` list and optiona
 |---|---|---|
 | `name` | string | Index name (must be unique within the database) |
 | `columns` | array[string] | Columns included in the index |
-| `type` | string | Index type. Defaults to `btree`. PostgreSQL supports `btree`, `gin`, `gist`, `hash`. MySQL supports `btree`, `hash`, `fulltext`, `spatial`. |
+| `type` | string | Index method. Defaults to `btree`. PostgreSQL supports `btree`, `gin`, `gist`, `spgist`, `brin`, `hash`. MySQL supports `btree`, `hash`, `fulltext`, `spatial`. |
 | `unique` | boolean | Whether the index enforces uniqueness. Defaults to `false`. |
+
+```yaml
+indexes:
+  - name: "idx_audit_details"
+    columns: ["details"]
+    type: "gin"
+```
+
+`type` selects the **method** only. An index whose definition needs more than a
+method and a list of columns is not expressible here:
+
+- **Expression indexes** — `gin (to_tsvector('english', title || ' ' || body))`
+- **Operator classes** — `gin (details jsonb_path_ops)`
+- **Partial indexes** — `... WHERE deleted_at IS NULL`
+- **INCLUDE columns**, and covering-index variations
+
+These belong in a [hand-written migration](#hand-written-migrations), listed
+under [`exclude`](#excluding-unmodelled-objects). This is a deliberate boundary
+rather than a gap waiting to be filled: the diff engine compares index
+expressions as text, and PostgreSQL rewrites what you write when it stores it
+(`to_tsvector('english', body)` comes back as `to_tsvector('english'::regconfig, body)`).
+A declarative expression index would therefore look changed on every diff and
+churn a DROP/CREATE pair into every migration.
+
+### Excluding Unmodelled Objects
+
+`exclude` lists objects that exist in the database but are deliberately not
+described in the schema YAML — typically created by hand-written migrations.
+Excluded objects are invisible to YAML-driven diffs: `celerity schema diff`
+never plans changes for them, and local development never drops them.
+
+```yaml
+exclude:
+  # A specific index, created by a hand-written migration.
+  - "audit_log.idx_audit_details_fts[type=index]"
+  # Every table matching a prefix — e.g. tables owned by another system.
+  - "legacy_*"
+```
+
+Patterns are globs, relative to the schema Celerity manages, optionally narrowed
+by object type with `[type=table|column|index|fk|check]`. A pattern with no type
+selector matches any object of that name.
+
+Without an `exclude` entry, an object in a category the YAML *does* model — an
+index, a column, a constraint — is treated as one you removed from the schema,
+and the next `celerity schema diff` generates a statement to drop it. Objects in
+categories the YAML does not model at all (triggers, functions, views, policies)
+are never touched and need no entry.
+
+<Callout title="The migration-history table" type="info">
+  The revision table is excluded automatically. You never need to list it.
+</Callout>
 
 ### Foreign Keys
 
@@ -418,7 +470,7 @@ Generated files are named automatically (pass `--name <description>` to `celerit
 
 #### Directory Integrity
 
-The `atlas.sum` file records a hash of every migration file. It is updated automatically when Celerity generates or creates migration files, and verified before any migration is applied. This catches accidentally edited already-applied migrations, missing files, and conflicting migration histories from parallel branches. A merge conflict in `atlas.sum` is a signal that two branches added migrations concurrently and the directory needs to be corrected by re-running `celerity schema diff` after merging.
+The `atlas.sum` file records a hash of every migration file. It is updated automatically when Celerity generates or creates migration files, and verified before any migration is applied. Editing a file afterwards — filling in the empty migration `celerity schema new` created, for instance — invalidates the sum, so run [`celerity schema hash`](/docs/cli/reference#hash) to recompute it. Only re-hash migrations that have not been applied anywhere: on an applied migration a mismatch means the recorded history no longer matches what ran, and the fix is a new forward migration, not a new hash. This catches accidentally edited already-applied migrations, missing files, and conflicting migration histories from parallel branches. A merge conflict in `atlas.sum` is a signal that two branches added migrations concurrently and the directory needs to be corrected by re-running `celerity schema diff` after merging.
 
 #### Keeping migrations in version control
 
@@ -442,7 +494,26 @@ Hand-written migration files cover structural SQL that the schema YAML cannot ex
 - Row-level security policies
 - Custom types or domains
 
-They are plain SQL files in the same migration directory and the same linear history, with no separate execution phase and no special file type. Objects created by hand-written migrations are left untouched by generated migrations: the diff engine only manages what the schema YAML models (tables, columns, indexes, foreign keys, constraints and extensions), so it will never generate statements that drop or modify your triggers, functions or policies.
+They are plain SQL files in the same migration directory and the same linear history, with no separate execution phase and no special file type.
+
+**Whether a hand-written object needs an `exclude` entry depends on its category.** The diff engine manages what the schema YAML models — tables, columns, indexes, foreign keys, constraints and extensions:
+
+- **Categories the YAML does not model at all** — triggers, functions, stored procedures, views, row-level security policies, partitioning. Nothing to do: the diff engine never generates statements that drop or modify them.
+- **Categories the YAML does model** — most commonly a specialised index (expression, partial, operator class). To the diff engine an index it cannot see in the YAML looks like one you deleted, so it plans a `DROP INDEX`. List it under [`exclude`](#excluding-unmodelled-objects) and it is left alone.
+
+```yaml
+# schemas/audit.yaml
+exclude:
+  - "audit_log.idx_audit_details_fts[type=index]"
+```
+
+```sql
+-- sql/audit-db/20260610093000_add_fts_index.sql
+CREATE INDEX idx_audit_details_fts
+  ON audit_log USING gin (to_tsvector('english', details));
+```
+
+Forgetting the `exclude` entry is caught early rather than in production: `celerity schema diff` generates the drop for review, and `celerity schema diff --check` fails in CI.
 
 If a generated change would break a hand-written object (e.g. dropping a column that a trigger references), the failure surfaces immediately when `celerity schema diff` replays the directory on the temporary local database, before anything reaches a real environment.
 
@@ -451,7 +522,7 @@ Hand-written migrations are for DDL and structural changes only, not for data ba
 ### Execution Model
 
 1. Pending migration files are applied in timestamp order, generated and hand-written files alike
-2. Each migration is tracked in a revision table (`atlas_schema_revisions`) that is automatically created in each managed database, and runs only once; re-running `dev run`, `deploy` or `schema apply` skips already-applied migrations
+2. Each migration is tracked in a revision table that is automatically created in each managed database, and runs only once; re-running `dev run`, `deploy` or `schema apply` skips already-applied migrations. On PostgreSQL the table lives in its own schema, `atlas_schema_revisions.atlas_schema_revisions`, so it sits outside the schema your YAML describes — schema diffs, `schema show` and exports never see it. Databases created by an earlier CLI version, which kept the table in `public`, are migrated to the new location automatically on the next apply
 3. Directory integrity (`atlas.sum`) is verified before applying; a tampered or out-of-sync directory blocks execution
 4. Each migration file runs in a transaction by default; migrations that cannot run inside a transaction (such as `CREATE INDEX CONCURRENTLY`) are marked to run non-transactionally, with statement-level tracking in the revision table so a partial failure can be resumed safely
 
@@ -684,7 +755,9 @@ When `celerity dev run` starts an application with SQL database resources:
 3. Connection environment variables are injected, pointing to the local container
 4. The runtime starts and handlers receive connection configuration
 
-If the schema YAML has changed but no migration has been generated for it yet, `dev run` warns and prompts to run `celerity schema diff` first, so local databases always come up from the same migration history that other environments run.
+Once a migration directory exists it is the only source of schema changes locally, so a local database comes up from exactly the migration history every other environment runs — including anything hand-written migrations created. If the schema YAML has changed but no migration has been generated for it yet, `dev run` warns and prompts to run `celerity schema diff` first; those edits are not applied to the local database until a migration captures them.
+
+Before the first migration exists, there is nothing to apply, so `dev run` applies the schema YAML declaratively instead. That keeps a brand-new project working without having to generate a migration first, and stops as soon as the first migration is committed.
 
 For **persistent local development** (opt-in): diff-based migration is used instead of full recreate, preserving data between restarts.
 
@@ -708,6 +781,7 @@ The `celerity schema` command group provides all the tools for working with data
 |---|---|
 | [`celerity schema diff`](/docs/cli/reference#diff-1) | Generate a migration file from schema YAML changes, showing the plan and contract impact (`--check` writes nothing and fails if a migration is missing — a CI completeness gate) |
 | [`celerity schema new`](/docs/cli/reference#new) | Create an empty migration file for hand-written SQL |
+| [`celerity schema hash`](/docs/cli/reference#hash) | Recompute `atlas.sum` after hand-editing a migration file |
 | [`celerity schema apply`](/docs/cli/reference#apply) | Apply pending migrations outside of a full deployment (only `safe` migrations by default — see [Migration Risk Classification](#migration-risk-classification)) |
 | [`celerity schema drift`](/docs/cli/reference#drift) | Check a live database for out-of-band changes |
 | [`celerity schema validate`](/docs/cli/reference#validate-1) | Validate schema files, foreign keys, migration SQL, contracts and optionally codegen freshness |
