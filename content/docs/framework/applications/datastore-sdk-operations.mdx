@@ -269,6 +269,42 @@ On stores with no native revision, the SDK maintains a reserved item field named
 
 A revision belongs to the item it was read from. Do not persist one, pass one between handlers, or use one obtained from a different data store.
 
+##### Items that carry no revision
+
+An item can exist without a stored revision where it was written before the application adopted a Celerity SDK, or by a data script, a console edit or another service. Every existing table is full of such items on the day revisions are switched on, so the contract defines their behaviour rather than leaving each driver to choose.
+
+**A read of such an item returns the `unrevisioned` revision.** It is a real revision value, not an absent one, and it is used exactly like any other:
+
+```typescript
+const { item, revision } = await orders.getItem(key); // revision is `unrevisioned`
+item.status = "paid";
+await orders.putItem(item, { ifUnchanged: revision });
+```
+
+`ifUnchanged(unrevisioned)` asserts that the item **still has no stored revision**. On DynamoDB and Alternator that is `attribute_not_exists(_celerity_rev)`, which is native and costs nothing extra. If another Celerity write lands in between, it sets a revision, the precondition fails, and the caller re-reads and retries. Read-modify-write is therefore correct on legacy data from the first pass, with no migration and no back-fill.
+
+Two rules keep this from being a trap:
+
+- **Every write sets a revision.** After any Celerity write the item is revisioned, so an item passes through `unrevisioned` at most once.
+- **An uninitialised revision is not `unrevisioned`.** Passing a zero, null or default-constructed value to `ifUnchanged` is an invalid argument and is refused before the request is made. Without that rule, a variable that was never assigned would silently turn a concurrency check into no check at all.
+
+This case never arises on Firestore or Cosmos DB, where the store writes the revision itself on every write, so a document always has one.
+
+##### What `ifUnchanged` can and cannot detect
+
+The revision is maintained by the store on some targets and by the SDK on others, and that changes which writers it notices:
+
+| Store | Revision maintained by | Detects writers that bypass the SDK |
+|---|---|---|
+| Firestore | The store, as the document's last update time | **Yes**, all of them |
+| Cosmos DB | The store, as the ETag | **Yes**, all of them |
+| DynamoDB, Alternator | The SDK, in `_celerity_rev` | No |
+| PostgreSQL | The driver, in a revision column | Yes where the column is maintained by a trigger, which is what the self-hosted schema emits |
+
+On DynamoDB and Alternator a writer that does not participate in the scheme is invisible to `ifUnchanged`, in both directions: one that leaves the field absent passes an `unrevisioned` check, and one that modifies the item while leaving an old `_celerity_rev` in place passes a normal check. The second is the more dangerous of the two, because the value looks valid.
+
+This is the strongest reason to route all writes to a data store through a Celerity SDK on those stores. Where writes genuinely come from elsewhere, treat `ifUnchanged` as protecting against other Celerity handlers rather than against everything, and use [continuous conformance checking or drift scans](/docs/framework/applications/nosql-datastore-schema-management#drift-detection) to see what those other writers are doing.
+
 #### An arbitrary condition
 
 **Tier B.** A [condition expression](#condition-expressions) on the item's own fields, evaluated as a precondition on a write.
@@ -406,6 +442,7 @@ The operations above are named in the contract's conventions. Each SDK takes its
 | Read through pages | `ItemListing`, an async iterable | An async iterator | `Items`, returning `iter.Seq2` |
 | Preconditions | `condition` options | `condition` keyword arguments | `IfUnchanged`, `IfNotExists`, `If` options |
 | Update operations | `{ op: "set", … }` objects | `Set(...)`, `Remove(...)`, `Increment(...)` dataclasses | `resources.Set`, `resources.Remove`, `resources.Increment` |
+| The unrevisioned revision | `unrevisioned` | `UNREVISIONED` | `resources.Unrevisioned` |
 
 For language-specific documentation, see [Node.js SDK - Datastore](/docs/node-runtime/datastore), [Python SDK - Datastore](/docs/python-runtime/datastore) and [Go SDK - Datastore](/docs/go-sdk/datastore).
 
