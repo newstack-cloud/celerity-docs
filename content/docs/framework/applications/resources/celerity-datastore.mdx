@@ -130,29 +130,7 @@ TTL functionality is only supported for some target environments.
 
 ## Annotations
 
-### celerity.datastore.validationMode
-
-Controls how the Celerity SDK validates items against the schema on writes at runtime. Only applies when a schema is defined for the data store.
-
-| Value | Behavior |
-|---|---|
-| `warn` (default) | Non-conforming writes succeed but are logged with structured details of each violation and surfaced as metrics |
-| `strict` | Non-conforming writes are rejected with a validation error |
-| `off` | No write validation |
-
-The `warn` default means tightening a schema (such as making a field required) can never break production writes for items that predate the change. Since the annotation is per resource, `off` serves as an escape hatch for extreme high-throughput write paths without disabling validation for other datastores; drift scans still observe the datastore's data shape from the outside. See [Runtime Validation](/docs/framework/applications/nosql-datastore-schema-management#runtime-validation-sdk-abstraction) for the full model.
-
-✅ **Available in v0**
-
-**type**
-
-string
-
-**default value**
-
-`warn`
-
----
+There are no annotations required for linking other resources to a `celerity/datastore` resource or modifying the behaviour of a data store resource.
 
 No annotations are required for linking other resources to a `celerity/datastore` resource.
 
@@ -872,58 +850,16 @@ string
 
 ## SDK Operations
 
-The Celerity SDKs provide a cloud-agnostic interface for interacting with data stores. The following operations are supported across all target providers (Amazon DynamoDB, Google Cloud Firestore and Azure Cosmos DB).
+The Celerity SDKs provide a cloud-agnostic interface for reading and writing a data store. The full contract, covering every operation, the condition vocabulary, write preconditions, atomic writes, pagination and what each capability costs on each store, is specified in [Datastore SDK Operations](/docs/framework/applications/datastore-sdk-operations).
 
-For language-specific documentation, see [Node.js SDK - Datastore](/docs/node-runtime/datastore) and [Python SDK - Datastore](/docs/python-runtime/datastore).
+In outline:
 
-### Core Operations
+- **Reads**: `getItem`, `query` a partition with a sort-key range and filters, `scan`, `batchGetItems`, with projection, sort direction and opaque cursor pagination.
+- **Writes**: `putItem`, `updateItem` to change part of an item, `deleteItem`, `batchWriteItems`, and `atomicWrite` for all-or-none writes within one partition.
+- **Preconditions**: existence, "unchanged since I read it", and arbitrary conditions on the item's own fields.
 
-- **`getItem(key)`** — Get a single item by primary key
-- **`putItem(item)`** — Put or upsert a full item
-- **`deleteItem(key)`** — Delete an item by primary key
-- **`query(options)`** — Query by partition key with optional sort key and filter conditions
-- **`scan(options)`** — Full table scan with optional filter conditions
-- **`batchGetItems(keys)`** — Get multiple items in a single call
-- **`batchWriteItems(ops)`** — Batch put and delete operations
+For language-specific documentation, see [Node.js SDK - Datastore](/docs/node-runtime/datastore), [Python SDK - Datastore](/docs/python-runtime/datastore) and [Go SDK - Datastore](/docs/go-sdk/datastore).
 
-### Condition Expressions
-
-Queries and scans support portable condition expressions with the following operators:
-
-`eq` | `ne` | `lt` | `le` | `gt` | `ge` | `between` | `startsWith` | `contains` | `exists`
-
-<Callout title="Note" type="info">
-The `not_exists` operator is only available through provider-specific SDK classes as Google Cloud Firestore does not support querying for the absence of a field.
-</Callout>
-
-Multiple conditions can be combined using AND or OR logic:
-
-- **Array** `[condA, condB]` — implicit AND (all must match)
-- **Explicit AND** `{ and: [...] }` — equivalent to array
-- **OR** `{ or: [...] }` — at least one must match
-
-Groups can be nested recursively for compound logic:
-
-```typescript
-// (status = "active" OR status = "pending") AND age > 18
-filter: { and: [
-  { or: [
-    { name: "status", operator: "eq", value: "active" },
-    { name: "status", operator: "eq", value: "pending" },
-  ]},
-  { name: "age", operator: "gt", value: 18 },
-]}
-```
-
-### Range Conditions
-
-When querying with a composite key, the following range conditions are supported for the sort key:
-
-`eq` | `lt` | `le` | `gt` | `ge` | `between` | `startsWith`
-
-### Cursor Pagination
-
-Query and scan results are returned as async iterables with cursor-based pagination, allowing you to efficiently iterate through large result sets and resume from where you left off.
 
 ## Schema Management
 
@@ -935,7 +871,7 @@ Celerity solves this by treating the schema YAML as the single source of truth:
 
 - **Schema-as-code**: Declarative YAML definitions with rich metadata (`description`, `owner`, `tags`, `classification`) that are version-controlled alongside your application, including [multi-entity schemas](/docs/framework/applications/nosql-datastore-schema-management#multiple-entities-single-table-design) for single-table designs
 - **Type generation**: Generate TypeScript interfaces and Python Pydantic models from the schema for type-safe development (`celerity schema codegen`)
-- **Schema validation**: Layered validation — runtime (SDK validates on writes, in `warn` mode by default per the [`validationMode` annotation](#celeritydatastorevalidationmode)), build-time (generated types) and CI (`celerity schema validate`)
+- **Schema validation**: Layered validation across build-time (generated types), CI (`celerity schema validate`), application-level (generated validators, called where wanted) and [drift detection](/docs/framework/applications/nosql-datastore-schema-management#drift-detection), which observes the stored data whichever writer wrote it
 - **Drift detection**: Sampled scans of live data report per-field conformance against the schema and surface unknown fields (`celerity schema drift`)
 - **Schema contracts**: Data teams declare which data stores they depend on and get CI-level protection when schemas change
 - **Schema exports**: Export as markdown, JSON Schema or Avro for pipeline tool integration (`celerity schema export`)

@@ -6,6 +6,7 @@
     "resources",
     "consumer-events",
     "sql-database-schema-management",
+    "datastore-sdk-operations",
     "nosql-datastore-schema-management",
     "compute-configuration",
     "monitoring"

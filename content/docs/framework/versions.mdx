@@ -15,32 +15,32 @@ This section provides an overview of the versioning strategy for Celerity spanni
 
 v0 represents the initial release of Celerity with limited but functional capabilities that will continuously evolve until the release of v1.
 
-The current v0 release supports deploying Celerity applications to AWS serverless environments with application handlers running in AWS Lambda:
+The current v0 release supports deploying Celerity applications to AWS serverless environments with application handlers running in AWS Lambda, along with containerised deployments to Amazon ECS running the Celerity runtime:
 
 #### Current v0 Components (October 2026)
 - **Celerity CLI**: Full set of commands for starting projects along with the development and deployment lifecycle.
-- **Celerity Core Runtimes & SDKs**: Node.js and Python runtimes only, supporting HTTP APIs, WebSocket APIs, consumers, schedules, SQL databases, NoSQL datastores and caches.
+- **Celerity Core Runtimes & SDKs**: Node.js, Python and Go SDKs only, supporting HTTP APIs, WebSocket APIs, consumers, schedules, SQL databases, NoSQL datastores and caches. Node.js and Python projects are backed by dedicated runtimes and Go projects run on an [OS-only](/docs/framework/runtime/lifecycle#os-only-runtimes) runtime. 
 - **Client SDK for WebSocket APIs**: A single TypeScript package for browsers and Node.js to interact with WebSocket APIs adhering to the [WebSocket Runtime Protocol](/docs/framework/runtime/websocket-runtime-protocol), that are also compatible with AWS API Gateway v2 WebSocket APIs.
-- [**Bluelink Deploy Engine**](https://bluelink.dev/docs/bluelink/overview): The engine that powers deployments of Celerity applications, initially supporting only a subset of AWS services that enable serverless deployments.
+- [**Bluelink Deploy Engine**](https://bluelink.dev/docs/bluelink/overview): The engine that powers deployments of Celerity applications, initially supporting only a subset of AWS services that enable serverless deployments along with containerised deployments to Amazon ECS.
 - [**Bluelink Blueprint Language Server**](https://bluelink.dev/docs/bluelink/overview): Diagnostics, validation and auto-complete support for blueprints used to define Celerity applications.
 
 #### Current v0 Resource Types (October 2026)
-- `celerity/api` - AWS API Gateway deployments and the Celerity runtime locally - HTTP and WebSocket APIs, full CORS support and authentication.
-- `celerity/handler` - AWS Lambda functions
+- `celerity/api` - AWS API Gateway and Amazon ECS deployments along with the Celerity runtime locally - HTTP and WebSocket APIs, full CORS support and authentication.
+- `celerity/handler` - AWS Lambda functions and handlers hosted in the Celerity runtime for Amazon ECS deployments.
+- `celerity/consumer` - AWS SQS Lambda triggers, along with the Celerity runtime polling event sources for Amazon ECS deployments.
+- `celerity/schedule` - AWS EventBridge rules, along with the Celerity runtime polling an EventBridge-fed SQS queue for Amazon ECS deployments.
 - `celerity/handlerConfig` - Helper type for shared handler configuration translating to AWS Lambda function configuration.
 - `celerity/config` - AWS SSM Parameter Store and AWS Secrets Manager
 - `celerity/datastore` - AWS DynamoDB tables with built-in schema management (schema-as-code, type generation, schema contracts, data-shape drift detection, data team exports).
 - `celerity/queue` - AWS SQS queues
 - `celerity/topic` - AWS SNS topics
-- `celerity/consumer` - AWS SQS Lambda triggers
-- `celerity/schedule` - AWS EventBridge rules
 - `celerity/bucket` - AWS S3 buckets
-- `celerity/vpc` - AWS VPCs hosting lambda functions and using VPC endpoints to interact with other AWS services.
+- `celerity/vpc` - AWS VPCs hosting lambda functions and ECS services (including the load balancers fronting containerised APIs) along with using VPC endpoints to interact with other AWS services.
 - `celerity/sqlDatabase` - AWS RDS for PostgreSQL with built-in schema management (schema-as-code with generated migrations, drift detection, type generation).
 - `celerity/cache` - AWS ElastiCache for Redis with an SDK abstraction covering all core Redis data structures (strings, hashes, lists, sets, sorted sets), atomic counters, transactions and a credentials provider for direct Redis client access.
 
 #### Cloud Provider Support
-- **AWS only** (initially)
+- **AWS only** (initially), across both the AWS Serverless (API Gateway + Lambda) and AWS containerised (Amazon ECS) deployment targets. Amazon EKS is planned for v1.
 
 ### v1 (Preview) - Full Capabilities
 **Target Release**: October 2027
@@ -49,7 +49,7 @@ v1 represents the full vision of Celerity with complete multi-cloud capabilities
 
 #### Supported Components
 - **Celerity CLI**: Full set of commands for starting projects along with the development and deployment lifecycle.
-- **Celerity Core Runtimes & SDKs**: All language runtimes (Node.js, Python, Go, C#, Java)
+- **Celerity Core Runtimes & SDKs**: All language SDKs and runtimes (Node.js, Python, Go, C#, Java)
 - **Celerity Workflow Runtime**: Workflow orchestration with support for all language runtimes (Node.js, Python, Go, C#, Java)
 - **Client SDK for WebSocket APIs**: Client SDKs for browsers, Node.js and Python to interact with WebSocket APIs adhering to the [WebSocket Runtime Protocol](/docs/framework/runtime/websocket-runtime-protocol), that are also compatible with AWS API Gateway v2 WebSocket APIs. v1 adds a Python WebSocket client SDK.
 - [**Bluelink Deploy Engine**](https://bluelink.dev/docs/bluelink/overview): The engine that powers deployments of Celerity applications, supporting AWS, Azure and Google Cloud.
@@ -58,7 +58,7 @@ v1 represents the full vision of Celerity with complete multi-cloud capabilities
 #### Supported Resource Types
 - `celerity/api`
     - AWS API Gateway for HTTP and WebSocket APIs for the AWS Serverless deployment target.
-    - AWS ECS or EKS for HTTP and WebSocket APIs for the AWS deployment target with containers running the Celerity runtime.
+    - AWS ECS (available in v0) or EKS for HTTP and WebSocket APIs for the AWS deployment target with containers running the Celerity runtime.
     - Azure API Management with Azure Functions for HTTP APIs with the Azure Serverless deployment target.
     - Azure Container Apps or AKS for HTTP and WebSocket APIs with containers running the Celerity runtime for the Azure deployment target.
     - Google Cloud API Gateway for HTTP APIs for the Google Cloud Serverless deployment target.
@@ -113,7 +113,7 @@ v1 represents the full vision of Celerity with complete multi-cloud capabilities
 
 - `celerity/consumer`
     - AWS SQS Lambda triggers for the AWS Serverless deployment target. For integration with Celerity topics, an intermediary SQS queue will be provisioned to enable the Celerity runtime to consume messages from the topic.
-    - AWS ECS or EKS for the AWS deployment target running the Celerity runtime that will poll the event source for messages, be it an SQS queue, an intermediary SQS queue for a topic, a Kinesis stream or DynamoDB stream.
+    - AWS ECS (available in v0) or EKS for the AWS deployment target running the Celerity runtime that will poll the event source for messages, be it an SQS queue, an intermediary SQS queue for a topic, a Kinesis stream or DynamoDB stream.
     - Azure Functions with Azure Service Bus triggers for the Azure Serverless deployment target.
     - Azure Container Apps or AKS for the Azure deployment target running the Celerity runtime which for the former will be triggered as an event-driven job and for the latter will poll the event source for messages.
     - Google Cloud Functions with Google Cloud Pub/Sub triggers for the Google Cloud Serverless deployment target.
@@ -121,7 +121,7 @@ v1 represents the full vision of Celerity with complete multi-cloud capabilities
 
 - `celerity/schedule`
     - AWS EventBridge rules to trigger lambda functions for the AWS Serverless deployment target.
-    - AWS ECS or EKS for the AWS deployment target running the Celerity runtime that will poll an SQS queue for messages sent by an EventBridge rule.
+    - AWS ECS (available in v0) or EKS for the AWS deployment target running the Celerity runtime that will poll an SQS queue for messages sent by an EventBridge rule.
     - Azure Functions configured with timer triggers for the Azure Serverless deployment target.
     - Azure Container Apps or AKS for the Azure deployment target running the Celerity runtime. For Container Apps, an event-driven job with a schedule trigger will be used and for AKS, an Azure Logic App scheduled trigger will send a message to a queue that will be polled by the Celerity runtime in the container hosting your application.
     - Google Cloud Functions configured with Cloud Scheduler triggers for the Google Cloud Serverless deployment target.
@@ -148,7 +148,7 @@ v1 represents the full vision of Celerity with complete multi-cloud capabilities
 
 ### v1+ (Future) - Post-v1 Features
 
-v1+ represents features that are planned for after the v1 release in July 2027. These are features that have been designed and or considered of but are not part of the v1 roadmap.
+v1+ represents features that are planned for after the v1 release in October 2027. These are features that have been designed and or considered of but are not part of the v1 roadmap.
 
 #### Planned Resource Types
 
@@ -156,7 +156,7 @@ v1+ represents features that are planned for after the v1 release in July 2027. 
 
 #### Planned Provider Support
 
-- **Self-hosted/on-premise** - Support for self-hosted deployments is planned for v1+ with a focus on a Kubernetes-based deployment of the Celerity stack, control plane and your workloads powered by open source software.
+- **Self-hosted/on-premise** - Support for self-hosted deployments is planned for v1+, the Celerity stack, control plane and your workloads running on a fully open source backing stack. The aim is to support both a single-node Docker Compose deployment and a Kubernetes-based deployment for larger scale needs.
 
 ## Documentation Versioning Strategy
 
@@ -166,12 +166,12 @@ The Celerity-wide documentation uses a simple versioning approach:
 - **Format**: `vYYYY-MM-DD-draft` (e.g., `v2026-02-27-draft`)
 - **Purpose**: Single evolving specification for each resource type
 - **When to update**: When a stable resource specification changes
-- **Draft Status**: Will remain in draft until v1 release (July 2027)
+- **Draft Status**: Will remain in draft until v1 release (October 2027)
 - **Blueprint transform**: Matches the spec version
 
 ### 2) Ecosystem Compatibility
 - **v0**: Current capabilities (continuously evolving)
-- **v1**: Full planned capabilities (target: July 2027)
+- **v1**: Full planned capabilities (target: October 2027)
 - **Purpose**: Indicates which ecosystem features are available
 - **When to update**: As ecosystem components are implemented
 

@@ -17,7 +17,7 @@ For SQL database schema management, see the [SQL Database Schema Management](/do
 
 ## How It Works
 
-Unlike SQL schema management, there are no migrations and no DDL. NoSQL databases are schemaless by design, so field-level changes do not require database operations. Instead, Celerity's schema management for NoSQL focuses on **visibility, validation, contracts and data team tooling**.
+Unlike SQL schema management, there are no migrations and no DDL. NoSQL databases are schemaless by design, so field-level changes do not require database operations. Instead, Celerity's schema management for NoSQL focuses on **visibility, conformance, contracts and data team tooling**. Validation is part of that, but the layer that carries the data-team guarantee is the one that observes **every** writer rather than only the ones going through a Celerity SDK: [`celerity schema drift`](#drift-detection), run on a schedule.
 
 ```
 Schema YAML (desired state) ──► Schema Manager ──► Diff + Contracts ──► State Update
@@ -418,7 +418,7 @@ celerity schema drift userStore --env production --sample 10000
 
 The per-field conformance report shows whether any sampled items still lack the field.
 
-**Step 4: Make the field required.** Update `required` in the schema YAML and deploy. Under the default `warn` [validation mode](#runtime-validation-sdk-abstraction) this is safe even if stragglers remain: non-conforming writes are logged, not rejected. Teams running `strict` mode should only take this step once the drift scan reports full conformance, since read-modify-write operations on non-conforming items would otherwise fail.
+**Step 4: Make the field required.** Update `required` in the schema YAML and deploy. Nothing rejects a write for non-conformance, so stragglers do not cause production failures. They are reported by [drift scans](#drift-detection). Take this step once the drift scan reports full conformance, so the reports are actionable rather than noisy, and remember that regenerating types makes the field non-optional in first-party code from that point on.
 
 ## Schema Validation Strategy
 
@@ -426,50 +426,63 @@ The per-field conformance report shows whether any sampled items still lack the 
 
 Since the database doesn't enforce schema, Celerity provides a layered validation approach that catches issues at multiple stages.
 
-### Runtime Validation (SDK Abstraction)
+### Application-Level Validation (Opt-In)
 
-The Celerity datastore SDK provides a cloud-agnostic abstraction (`putItem`, `batchWriteItems`, `query`, `scan`, etc.). When a schema is defined for a datastore, the SDK validates items against it on writes:
+Generated code carries the schema's checks, so an application can validate an item wherever it makes sense to, whether that be after decoding a queue message, before a write, at the edge of a module. Nothing validates implicitly on the way to the data store.
 
-- **Type mismatches**: Writing a number where the schema expects a string
-- **Missing required fields**: Omitting a field that's in the `required` list
-- **Unexpected nulls**: Writing null to a field that isn't marked `nullable`
-- **Nested structure**: Validating nested objects and arrays recursively
+What the generated checks cover:
 
-#### How the Schema Reaches the Runtime
+- **Type mismatches**: a number where the schema expects a string
+- **Missing required fields**: a field absent from the `required` list
+- **Unexpected nulls**: null in a field not marked `nullable`
+- **Unknown fields**: a field the schema does not declare
+- **Nested structure**: nested objects and arrays, recursively
 
-The schema is bound to the deployment at build time, in two parts:
+#### What validation reports
 
-- The transformer embeds a **schema hash** into the datastore resource spec, so a schema change is a spec change: the deploy engine sees the diff and deployment state records exactly which schema version shipped
-- The CLI validates and normalises the schema (YAML to JSON) during the build and includes it as a **generated asset in the build artifacts** (Lambda packages, container images), alongside the resource configuration the CLI already generates. The SDK loads it from the artifact when the datastore client is initialised
+Each language exposes validation the way that language already does it:
 
-Handlers therefore always validate against **the schema they shipped with**: there is no runtime schema fetch, no version skew between handlers and schema state, and `celerity schema apply` never changes the behavior of running handlers. Schema updates reach handlers on their next deployment. A malformed schema fails the build rather than surfacing as a startup error in production, and the SDKs consume pre-validated JSON with no YAML parsing at runtime.
+| Language | How an application validates | On by default? |
+|---|---|---|
+| Python | Constructing the Pydantic model validates and raises; `model_construct` skips it, and the generated `validate_user_store_item` reports violations instead of raising | **Yes**, on construction |
+| TypeScript | `validateUserStoreItem(value)` | No |
+| Go | `item.Validate()`, or `generated.ValidateUserStoreItem(value)` for a value that is not the item type | No |
 
-#### Validation Modes
+**The violation shape is shared, not the call.** There is no common validator interface, because nothing generic ever holds a validator: the SDK does not validate writes, and [conformance checkers](#continuous-conformance-checking) carries the schema rather than calling generated code. What has to agree across languages is the data that comes out:
 
-The write-validation behavior is controlled by the `celerity.datastore.validationMode` annotation on the resource:
+```typescript
+type SchemaViolation = {
+  /** The field, outermost first. Empty for a problem with the item as a whole. */
+  path: string[];
+  /** A stable, lowercase identifier: invalid_type, missing_required, unexpected_null, unknown_field. */
+  code: string;
+  /** What is wrong, in terms of the field. */
+  message: string;
+};
+```
 
-| Mode | Behavior |
-|---|---|
-| `warn` (default) | Non-conforming writes succeed but are logged with structured details of each violation and surfaced as metrics |
-| `strict` | Non-conforming writes are rejected with a validation error |
-| `off` | No write validation |
+The shape matters in two places. Violations are **comparable across a polyglot application**, so a report from a Go handler and one from a Python handler read the same. It is also what the conformance checkers compare against: the checker and the generated validators are separate implementations of the same rules, and a shared violation shape is what lets `celerity schema validate` prove they agree.
 
-The `warn` default is deliberate: tightening a schema (e.g. making a field required) can never break production writes, because existing items that predate the change would otherwise fail read-modify-write operations. Teams that want hard enforcement opt into `strict` once a [drift scan](#drift-detection) confirms conformance. See [Evolving a Schema Safely](#evolving-a-schema-safely) for the workflow.
+Two properties hold everywhere, a validator **returns violations rather than raising**, so the caller decides what is fatal, and it **reports every violation rather than the first**, so one call produces one complete report. Pydantic's construction-time raise is the documented exception.
 
-Because the annotation is set per resource, `off` also serves as an escape hatch for extreme high-throughput write paths: a single hot-path datastore can skip write validation while every other datastore keeps it, and [drift scans](#drift-detection) still observe that datastore's data shape from the outside.
+#### How the Schema Reaches Running Code
 
-Developers who use the Celerity SDK get runtime validation automatically in `warn` mode, with no additional setup needed.
+**Generated code is the schema at runtime.** There is no schema asset in the build artifact and nothing to load or parse at startup: `celerity schema codegen` compiles the schema's checks into the generated validator, so what ships is ordinary code in the application's own language.
 
-<Callout title="Direct provider SDK access" type="info">
-Developers who bypass the Celerity SDK and use the target provider's native SDK directly will not get runtime validation. They still get build-time and CI validation via generated types, and drift scans observe the resulting data shape either way.
-</Callout>
+Two things bind a schema to a deployment:
+
+- The transformer embeds a **schema hash** into the datastore resource spec, so a schema change is a spec change: the deploy engine sees the diff and deployment state records exactly which schema version shipped.
+- `celerity schema validate --check-codegen` in [CI](#ci-validation) fails when generated code no longer matches the schema YAML, which is what makes the first point trustworthy. The hash describes the schema, and CI guarantees the shipped code agrees with it.
+
+Code therefore always validates against **the schema it shipped with**: no runtime schema fetch, no asset to bundle, no YAML or JSON parsing at startup, and no version skew. `celerity schema apply` never changes the behaviour of running handlers; schema updates reach them on their next deployment. A malformed schema fails codegen, and so the build, rather than surfacing as a startup error in production.
 
 ### Build-Time Validation (Generated Types)
 
 Generated types from `celerity schema codegen` shift schema enforcement to compile/type-check time:
 
-- **TypeScript**: Generated interfaces make the compiler catch type mismatches, missing required fields and incorrect nested structures, regardless of whether the developer uses the Celerity SDK or the native provider SDK.
+- **TypeScript**: Generated interfaces make the compiler catch type mismatches, missing required fields and incorrect nested structures, regardless of whether the developer uses the Celerity SDK or the native provider SDK. Because a type is erased at runtime, codegen also emits a `validate...` function for runtime checks for greater safety.
 - **Python**: Generated Pydantic models provide runtime validation, IDE autocomplete and type checking via mypy/pyright.
+- **Go**: Generated structs make the compiler catch type mismatches and unknown fields, with required and optional fields distinguished by value versus pointer. A generated `Validate()` method covers what the compiler cannot, such as items decoded from outside the program.
 
 See [Type Generation](#type-generation) for details and examples.
 
@@ -479,13 +492,16 @@ See [Type Generation](#type-generation) for details and examples.
 
 ### Validation Layers
 
-| Layer | What it catches | How |
-|---|---|---|
-| Runtime (SDK) | Wrong field types, missing required fields, unexpected nulls | Celerity SDK validates on writes, per the configured [validation mode](#validation-modes) (`warn` by default) |
-| Build time (types) | Type mismatches, missing fields, incorrect nesting | Generated types + TypeScript compiler / mypy |
-| CI (`validate`) | Schema YAML errors, stale codegen, contract violations | CLI validation command |
-| CI (contracts) | Breaking changes to contracted datastores | Contract evaluation via `celerity schema validate` as a CI gate |
-| After the fact (drift) | Data-shape drift in existing items | [`celerity schema drift`](#drift-detection) sampled scan |
+The rightmost column is the one to read first: every layer but the last two only ever sees first-party code. **Drift detection is the one available today that observes writes Celerity did not make**, and it is what a data team would depend on.
+
+| Layer | What it catches | How | Whose writes it covers |
+|---|---|---|---|
+| Build time (types) | Type mismatches, missing fields, unknown fields, incorrect nesting | Generated types + the language type checker (TypeScript compiler, mypy, the Go compiler) | First-party code using generated types |
+| Application (opt-in) | The same, for values the compiler cannot vouch for | [Generated validators](#what-validation-reports) called explicitly; Pydantic on construction | Wherever the application chooses to call it |
+| CI (`validate`) | Schema YAML errors, stale codegen, contract violations | CLI validation command | First-party code, before it ships |
+| CI (contracts) | Breaking changes to contracted datastores | Contract evaluation via `celerity schema validate` as a CI gate | First-party schema changes |
+| Scheduled ([drift](#drift-detection)) | Data-shape drift in items already stored | [`celerity schema drift`](#drift-detection) sampled scan, in a scheduled CI job | **Every writer** |
+| Continuous ([conformance](#continuous-conformance-checking)) 🔮 future, paid | Non-conforming items as they are written | Change stream into a conformance checker | **Every writer** |
 
 ## Drift Detection
 
@@ -524,13 +540,60 @@ userStore (datastore: users) — sampled 10,000 of ~1.2M items:
 
 Drift output is **contract-aware**: drifted datastores are matched against [`schema-contracts.yaml`](#schema-contracts) so the report shows which downstream consumers are affected. The command exits non-zero when drift is found, so a scheduled CI job gives continuous shape tracking.
 
-Because this is a sampled read-only scan, it needs no runtime plumbing: it observes what's actually in the datastore regardless of which SDK or service wrote it, making it the complement to [runtime validation](#runtime-validation-sdk-abstraction), which only sees new writes made through the Celerity SDK.
+Because this is a sampled read-only scan, it doesn't need runtime plumbing. It observes what's actually in the datastore regardless of which SDK or service wrote it. Run on a schedule, this is the v0 mechanism for tracking data shape over time, and the non-zero exit code is what turns it into a notification: a failing scheduled job reaches people through whatever CI already uses. [Continuous conformance checking](#continuous-conformance-checking) would add lower latency and full coverage of changes, without replacing the scan, since only a scan sees items that nothing has touched since a schema changed.
 
 ### Scheduled Drift Monitoring
 
 <Callout title="Future Capability" type="info">
-Hosted, scheduled drift scans with conformance trends over time, full-table scan support and notifications routed to contract owners are projected as part of the paid Schema Service for a future release after v1 (post-July 2027). The v0 `celerity schema drift` command is the free, on-demand building block it is built on. Run it from a scheduled CI job for continuous checking today.
+Hosted, scheduled drift scans with conformance trends over time, full-table scan support and notifications routed to contract owners are projected as part of the paid Schema Service for a future release after v1 (post-October 2027). The v0 `celerity schema drift` command is the free, on-demand building block it is built on. Run it from a scheduled CI job for continuous checking today.
+
+Watching the change stream instead of sampling the table is part of the same projected service. See [Continuous Conformance Checking](#continuous-conformance-checking) below.
 </Callout>
+
+### Continuous Conformance Checking
+
+<Callout title="Future Capability" type="info">
+Checking every change as it is written, rather than sampling what is stored, is projected as part of the same paid Schema Service for a future release after v1 (post-October 2027). These are future projections, not committed features.
+
+The free mechanism remains `celerity schema drift` on a schedule, as above.
+</Callout>
+
+Instead of scanning the table, a conformance checker consumes the datastore's **change stream**, validates each changed item against the schema, and reports violations attributed to the owners of any [schema contracts](#schema-contracts) covering the datastore.
+
+```
+Item written (by anything) ──► change stream ──► conformance checker ──► violations, routed
+```
+
+#### What it adds, and what it costs
+
+Both approaches are writer-agnostic and both are contract-aware, with the following differences:
+
+| | Scheduled scan (free) | Stream checker (paid, future) |
+|---|---|---|
+| Coverage | A sample, default 1,000 items | Every changed item |
+| Latency | The scan interval | Seconds to minutes |
+| Sees items nothing has touched | **Yes** | No, only changes |
+| Delivery | Non-zero exit fails a CI job | Routed to contract owners |
+| Runtime cost | None | A change stream and a consumer, per datastore |
+
+What separates them is which problems each one is positioned to see. A **systematic** problem, such as a writer that started adding an undeclared field or writing the wrong type, appears on most items, and a 1,000-item sample finds it with near-certainty. A **rare** non-conforming shape, one code path in a hundred or a batch import that went wrong for a subset, is what a sample is unlikely to land on, and checking every change as it is written is what catches it. Latency separates them the same way, a scan reports at whatever interval it runs on, a stream checker will within seconds to minutes of the write that caused the violation.
+
+The difference also runs the other way. A stream checker sees only what changes, so items written before a schema tightened and never touched since are invisible to it, and those are exactly what a scan is for. The two are complements: a datastore watched continuously still wants an occasional scan.
+
+#### Why it belongs with the paid service
+
+Its output is only actionable once violations reach the team that declared the dependency, and that routing is the same paid capability. A free version emitting metrics into the application owner's monitoring would put the signal in front of the wrong team: the data team that depends on the datastore is usually in a different org boundary, which is the gap [contracts](#schema-contracts) exist to bridge. The scheduled scan sidesteps that by failing a CI job, which already reaches anyone with access to the CI project.
+
+#### Where the checker would run
+
+A consumer wired to the datastore's change stream, running a **first-party Celerity component** rather than generated code. It is the one place the normalised schema ships as an asset.
+
+That is a deliberate split from the [generated validators](#what-validation-reports):
+
+- Handlers do not carry the schema, because a cold start in a FaaS deploy target should not need to parse one.
+- The checker carries the schema, because reading it once at the start of a long-lived consumer costs nothing, and because it means the checker is written **once** rather than once per language.
+
+The cost of that split is two implementations of the same rules, the generated validators and the checker, with `celerity schema validate` failing when they disagree.
 
 ## Deploy Pipeline Integration
 
@@ -563,7 +626,7 @@ celerity deploy
 <Callout title="Contract validation in v0" type="info">
 In v0, contract validation is not built into the deploy pipeline. Use `celerity schema validate` in your CI pipeline to catch contract violations before deployment. See [Schema Contracts](#schema-contracts) for details.
 
-Deploy-time contract enforcement (blocking deploys and dispatching webhook notifications automatically) is projected as a paid tier feature for a future release after v1 (post-July 2027).
+Deploy-time contract enforcement (blocking deploys and dispatching webhook notifications automatically) is projected as a paid tier feature for a future release after v1 (post-October 2027).
 </Callout>
 
 ## Local Development
@@ -639,11 +702,15 @@ userStore (datastore: users):
 
 ## Type Generation
 
-✅ **Available in v0** (TypeScript, Python)
+✅ **Available in v0** (TypeScript, Python, Go)
 
-Generate types from the schema YAML: TypeScript interfaces or Python Pydantic models representing datastore items, plus field name and index constants. No ORM coupling. Combine with whatever library you prefer.
+Generate types from the schema YAML: TypeScript interfaces, Python Pydantic models or Go structs representing datastore items, plus field name and index constants. No ORM coupling. Combine with whatever library you prefer.
 
-For SDK usage examples with generated types, see the [Node.js SDK - Datastore](/docs/node-runtime/datastore) and [Python SDK - Datastore](/docs/python-runtime/datastore) documentation.
+Each language gets the design that language would have chosen, not a shoehorning of another's: optionality is `?` in TypeScript, `Optional[...]` in Python and a pointer in Go; defaults are a Pydantic field default, an exported constant and a constructor respectively. What is identical across all three is the item shape on the wire, so an item written by one language's generated types reads correctly through another's.
+
+Java and C# follow their language runtimes in v1.
+
+For SDK usage examples with generated types, see the [Node.js SDK - Datastore](/docs/node-runtime/datastore), [Python SDK - Datastore](/docs/python-runtime/datastore) and [Go SDK - Datastore](/docs/go-sdk/datastore) documentation. For the operations the generated types are used with, see [Datastore SDK Operations](/docs/framework/applications/datastore-sdk-operations).
 
 ### TypeScript
 
@@ -716,7 +783,25 @@ export const UserStoreKeys = {
   partitionKey: "id",
   sortKey: "createdAt",
 } as const;
+
+/**
+ * Validates a value against the user store schema, returning one violation per
+ * problem found. An empty array means the value conforms.
+ */
+export function validateUserStoreItem(value: unknown): SchemaViolation[] { ... }
 ```
+
+A TypeScript type disappears at runtime, so the generated interface alone cannot check anything once the code is running. That is why codegen also emits `validateUserStoreItem`. It is a plain function with no dependencies: the schema's checks are compiled into it, so it needs neither a validation library nor the schema itself. Python gets the equivalent from Pydantic's own model validation and Go from its generated `Validate()` method.
+
+It takes `unknown` rather than `UserStoreItem`, because the values worth validating are the ones the compiler could not catch, such as an item decoded from a queue message or read back from the store.
+
+Codegen also emits a typed accessor, which is how the SDK finds the validator for a given datastore:
+
+```typescript
+export function userStore(client: DatastoreClient): TypedDatastore<UserStoreItem> { ... }
+```
+
+`client.datastore("user-store")` still works and is untyped. `userStore(client)` binds the datastore name to its item type, so reads and writes are typed and the name appears once, in generated code, rather than as a string in every handler that touches it. Python and Go generate the same accessor. It is about typing, not validation. Validation is a [separate call](#what-validation-reports) an application makes where it wants it.
 
 Note the generated types reflect NoSQL realities:
 - Non-required fields are optional (`?`), since items may not have them
@@ -738,8 +823,8 @@ from pydantic import BaseModel, Field
 from typing import Optional
 
 class UserStoreProfilePreferences(BaseModel):
-    theme: Optional[str] = None
-    notifications: Optional[bool] = None
+    theme: Optional[str] = "system"
+    notifications: Optional[bool] = True
 
 class UserStoreProfile(BaseModel):
     bio: Optional[str] = None
@@ -761,26 +846,126 @@ class UserStoreItem(BaseModel):
     expires_at: Optional[float] = None
 ```
 
-### Defaults
-
-Schema `default` values are applied at item construction time by generated code and are never silently injected by the SDK on write. Python surfaces them directly as Pydantic field defaults (`tier: Optional[str] = "free"` above). TypeScript types cannot carry values, so defaults are exported as a constant for explicit use:
-
-```typescript
-/** Schema defaults */
-export const UserStoreDefaults = {
-  tier: "free",
-} as const;
-```
-
-A field that is absent stays absent across languages: optional fields without an explicit default generate as `None`/`?` rather than materialising empty values, so an item round-tripped through one language's generated types has the same shape in the other.
-
-### Entities
-
-When a schema defines [entities](#multiple-entities-single-table-design), codegen emits one item type per entity plus a discriminated union, so `AppStoreItem = UserItem | SessionItem` in TypeScript and a Pydantic discriminated union (on the `discriminator` field) in Python, along with per-entity field constants.
-
 ### Go
 
-🚀 **Planned for v1** - Go type generation (struct types) is planned for a future release.
+✅ **Available in v0**
+
+```bash
+celerity schema codegen --lang go --out ./internal/generated/
+```
+
+Generated output:
+
+```go
+// Code generated by celerity schema codegen. DO NOT EDIT.
+
+package generated
+
+import "github.com/newstack-cloud/celerity-go-sdk/resources"
+
+// UserStoreItem is an item in the user store.
+type UserStoreItem struct {
+	// ID is a UUID. Partition key.
+	ID string `json:"id"`
+	// CreatedAt is a Unix timestamp (ms). Sort key.
+	CreatedAt float64 `json:"createdAt"`
+	// Email is the primary email address.
+	Email string `json:"email"`
+	// Name is the display name.
+	Name string `json:"name"`
+	// Tier is the subscription tier: free, pro, enterprise.
+	Tier *string `json:"tier,omitempty"`
+	// IsActive reports whether the account is active.
+	IsActive *bool `json:"isActive,omitempty"`
+	// Roles are the authorization roles assigned to the user.
+	Roles []string `json:"roles,omitempty"`
+	// Profile holds the user's profile details.
+	Profile *UserStoreProfile `json:"profile,omitempty"`
+	// LastLogin is a Unix timestamp (ms). Nil when the user has never logged in.
+	LastLogin *float64 `json:"lastLogin,omitempty"`
+	// ExpiresAt is a Unix timestamp (s) for TTL.
+	ExpiresAt *float64 `json:"expiresAt,omitempty"`
+}
+
+type UserStoreProfile struct {
+	Bio         *string                      `json:"bio,omitempty"`
+	AvatarURL   *string                      `json:"avatarUrl,omitempty"`
+	Preferences *UserStoreProfilePreferences `json:"preferences,omitempty"`
+}
+
+type UserStoreProfilePreferences struct {
+	Theme         *string `json:"theme,omitempty"`
+	Notifications *bool   `json:"notifications,omitempty"`
+}
+
+// Field names, for conditions and projections.
+const (
+	UserStoreFieldID        = "id"
+	UserStoreFieldCreatedAt = "createdAt"
+	UserStoreFieldEmail     = "email"
+	UserStoreFieldName      = "name"
+	UserStoreFieldTier      = "tier"
+	UserStoreFieldIsActive  = "isActive"
+	UserStoreFieldRoles     = "roles"
+	UserStoreFieldProfile   = "profile"
+	UserStoreFieldLastLogin = "lastLogin"
+	UserStoreFieldExpiresAt = "expiresAt"
+)
+
+// Index names, for Query.Index.
+const (
+	UserStoreIndexEmail       = "emailIndex"
+	UserStoreIndexTierCreated = "tierCreatedIndex"
+)
+
+// Key schema.
+const (
+	UserStorePartitionKey = "id"
+	UserStoreSortKey      = "createdAt"
+)
+
+// NewUserStoreItem returns an item with the schema's defaults applied.
+func NewUserStoreItem() UserStoreItem { ... }
+
+// Key returns the item's key, so a handler never assembles one by hand.
+func (i UserStoreItem) Key() resources.Key { ... }
+
+// Validate reports every way the item does not conform to the schema, for
+// handler code that wants to check an item itself. The returned error reports
+// its violations through resources.SchemaViolations.
+func (i UserStoreItem) Validate() error { ... }
+
+// ValidateUserStoreItem checks a value that is not known to be an item, such
+// as a decoded map, and reports every violation it finds.
+func ValidateUserStoreItem(value any) []resources.SchemaViolation { ... }
+
+// UserStore binds the datastore name, the item type and the validator.
+func UserStore(host resources.Host) resources.TypedDatastore[UserStoreItem] { ... }
+```
+
+Go's generation differs from TypeScript's and Python's in five places, each because of something about Go rather than about the schema:
+
+**Optionality is a pointer, not a `?`.** Go has no optional-field syntax, so a field that is not in `required` generates as a pointer with `omitempty`: nil means the field is absent from the item. A required field generates as a value type and is always written. Pointers rather than bare values matter here, because `omitempty` on a `string` would silently drop a deliberately-written empty string, whereas `*string` distinguishes "not set" from "set to empty".
+
+**Defaults are a constructor, not a field initialiser.** Python gets defaults free from Pydantic and TypeScript exports them as constants, because a TypeScript type cannot carry values. Go has the same limitation but it has constructors, so `NewUserStoreItem()` returns an item with the item type's own defaults applied, and each nested object type gets its own constructor. Optional nested objects are left nil rather than materialised, as [Defaults](#defaults) explains.
+
+**Validation is an explicit method.** Pydantic validates on model construction, which has no Go equivalent and would be surprising if it did, so `Validate() error` is explicit, for handler code that wants to check an item before doing anything with it. `ValidateUserStoreItem` handles values that are not the item type, such as a decoded map, and returns [violations](#what-validation-reports) rather than an error so a caller can decide what is fatal. Both call the same generated checks.
+
+**A generated `Key()` method.** Go's datastore operations take a `resources.Key` rather than a map, so the partition and sort key are ordinary struct fields on the item. Generating `Key()` means the key is derived from the item, and a handler cannot pass a key whose fields disagree with the item it is writing.
+
+**Numbers are `float64`.** The schema's `number` covers integers and floats, so `float64` is the faithful mapping and matches Python's `float` and TypeScript's `number`. Integer-typed fields would need an integer type in the schema format first; without one, generating `int64` would be a guess that silently truncates.
+
+<Callout title="Two SDK requirements this depends on" type="warn">
+Generated structs are tagged `json`, because that is the tag Go developers expect and the tag every provider driver can read. The AWS SDK's `attributevalue` package reads `dynamodbav` by default and ignores `json` tags unless `TagKey` is set explicitly, so the Celerity SDK must configure its marshaller with `TagKey: "json"`. Without it, attribute names silently fall back to Go field names, writing `CreatedAt` where every other language writes `createdAt`, which produces items no other language's types can read.
+
+`attributevalue` also supports only `omitempty`, not Go 1.24's `omitzero`, so generated tags use `omitempty` and rely on every optional field being a pointer for that to be precise.
+</Callout>
+
+<Callout title="Absent versus null on an optional field" type="info">
+A field that is both optional and nullable has three states (absent, present-and-null, and present with a value) where a Go pointer has two. Generated code treats nil as **absent**, so an explicit null cannot be written through a generated type.
+
+This is a real gap rather than a Go quirk: `nullable` fields that are also required do write an explicit null, because there is nowhere for a required field to be absent. For the optional-and-nullable case, model the absence instead of writing a null. That is the portable choice anyway, since Firestore indexes no entry for a missing field, so a null and an absence are not interchangeable there. See [`not_exists` in the datastore contract](/docs/framework/applications/datastore-sdk-operations#existence).
+</Callout>
 
 ### Java
 
@@ -789,6 +974,59 @@ When a schema defines [entities](#multiple-entities-single-table-design), codege
 ### C#
 
 🚀 **Planned for v1** - C# type generation (record types) is planned for a future release.
+
+### Defaults
+
+Schema `default` values are applied at construction time by generated code and are never silently injected by the SDK on write.
+
+**A default belongs to the object type that declares it.** A default on a nested field is part of that nested object's shape, not the item's, so every generated object type carries its own defaults and they apply when *that* object is constructed. This is what keeps defaults from fighting optionality: `profile` in the schema above is optional and has no default of its own, so nothing about `preferences.theme` having a default may cause an empty `profile` to appear on an item that never had one.
+
+Each language expresses that rule in its own way:
+
+**Python.** Pydantic field defaults on each model, including nested ones:
+
+```python
+class UserStoreProfilePreferences(BaseModel):
+    theme: Optional[str] = "system"
+    notifications: Optional[bool] = True
+```
+
+**TypeScript.** Types cannot carry values, so defaults are exported as one constant per generated object type:
+
+```typescript
+/** Schema defaults */
+export const UserStoreDefaults = {
+  tier: "free",
+} as const;
+
+export const UserStoreProfilePreferencesDefaults = {
+  theme: "system",
+  notifications: true,
+} as const;
+```
+
+A single nested constant would have been the obvious alternative and is wrong: `{ tier: "free", profile: { preferences: { ... } } }` spread over an item materialises a `profile` the schema says is optional.
+
+**Go.** Types cannot carry values either, but Go has constructors, so `NewUserStoreItem()` and `NewUserStoreProfilePreferences()` return values with their own type's defaults applied. An item's constructor leaves optional nested objects nil; constructing one applies its defaults. The constants are generated too, as with `UserStoreDefaults`, for code that needs to read a default without building anything.
+
+A field that is absent stays absent across languages: optional fields without an explicit default generate as `None`, `?` or a nil pointer rather than materialising empty values, so an item round-tripped through one language's generated types has the same shape in the others.
+
+### Entities
+
+When a schema defines [entities](#multiple-entities-single-table-design), codegen emits one item type per entity plus a discriminated union, so `AppStoreItem = UserItem | SessionItem` in TypeScript and a Pydantic discriminated union (on the `discriminator` field) in Python, along with per-entity field constants.
+
+Go does not have a union type. Generation emits a struct per entity plus a sealed interface the entity structs satisfy, so a type switch over it is exhaustive at review time and a new entity added to the schema shows up as an unhandled case rather than a runtime surprise:
+
+```go
+switch item := item.(type) {
+case generated.UserItem:
+	// ...
+case generated.SessionItem:
+	// ...
+}
+```
+
+A generated function decodes an item into the right entity struct by reading the `discriminator` field, which is the one place the discriminator value appears in code.
 
 ## Schema Contracts
 
@@ -868,7 +1106,7 @@ Contract impact is also shown in `celerity schema diff` output, giving visibilit
 <Callout title="Future Capability" type="info">
 In v0, contract validation runs via `celerity schema validate` as a CI gate; it does not run automatically during `celerity deploy`.
 
-Deploy-time contract enforcement (automatically blocking deploys when contracts are affected) and webhook notifications (dispatching to Slack, email or custom endpoints when contracts fire) are projected as paid tier features for a future release after v1 (post-July 2027). These are future projections, not committed features.
+Deploy-time contract enforcement (automatically blocking deploys when contracts are affected) and webhook notifications (dispatching to Slack, email or custom endpoints when contracts fire) are projected as paid tier features for a future release after v1 (post-October 2027). These are future projections, not committed features.
 
 The paid Schema Service would add a `notify` field to contracts for webhook configuration, integrate contract checks directly into the deploy pipeline, and dispatch notifications automatically.
 </Callout>
@@ -876,7 +1114,7 @@ The paid Schema Service would add a `notify` field to contracts for webhook conf
 ### Programmatic Schema API
 
 <Callout title="Future Capability" type="info">
-A programmatic REST API for querying deployed schemas, change history and contract status is projected as a paid tier feature for a future release after v1 (post-July 2027).
+A programmatic REST API for querying deployed schemas, change history and contract status is projected as a paid tier feature for a future release after v1 (post-October 2027).
 
 Planned endpoints include:
 - `GET /schemas/{instanceId}/{resourceName}` — current deployed schema
@@ -889,7 +1127,7 @@ Pipeline tools would integrate with this API to auto-generate configs, sync data
 ### Data Catalog Integrations
 
 <Callout title="Future Capability" type="info">
-Auto-sync to data catalog services (AWS Glue Data Catalog, DataHub, Atlan, etc.) is projected as a paid tier feature for a future release after v1 (post-July 2027).
+Auto-sync to data catalog services (AWS Glue Data Catalog, DataHub, Atlan, etc.) is projected as a paid tier feature for a future release after v1 (post-October 2027).
 </Callout>
 
 ## For Data Teams

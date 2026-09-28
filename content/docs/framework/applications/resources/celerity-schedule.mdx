@@ -11,8 +11,8 @@ description: Celerity resource type for scheduled triggers
 **blueprint transform:** `celerity-2026-02-27-draft`
 
 <Callout title="Ecosystem Compatibility" type="info">
-- **v0 (Current)**: AWS only, supporting AWS EventBridge scheduled rules to trigger Lambda functions.
-- **v1 (Preview)**: Multi-cloud with support for cloud provider schedulers triggering containerised and FaaS applications.
+- **v0 (Current)**: AWS only, supporting AWS EventBridge scheduled rules to trigger Lambda functions and containerised schedule applications deployed to Amazon ECS.
+- **v1 (Preview)**: Multi-cloud with support for cloud provider schedulers triggering containerised and FaaS applications. Adds Amazon EKS for the AWS deployment target.
 
 Read more about Celerity versions [here](/docs/framework/versions).
 </Callout>
@@ -107,7 +107,9 @@ When a VPC is not defined for container-backed cloud environments, annotations i
 
 ✅ **Available in v0** for serverless targets, where it selects the subnet tier for the handlers that inherit the schedule's VPC placement. Overridden by a handler's own `celerity.handler.vpc.subnetType` annotation.
 
-🚀 **Planned for v1** - Placement of the schedule application itself when schedules can be deployed to a containerised environment, it may become available in a future v0 evolution.
+✅ **Available in v0** for the ECS-backed AWS target, where it selects the subnet tier for the ECS service running the schedule application.
+
+🚀 **Planned for v1** - Placement of the schedule application itself in the EKS-backed AWS target and in the Google Cloud and Azure containerised targets.
 
 The kind of subnet that the schedule application should be deployed to.
 
@@ -198,7 +200,9 @@ When deploying to serverless environments, a schedule is a placeholder for a con
 
 ✅ **Available in v0** for serverless targets, where the link places the schedule's handlers. See [placing an application component in a VPC](/docs/framework/applications/resources/celerity-vpc#placing-an-application-component-in-a-vpc).
 
-🚀 **Planned for v1** - Placement of the schedule application itself when schedules can be deployed to a containerised environment, it may become available in a future v0 evolution.
+✅ **Available in v0** for the ECS-backed AWS target, where the link places the ECS service running the schedule application.
+
+🚀 **Planned for v1** - Placement of the schedule application itself in the EKS-backed AWS target and in the Google Cloud and Azure containerised targets.
 
 [Read more about Celerity VPCs](/docs/framework/applications/resources/celerity-vpc)
 
@@ -285,16 +289,20 @@ Links from VPCs to schedules are ignored for this environment as the schedule ap
 
 ### AWS
 
-🚀 **Planned for v1** - This target environment will be available in a future v0 evolution.
+✅ **Available in v0** for [ECS](#ecs).
+
+🚀 **Planned for v1** for [EKS](#eks).
 
 In the AWS environment, a schedule application is deployed as a containerised version of the Celerity runtime that polls a queue for scheduled event payloads.
 
 An SQS queue is created and wired up to the scheduled trigger in an Amazon EventBridge rule that is provisioned with the value of the `schedule` field defined in the `celerity/schedule` resource as the trigger.
 The queue is then polled by the Celerity runtime for messages that contain the payload to trigger the handler(s) in the schedule application.
 
-Schedule applications can be deployed to [ECS](https://aws.amazon.com/ecs/) or [EKS](https://aws.amazon.com/eks/) backed by [Fargate](https://aws.amazon.com/fargate/) or [EC2](https://aws.amazon.com/ec2/) using [deploy configuration](/docs/cli/app-deploy-configuration) for the AWS target environment.
+Schedule applications can be deployed to [ECS](https://aws.amazon.com/ecs/) (v0) or [EKS](https://aws.amazon.com/eks/) (v1) backed by [Fargate](https://aws.amazon.com/fargate/) or [EC2](https://aws.amazon.com/ec2/) using [deploy configuration](/docs/cli/app-deploy-configuration) for the AWS target environment.
 
 #### ECS
+
+✅ **Available in v0**
 
 When a schedule application is deployed to ECS, a new cluster is created for the application. A service is provisioned within the cluster to run the application.
 
@@ -319,6 +327,8 @@ For a Fargate-backed cluster, in production app environments, the task housing t
 A sidecar [ADOT collector](https://aws-otel.github.io/docs/getting-started/collector) container is deployed with the application to collect traces and metrics for the application, this will take up a small portion of the memory and CPU allocated to the schedule application. Traces are only collected when tracing is enabled for the handler that is processing messages.
 
 #### EKS
+
+🚀 **Planned for v1** - Deploying schedule applications to EKS is planned for v1, it may become available in a future v0 evolution.
 
 When a schedule application is first deployed to EKS, a new cluster is created for the application unless you specify an existing cluster to use in the deploy configuration.
 

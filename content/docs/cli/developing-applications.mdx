@@ -76,9 +76,11 @@ test ports are isolated from `dev run`, so both can run at once. See
 
 ## 4. Build deployable artifacts
 
-`build` packages your application for the deploy target (AWS serverless in v0:
-a shared app-code archive, an entry point, and dependency layers) and writes a
-build manifest to `.celerity/build-manifest.json`.
+`build` packages your application for the deploy target and writes a build
+manifest to `.celerity/build-manifest.json`. For the `aws-serverless` target
+this is a shared app-code archive, an entry point, and dependency layers; for
+the containerised `aws` (Amazon ECS) target it is a Celerity runtime container
+image with your handlers bundled in.
 
 ```bash
 celerity build

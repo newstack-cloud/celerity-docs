@@ -179,10 +179,14 @@ The Celerity runtime provides tailored SDK support for the following languages. 
 |---|---|
 | Node.js (TypeScript) | ✅ Available in v0 |
 | Python | ✅ Available in v0 |
-| Go | 🚀 Planned for v1 |
+| Go | ✅ Available in v0 |
 | C# | 🚀 Planned for v1 |
 | Java | 🚀 Planned for v1 |
 
+<Callout title="Compiled languages do not have their own runtime" type="info">
+Tailored SDK support is not the same as a language-specific runtime. For an interpreted language such as Node.js or Python, Celerity publishes a runtime image containing that language's interpreter. For a compiled language such as Go, there is no Go runtime image — the SDK produces a handler executable, and that executable runs on an [OS-only runtime](/docs/framework/runtime/lifecycle#os-only-runtimes), which is a bare OS image containing only the Celerity core runtime. The core runtime starts your executable as a separate process and communicates with it over the Celerity IPC protocol. One OS-only runtime serves every compiled language, so compiled languages do not appear in the [future runtime roadmap](/docs/framework/runtime/lifecycle#future-runtime-roadmap).
+</Callout>
+
 <Callout title="Ahead-of-time compiled languages" type="info">
-🚀 **Planned for v1** — In v1, the runtime will also support any other language that can be compiled ahead of time into an executable binary. Languages such as Rust, C++, C or Zig will be usable but lack the official SDK support that the languages listed above have; for these languages you will be able to use the [Local Runtime API](#) to interact with the runtime from your handler code.
+🚀 **Planned for v1** — In v1, the runtime will also support any other language that can be compiled ahead of time into an executable binary. Languages such as Rust, C++, C or Zig will be usable but lack the official SDK support that the languages listed above have; for these languages you will be able to use the [Local Runtime API](#) to interact with the runtime from your handler code. These handlers also run on an [OS-only runtime](/docs/framework/runtime/lifecycle#os-only-runtimes) and are subject to the same [IPC protocol compatibility guarantees](/docs/framework/runtime/lifecycle#ipc-protocol-compatibility).
 </Callout>

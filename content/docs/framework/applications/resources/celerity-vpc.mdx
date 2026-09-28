@@ -145,7 +145,9 @@ The `celerity.api.vpc.egress` annotation narrows their outbound access, and on s
 
 ✅ **Available in v0** for serverless targets, where the link places the API's handlers.
 
-🚀 **Planned for v1** - Placement of the API itself when containerised deployments are supported, this will likely be available in a future v0 evolution.
+✅ **Available in v0** for the ECS-backed AWS target, where the link places the ECS service running the API and the load balancer fronting it.
+
+🚀 **Planned for v1** - Placement of the API itself in the EKS-backed AWS target and in the Google Cloud and Azure containerised targets.
 
 [Read more about Celerity APIs](/docs/framework/applications/resources/celerity-api)
 
@@ -167,7 +169,9 @@ The `celerity.consumer.vpc.egress` annotation narrows their outbound access, and
 
 ✅ **Available in v0** for serverless targets, where the link places the consumer's handlers.
 
-🚀 **Planned for v1** - Placement of the consumer application itself when containerised deployments are supported, this will likely be available in a future v0 evolution.
+✅ **Available in v0** for the ECS-backed AWS target, where the link places the ECS service running the consumer application.
+
+🚀 **Planned for v1** - Placement of the consumer application itself in the EKS-backed AWS target and in the Google Cloud and Azure containerised targets.
 
 [Read more about Celerity consumers](/docs/framework/applications/resources/celerity-consumer)
 
@@ -180,7 +184,9 @@ The `celerity.schedule.vpc.egress` annotation narrows their outbound access, and
 
 ✅ **Available in v0** for serverless targets, where the link places the schedule's handlers.
 
-🚀 **Planned for v1** - Placement of the schedule application component itself when containerised deployments are supported, this will likely be available in a future v0 evolution.
+✅ **Available in v0** for the ECS-backed AWS target, where the link places the ECS service running the schedule application.
+
+🚀 **Planned for v1** - Placement of the schedule application component itself in the EKS-backed AWS target and in the Google Cloud and Azure containerised targets.
 
 [Read more about Celerity schedules](/docs/framework/applications/resources/celerity-schedule)
 

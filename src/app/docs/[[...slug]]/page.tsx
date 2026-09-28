@@ -17,13 +17,12 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
   const page = source.getPage(params.slug);
   if (!page) notFound();
 
-  const MDXContent = page.data.body;
-  const lastModified = page.data.lastModified;
+  const { body: MDXContent, toc, lastModified } = await page.data.load();
 
   const markdownUrl = toMarkdownUrl(page.url);
 
   return (
-    <DocsPage toc={page.data.toc} lastUpdate={lastModified ? new Date(lastModified) : undefined} full={page.data.full} tableOfContent={{
+    <DocsPage toc={toc} lastUpdate={lastModified ? new Date(lastModified) : undefined} full={page.data.full} tableOfContent={{
       style: 'clerk',
     }}>
       <DocsTitle>{page.data.title}</DocsTitle>

@@ -202,9 +202,11 @@ Has no effect unless `--transform-spec` is also `true`.
 
 ## `build`
 
-Builds a Celerity application into deployable artifacts (for the AWS serverless
-target: a shared app-code archive, an entry point, and dependency layers) and
-writes a build manifest to `.celerity/build-manifest.json`. The build target and
+Builds a Celerity application into deployable artifacts and writes a build
+manifest to `.celerity/build-manifest.json`. For the `aws-serverless` target the
+artifacts are a shared app-code archive, an entry point, and dependency layers;
+for the containerised `aws` (Amazon ECS) target they are a Celerity runtime
+container image with your handlers bundled in. The build target and
 app environment come from the app deploy config. `build` runs automatically
 before `stage` and `deploy` unless `--skip-build` is set.
 
@@ -1549,6 +1551,7 @@ Generate type-safe code from schema definitions. For SQL databases, produces typ
 ```bash
 celerity schema codegen --lang typescript --out ./src/generated/
 celerity schema codegen --lang python --out ./src/generated/
+celerity schema codegen --lang go --out ./internal/generated/
 ```
 
 #### `--lang`
@@ -1557,13 +1560,13 @@ celerity schema codegen --lang python --out ./src/generated/
 
 **Allowed Values**: `typescript` | `python` | `go` | `java` | `csharp`
 
-The target language for code generation. Go, Java and C# support is planned for v1.
+The target language for code generation. Java and C# follow their language runtimes in v1.
 
 | Language | Output | Status |
 |---|---|---|
 | `typescript` | Interfaces, column constants, table name constants | ✅ Available in v0 |
 | `python` | Pydantic model classes | ✅ Available in v0 |
-| `go` | Struct types | 🚀 Planned for v1 |
+| `go` | Structs with `db` tags (SQL) or `json` tags (NoSQL), column/table or field/index constants, and scan or validation helpers | ✅ Available in v0 |
 | `java` | Record classes | 🚀 Planned for v1 |
 | `csharp` | Record types | 🚀 Planned for v1 |
 

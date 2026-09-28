@@ -450,11 +450,11 @@ Server-requested acknowledgements do cross the cluster, because an application c
 When the target connection is held by another node, the message is forwarded to that node and the acknowledgement travels back the same way, in two stages that mean different things.
 
 The **forwarding node** confirms to the sending node that it has taken responsibility for the message.
-Until it does, the sending node retries the forward, since a node that never received the message can neither deliver it nor report on it.
-This confirmation says nothing about the client.
+Until it does, the sending node retries forwarding the message, since a node that never received the message can neither deliver it nor report on it.
+This confirmation does not report on the status of the client.
 
 The **holding node** owns the acknowledgement from that point.
-It waits for the client, resends to the client on timeout up to the maximum attempts, and decides when the message is lost.
+It waits for the client, resends on timeout up to the maximum attempts, and decides when the message is lost.
 Only the node holding a connection can do this, since only it can send to that client and only it will receive the acknowledgement.
 
 The holding node reports the outcome, acknowledged or lost, back to the sending node.
@@ -479,8 +479,12 @@ For these cases, a mechanism must be provided to inform specific clients connect
 
 The Celerity runtime provides 2 ways of handling lost messages:
 
-1. Synchronous server-side error handling when using the SDK to send messages to clients, the `waitForAck` or similarly named option can be used to wait for an acknowledgement that the client has received the message in a multi-node deployment. This option is only required for multi-node deployments, in a single node deployment, if the target client is not connected to the server, an immediate lost message error will be returned.
-2. Asynchronous client-side handling of lost messages, where the server-side application code sending a message to a specific client can use an `informClientsOnLoss` or similarly named option to provide a list of clients (connection IDs) that should be informed if the message is considered lost. In this case, the runtime will send a message to the specified clients (if they are connected to the current node) with a message indicating that the message may have been lost allowing the client to take appropriate action.
+1. Synchronous server-side error handling when using the SDK to send messages to clients, the `waitForAck` or similarly named option can be used to wait for an acknowledgement that the client has received the message. It resolves when the client acknowledges the message and returns a lost message error when the attempts to deliver it are spent, whether the client is connected to the node the application is running on or to another node in a cluster. Where the target client is not connected to any node, an immediate lost message error is returned.
+
+    This option only has meaning for a message that asked to be acknowledged, in one of the two shapes described under [Server Requested Acknowledgements](#server-requested-acknowledgements). A message that asked for nothing is settled by being written to the client's connection, because that is the whole of what can be known about it, and waiting on an acknowledgement that was never requested would wait for ever.
+2. Asynchronous client-side handling of lost messages, where the server-side application code sending a message to a specific client can use an `informClientsOnLoss` or similarly named option to provide a list of clients (connection IDs) that should be informed if the message is considered lost. In this case, the runtime will send a message to the specified clients with a message indicating that the message may have been lost allowing the client to take appropriate action.
+
+    A node can only reach the clients connected to it, so in a cluster the list is covered between two nodes. The node holding the target client decides the message is lost and informs whichever of the named clients it holds, and the node that sent the message informs whichever it holds when the outcome is reported back to it. A named client connected to neither is not informed.
 
 
 Lost messages are sent to clients using a binary message of the following format:

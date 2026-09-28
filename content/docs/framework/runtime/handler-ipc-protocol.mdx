@@ -1,0 +1,331 @@
+---
+title: Handler IPC Protocol
+description: The protocol between the Celerity core runtime and a handlers executable running as a separate process
+---
+
+**Spec Version:** `v2026-08-27`  
+**Protocol Version:** `1.0`  
+**Ecosystem Compatibility:** v0 (Current)
+
+Protocol `1.0` was introduced in v0, along with the Go SDK, which is the tailored SDK built on it. What a protocol version change would mean for an existing handler binary is covered under [IPC Protocol Compatibility](/docs/framework/runtime/lifecycle#ipc-protocol-compatibility). Read more about Celerity versions [here](/docs/framework/versions).
+
+For an interpreted language, Celerity publishes a runtime image containing that language's interpreter, and handlers run in the runtime's own process. For a compiled language there is no such image. The SDK produces a handler executable, the core runtime starts it as a separate process on an [OS-only runtime](/docs/framework/runtime/lifecycle#os-only-runtimes), and the two communicate over this protocol.
+
+This document is for anyone implementing the handler side of that contract, which in practice means an SDK author adding a language. Application authors using an existing SDK do not need it.
+
+## What Is Normative Where
+
+The message shapes, field numbers and wire compatibility are defined by `runtime.proto`, which ships with the runtime and is the authority on all three. This specification does not restate the field lists, and where the two disagree the `.proto` file wins on shape.
+
+What a `.proto` file cannot express is ordering, timing and obligation. This specification is normative for those: which frame must arrive before which, how long the runtime waits, what a handler must send and when, and how the runtime handles when it does not.
+
+The support window for a protocol version, and what a major version change means for a handler binary, are covered separately under [IPC Protocol Compatibility](/docs/framework/runtime/lifecycle#ipc-protocol-compatibility).
+
+## Transport
+
+The protocol is gRPC. The service is `celerity.runtime.v1.HandlerRuntimeService`, and it has one method:
+
+```protobuf
+rpc EventStream(stream HandlerMessage) returns (stream RuntimeMessage);
+```
+
+The runtime listens and the handlers executable connects. There is no reverse direction and no second endpoint.
+
+### Unix Socket
+
+The runtime serves the stream on a Unix domain socket, at the path in `CELERITY_RUNTIME_SOCKET`, which defaults to `/var/run/celerity/runtime.sock`. A Unix socket is preferred over loopback TCP because it is consistently faster on Linux, needs no port allocation, and its access control is filesystem permissions.
+
+The runtime restricts the socket to its own user on bind, `0600`, and any directory it creates for it to `0700`. A handlers executable therefore has to run as the same user as the runtime.
+
+A socket file left behind by a previous run is removed before binding. One that another process is still listening on is not; the runtime connects to it first, and a successful connection means another runtime is already serving that path, so it refuses to start rather than leaving that runtime on a socket nothing can reach.
+
+### TCP Fallback
+
+Where no Unix socket can be bound, which is the case on platforms without them, the runtime can fall back to loopback TCP. This is off unless `CELERITY_RUNTIME_SOCKET_FALLBACK_ENABLED` is `true`, and the port comes from `CELERITY_RUNTIME_SOCKET_FALLBACK_PORT`, defaulting to `8592`.
+
+The port must be a specific one. Port zero asks the operating system for whichever is free, which a handlers executable has no way to discover, so the runtime refuses to start with the fallback enabled and a port of zero.
+
+### One Stream Per Handler Process
+
+Each handler process opens one `EventStream` and keeps it for its lifetime. Everything travels on it: configuration, events, results, credit, WebSocket sends, cancellation and shutdown. There are no side connections, and nothing about the protocol depends on being able to open a second one.
+
+More than one handler process may connect. Each gets its own stream, its own credit window and its own concurrency caps, and the runtime spreads events for a tag across every stream serving it.
+
+## Handshake
+
+Nothing is dispatched until the handshake completes. It has a fixed order, and a handler that departs from it is not served.
+
+```plaintext
+runtime → handler   RuntimeConfig
+handler → runtime   Ready
+runtime → handler   ReadyAck
+                    (the runtime attaches the stream)
+runtime → handler   Dispatch ...
+```
+
+### Configuration First
+
+The runtime sends `RuntimeConfig` before it asks the handler for anything. It carries whether tracing and metrics are enabled, and one `HandlerConfig` per handler the blueprint declares, each with the handler's name, its handler tag, its timeout, and the name the blueprint publishes it under.
+
+Sending it first is what lets an SDK check the handlers registered in code against the ones the blueprint declares, and answer the handshake with a list rather than discovering the mismatch as a 404 in production. It also carries the protocol version the runtime serves, so a handler can refuse for itself rather than waiting to be refused.
+
+### Declaring The Handler
+
+The handler answers with `Ready`, which declares the protocol version it was built against, the handler tags this process actually serves, the initial credit, the SDK version, and any per-tag concurrency caps.
+
+`Ready` is the readiness signal. The runtime does not dispatch before it arrives, which is a thing a polling transport has no way to express.
+
+A handler has 30 seconds from connecting to send it. That is generous enough for an executable that connects while it is still starting up, and short enough that a connection which never communicates cannot hold a task and an outbound channel indefinitely. Any other frame arriving first is a protocol error and the stream is closed; the runtime has nothing to dispatch to a stream that has not reported what it serves.
+
+### Version Negotiation
+
+The runtime refuses a handler built against a major version it does not serve, since neither end could read what the other sends. The refusal happens at the handshake rather than being left to surface later as a frame one end cannot parse.
+
+**A version is required.** A handler that declares none is refused. It was built against a version this contract cannot determine, and taking it for the current one would put the mismatch back where it was.
+
+A later minor of the same major is served. Minor versions are additive, so a handler on a later one may use nothing the runtime lacks, and refusing on the chance that it does would stop a deployment that works. The runtime records that it happened.
+
+### Tag Negotiation
+
+The runtime compares the tags in `Ready` against the tags the blueprint declares and answers with `ReadyAck`:
+
+- `unknown_tags` are registered by the handler but absent from the blueprint.
+- `unhandled_tags` are declared by the blueprint but not registered by the handler.
+- `accepted` is false when either list is non-empty.
+- `refused_reason` says whether it was the tags or the protocol version, since the two lists alone cannot tell a version refusal from an accepted handler with nothing to report.
+
+A refused handler is told why and the stream is closed. This is deliberate as a tag mismatch is a startup error, visible the moment the application comes up, rather than a route that quietly answers 404 under production traffic.
+
+### Attaching
+
+Only after the dispatcher confirms the stream is attached does any event flow, so a handler is never told it is serving traffic that is still going elsewhere.
+
+A handler stream that connects during a drain is refused. It would be given no work, and closing it tells it to stop rather than sit idle believing it is serving traffic.
+
+### The Attach Grace
+
+Events can arrive before any handler stream has attached, which is normal during a restart. Rather than shedding them, the runtime holds an event for a tag nothing yet serves for a short grace window, three seconds, and sheds it only when that passes.
+
+Without the window, a request arriving in the moment before the handlers executable finished connecting would be shed, so every restart would drop traffic it could have served. Three seconds covers a connect already in progress and stays well inside any handler timeout, so an event shed here is one no handler was ever going to run.
+
+## Credit and Flow Control
+
+Two independent limits decide what may be sent to a stream. Neither is sufficient alone.
+
+### The Credit Window
+
+Credit bounds the total work in flight to one stream, across every tag it serves. The handler declares the initial window in `Ready` and the runtime consumes one unit per dispatch.
+
+Credit is purely additive. It is replenished only when the handler grants it, never implicitly by a result arriving. A `Result` carries a `credit_grant` alongside the outcome, and that is the normal way a place is returned. `CreditGrant` exists for resizing the window, for grants not tied to a completion, and for resuming after a deliberate withhold.
+
+An SDK should set the initial credit to its worker pool size. Throughput saturates there, and every unit beyond it adds latency for almost no throughput.
+
+<Callout title="A missed grant stalls the stream silently" type="warning">
+`credit_grant` must be sent on every result, including when the handler panics or throws. A missed grant drains the window by one, permanently. Enough of them and the stream stops taking work with no error anywhere to explain it.
+</Callout>
+
+### Withholding
+
+When `credit_grant` is set to zero, it is a request to withhold. The runtime stops dispatching to that stream until a later `CreditGrant` arrives. This is how a handler applies backpressure from its own side, for a worker pool that is saturated for reasons the runtime cannot see.
+
+### Per-Tag Concurrency Caps
+
+There is one credit window per stream, covering every tag. Isolation between tags is expressed by the optional `HandlerLimit` caps in `Ready`, not by separate credit pools.
+
+A cap is what stops one slow tag consuming the whole window and starving the others. The alternative, giving each tag its own credit pool, would be a second mechanism for the isolation the caps already provide, and it would make the missed grant above far harder to spot. A grant missed against a single shared window drains the window every tag draws on, so the whole stream slows towards a stop and something is plainly wrong. A grant missed against a per-tag pool drains only that tag's pool, so that one tag stops being served while every other tag on the stream carries on at full rate. Nothing reports an error, the stream looks healthy, and a dead route is indistinguishable from one nothing is calling.
+
+### Room For Tags That Are Idle
+
+Caps are optional, and a stream serving several tags with no caps at all would still let the busiest tag fill the window. So the runtime keeps places back for the tags currently holding nothing, and releases them as those tags are served.
+
+The reservation is counted against idle tags rather than against all of them, so it shrinks as they are served and the last tag to arrive is not asked to leave room for tags already busy. A fixed share cannot manage that, for example, if you give three tags a window of four and two places each, the first two take everything between them.
+
+It is never more than half the window. A stream serving many tags on a small window cannot keep a place for each of them, and holding the window half empty for tags that may send nothing would cost whichever tag carries the traffic more than the starvation it avoids.
+
+### Selection
+
+Events are not dispatched from a single queue. The credit window is finite, so only so many events can be in flight to a stream at once, and on one line shared by every handler tag the order events were queued in is what decides which of them get those places.
+
+An application with a one millisecond health check and a five second report endpoint puts both on that line. A health check queued behind fifty report requests cannot be dispatched until enough of those reports have completed and returned their places, so an answer that takes a millisecond to produce is held for seconds waiting for one. That is how a slow endpoint takes down a liveness probe.
+
+Events are partitioned into one queue per handler tag, and selection among the tags that can be served is round-robin, so the health check is offered a place as soon as its own tag can take one, however deep the report queue is. Where several streams serve the same tag, events are spread across them.
+
+A queue per tag is about the order events are dispatched in, not about how many run at once. A tag holds as many places in the window as its cap and the reservation for idle tags allow, so several events for the same tag are commonly in flight together. Round-robin decides which tag is offered a place next, it does not make a tag wait for its previous event to finish.
+
+## Dispatch
+
+A `Dispatch` frame carries an id, the handler tag, a timestamp, a deadline, trace context, and exactly one source: an HTTP request, a WebSocket message, a consumer batch, a schedule trigger or a custom invocation.
+
+The id is what every later frame about that event refers to: the `Result` that answers it, and any `Cancel` that abandons it.
+
+### Deadlines
+
+`deadline_unix_ms` is when the runtime stops waiting. A handler should treat it as its own deadline, and the runtime enforces it independently. A handler that runs past it is not stopped, but its answer is no longer wanted, and the runtime will have already answered the caller.
+
+### Before Dispatch
+
+An event only reaches a stream if there is somewhere to put it. The queue between the producer and the dispatcher is bounded, and a producer that finds it full waits for capacity rather than failing at once, for a quarter of the event's own timeout and never more than five seconds.
+
+The fraction matters in both directions. A short-deadline event is not held waiting for a slot it could never use, and a producer with a long timeout does not stall its own loop under sustained overload. For a consumer this wait is the backpressure: a consumer blocked here is not polling its source.
+
+Where the wait passes and there is still no room, the event is shed. It is never dispatched, so the handler never hears about it. See [The Error Model](#the-error-model).
+
+## Results
+
+Every dispatched event must be answered with a `Result` carrying the same id, whatever happened. The outcome is one of:
+
+| Source | Outcome |
+|---|---|
+| HTTP request | `HttpResponse` |
+| WebSocket message | `Ack` |
+| Consumer batch | `BatchResult` |
+| Schedule trigger | `Ack` |
+| Custom invocation | `CustomInvokeResult` |
+| Any of them | `HandlerError` |
+
+A result with no outcome at all is treated as a failure of the kind the source was waiting for, and reported as one. So is an outcome in a shape the source cannot use, such as an `Ack` for a consumer batch.
+
+`HandlerError` is for an unhandled error in user code. It is a normal answer to the protocol, not a protocol error, and the stream continues.
+
+### An Outcome Decides Whether A Message Is Acknowledged
+
+For a source that acknowledges, a queue, a topic or a schedule, the outcome is not a report for the log. It decides what happens to the message.
+
+A success acknowledges it and it is not delivered again. A failure leaves it on its source, which delivers it again according to its own rules. A handler reporting success for work it did not do will not see that work again.
+
+**Naming records is how a handler answers for each message separately.** The records a `BatchResult` names are left on their source and the rest are acknowledged, so a handler that processed most of a batch does not have all of it sent back. A `message_id` in a `RecordFailure` has to be the one that arrived on the `ConsumerRecord`, since a name matching no record in the batch leaves nothing behind.
+
+Failing with no records named answers for the whole batch, and none of it is acknowledged.
+
+<Callout title="Success and named failures together" type="warning">
+A non-empty failure list is taken as the answer even where `success` is true. The two together are a fault in the handler either way, and acknowledging a record it named would lose that record, while leaving one it processed only costs a redelivery.
+</Callout>
+
+## Cancellation
+
+`Cancel` tells the handler to stop work nobody is waiting for. It carries the event id and a reason:
+
+- `REASON_DEADLINE_EXCEEDED` — the deadline passed and the caller has been answered.
+- `REASON_CALLER_GONE` — the originating caller went away. Sent when an HTTP client disconnects. Not sent when a WebSocket connection closes, because a message is closer to a queue message than to a request and response, so the work is still worth finishing.
+- `REASON_SHUTDOWN` — the runtime is stopping.
+
+A `Cancel` may arrive for an event that has already completed, and a handler must ignore that rather than treat it as an error. The two frames cross on the wire and neither side can prevent it.
+
+### A Cancelled Event Is Still Answered
+
+A cancelled event should still be answered with a `Result`. That is what returns the place it holds in the credit window.
+
+The runtime waits five seconds after cancelling and then takes the place back itself. A handler that has hung or died would otherwise shrink the window for the life of the process, and a stream would lose a place every time one hung and would eventually stop dispatching altogether. Five seconds is long enough for a handler that honours a cancellation to unwind and answer, so a handler that answers promptly never meets it.
+
+Taking the place back is not a claim that the handler stopped. Nothing can make it stop. It says only that the runtime will no longer keep room for an answer it asked to be abandoned.
+
+### A Late Answer
+
+Where the runtime has already taken the place back, a `credit_grant` on the eventual result is ignored, since returning the same place twice would grow the window past what the handler declared. A grant of zero still withholds, and the runtime gives up the place it returned.
+
+The runtime remembers which events those were for sixty seconds. Bounded, because a handler that never answers would otherwise be remembered for good, and generous, because the answer being late is the whole reason there is anything to remember.
+
+## Draining
+
+Both sides can announce that they are going away, and the frames are separate because the obligations are not the same.
+
+### The Runtime Is Going Away
+
+`Drain` carries a deadline. The runtime stops dispatching, closes the queue to producers so nothing further is accepted, sheds whatever is still queued, and waits for the events already in flight.
+
+Events still in flight at the deadline are abandoned and their callers released. For a source that acknowledges, a queue or a topic, the work is redelivered on the next start.
+
+The deadline comes from `CELERITY_DRAIN_TIMEOUT` where it is configured. Where it is not, it is derived from the longest handler timeout the blueprint declares, so an application whose handlers are all short shuts down promptly while one with a long running handler is given the time that handler was told it had.
+The derivation is capped at five minutes, giving some leeway without having to hold off shutdown for more than a few minutes that will negatively impact future events coming through
+that would be taken care of by a following startup as a part of a recovery.
+
+### The Handler Is Going Away
+
+`Draining` carries a deadline of the handler's own, and lets a supervisor roll handler processes without dropping work.
+
+The runtime sends the stream nothing further, but keeps everything it already holds and still takes its results. Once the deadline passes the stream is closed.
+
+Anything the handler was still holding then fails. The runtime stops tracking those events and their callers are woken at once with no result, rather than waiting out the deadline of a handler that has gone. They are not dispatched to another stream: the runtime cannot know whether the departing handler ran them, and sending them again would be a second delivery rather than a retry. A handler that wants its remaining work to complete has to finish it before its own deadline.
+
+The same applies to a stream that fails or closes without draining at all. The difference `Draining` makes is that the runtime stops sending it work in advance, so there is less in flight to lose.
+
+## The Error Model
+
+The protocol has three answers to a dispatched event, and no others:
+
+1. A `Result` carrying an outcome for the source, which may itself report failure. A `BatchResult` with per-record failures and an `Ack` with `success` false are both this, and for a source that acknowledges they decide whether the message is delivered again. See [An Outcome Decides Whether A Message Is Acknowledged](#an-outcome-decides-whether-a-message-is-acknowledged).
+2. A `Result` carrying `HandlerError`, an unhandled error in user code.
+3. No answer at all. The deadline passes, or the stream fails, or the process dies. The runtime answers the caller itself and, where it can, cancels.
+
+### An Event That Was Never Processed Is Not One Of Them
+
+An event the runtime sheds is never dispatched. There is no frame, the handler process is not involved, and no field on any message can report it, because there is no message to put it on.
+
+This is not a gap the protocol can close. Where the runtime knows for certain that nothing ran, it knows it before writing anything to the stream. Where the event was dispatched and no answer came back, the runtime cannot know whether work happened, and no field can manufacture that knowledge.
+
+<Callout title="What this means for a consumer" type="warning">
+For an event source that acknowledges, a shed message must not be acknowledged, and the source redelivers it. How a consumer handles that redelivery, and whether it counts against a retry budget or a dead letter queue, is a property of the runtime's consumer implementation rather than of this protocol. A handler implementing this specification has nothing to do here.
+</Callout>
+
+## The WebSocket Side Channel
+
+A handler serving a WebSocket API can send messages to connections without being asked, on the same stream. `WsSend` carries a correlation id and a batch of outbound messages, and the runtime answers each batch with a `WsSendAck` carrying the same correlation id.
+
+The acknowledgement arrives once every message in the batch has an outcome. What an outcome means depends on what each message asked for. In most cases, it is the write to the socket, and for one that set `wait_for_ack` it is what its client made of it, which is a round trip rather than a write.
+
+### Asking The Client To Acknowledge
+
+`WsOutbound.wait_for_ack` makes the outcome for that message the client's answer. The runtime waits for it, sends the message again while attempts remain, and declares it lost when they run out, so a handler learns whether its message arrived rather than whether it was written.
+
+It is waited for wherever the connection is, on the node that received the `WsSend` or on another one in a cluster, so a send means the same thing in a single node deployment as in a clustered one.
+
+<Callout title="The message has to ask for it too" type="warning">
+The runtime does not compose the payload, so the request the client responds to is something the handler puts in the message itself, in one of the forms under [Custom Message IDs](/docs/framework/runtime/websocket-runtime-protocol#custom-message-ids). Setting `wait_for_ack` on a message that asks its client for nothing leaves the send waiting for an answer that is never coming, until the runtime declares the message lost.
+</Callout>
+
+### A Batch Is Not Sent In Sequence
+
+Messages are grouped by the connection they are for, and the groups are sent alongside each other. One client being slow to acknowledge a message costs only the messages meant for that client, rather than everything behind it in the batch.
+
+Within a connection, messages are sent in the order the handler listed them. That is the only ordering a handler can rely on, since the connections are served in no particular order.
+
+### Failures Are Per Message
+
+`WsSendAck` reports a failure per message rather than per batch, and a failure identifies its message by index into the batch.
+
+The index rather than the message id, because the runtime generates the id where the handler leaves it empty, so the handler may never have seen it. Per message rather than per batch, because a client has no way to deduplicate: a message reaches it as a bare text or binary frame, so re-sending one that already arrived is visible to the application. A handler has to be able to retry exactly what failed.
+
+Failures are reported in the order the messages were sent in, whichever order their connections were served in. A message that asked to be acknowledged and never was is reported as a failure like any other.
+
+### Binary Messages Must Be Framed
+
+The runtime sends a message to the socket exactly as given. A client reads every binary frame that is not a reserved one as a framed message, so a binary message that is not in the [Celerity Binary Message Format](/docs/framework/applications/resources/celerity-api#celerity-binary-message-format) is not read as a payload. It is read as a route length, a route and an id, leaving the application a short payload under a route nothing serves.
+
+The runtime therefore refuses a binary message it cannot read as a frame, and reports it as a failure for that message rather than sending one no client can use. Text messages are unconstrained beyond the reserved keys in the [WebSocket Runtime Protocol](/docs/framework/runtime/websocket-runtime-protocol#reserved-json-keys).
+
+### Two Kinds Of Message Id
+
+`WsOutbound.message_id` identifies the message to the runtime. It is what the acknowledgement between nodes refers to when the target connection lives on another one, and it is the `messageId` carried in the [loss event](/docs/framework/runtime/websocket-runtime-protocol#lost-messages) delivered to the clients named in `inform_clients_on_loss`. The runtime generates one where the handler leaves it empty.
+
+The runtime does not put it in the message. `message` is sent to the socket exactly as given, so the id a client reads out of a payload, and the acknowledgement and deduplication that depend on it, is something the handler composes. The two are the same id only where the handler makes them so.
+
+That is what decides whether leaving it empty is reasonable. For a message no client is informed about, a generated id is fine, since it exists for the runtime's own accounting and nothing outside ever sees it. Where `inform_clients_on_loss` names clients, the id is shown to those clients, and a generated one names something they have never seen and cannot look up, which leaves them told that a message was lost and unable to say which. A handler that wants an informed client to act on the specific message has to set `message_id` to an id that client already knows, ordinarily the same one it put in the payload.
+
+`caller` is the other half of this. It carries the connection that caused the send through to the loss event, so an informed client can tell which exchange was affected even where the message itself is not identified. Where a handler has no application-level id worth carrying, `caller` is what makes the loss event actionable, and it is meaningful only alongside `inform_clients_on_loss`.
+
+## Conformance
+
+An implementation of the handler side of this protocol must:
+
+1. Connect to `CELERITY_RUNTIME_SOCKET`, or to the fallback port where the fallback is enabled, and open exactly one `EventStream`.
+2. Accept `RuntimeConfig` as the first frame and check its own registered handlers against it.
+3. Send `Ready` within 30 seconds of connecting, declaring the protocol version it was built against, every tag it serves, and an initial credit no larger than its worker pool.
+4. Stop, reporting the reason, where `ReadyAck` is not accepted.
+5. Answer every `Dispatch` with a `Result` carrying the same id, including where user code panicked, threw, or was cancelled.
+6. Report failure for a message it did not process, and name records by the id they arrived with, since for a source that acknowledges the outcome decides whether the message is delivered again.
+7. Ask its client for an acknowledgement in the payload of any message it sets `wait_for_ack` on, and expect that message's outcome only once the client has answered or the runtime has given up on it.
+8. Send a `credit_grant` on every result, including on failure, and use zero only to withhold deliberately.
+9. Treat `deadline_unix_ms` as its own deadline.
+10. Ignore a `Cancel` for an event it no longer holds.
+11. Stop taking new work on `Drain` and finish what it holds before the deadline.
+12. Answer nothing after the stream closes.

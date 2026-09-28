@@ -11,8 +11,8 @@ description: Celerity Handler resource type
 **blueprint transform:** `celerity-2026-02-27-draft`
 
 <Callout title="Ecosystem Compatibility" type="info">
-- **v0 (Current)**: AWS only, supporting AWS Lambda functions.
-- **v1 (Preview)**: Multi-cloud with support for FaaS and containerised environments running the Celerity runtime.
+- **v0 (Current)**: AWS only, supporting AWS Lambda functions and handlers hosted in the Celerity runtime for containerised deployments to Amazon ECS.
+- **v1 (Preview)**: Multi-cloud with support for FaaS and containerised environments running the Celerity runtime. Adds Amazon EKS for the AWS deployment target.
 
 Read more about Celerity versions [here](/docs/framework/versions).
 </Callout>
@@ -85,7 +85,7 @@ string
 
 ### runtime
 
-The Celerity runtime identifier for this handler (e.g. `nodejs24.x`, `python3.13.x`). This is a portable identifier: the CLI maps it to a local runtime image for development, and the Celerity deploy engine maps it to the target platform's concrete runtime (AWS Lambda, Azure Functions, Google Cloud Functions). See [Runtimes](#runtimes) for the full list of supported Celerity runtime identifiers and how they map to each target.
+The Celerity runtime identifier for this handler (e.g. `nodejs24.x`, `python3.13.x`, `os-only.debian13`). This is a portable identifier: the CLI maps it to a local runtime image for development, and the Celerity deploy engine maps it to the target platform's concrete runtime (AWS Lambda, Azure Functions, Google Cloud Functions). See [Runtimes](#runtimes) for the full list of supported Celerity runtime identifiers and how they map to each target.
 
 This field can be inherited from a linked `celerity/handlerConfig` or `metadata.sharedHandlerConfig`.
 
@@ -2045,8 +2045,11 @@ The `runtime` field on a handler spec accepts a **Celerity runtime identifier**.
 |---------|------------|------------------|-----------------|
 | Node.js 24 | `nodejs24.x` | Debian 13 (trixie) | Active |
 | Python 3.13 | `python3.13.x` | Debian 13 (trixie) | Active |
+| OS-only Debian 13 | `os-only.debian13` | Debian 13 (trixie) | Active |
 
 _Support for additional runtimes will come in the lead up to the v1 release in 2027._
+
+OS-only runtimes run pre-compiled handler binaries against the Celerity core runtime over the Celerity IPC protocol, with no language interpreter in the image. For compiled languages, the language-specific part lives in the Celerity SDK, which produces a handler executable that runs on any OS-only runtime. Each supported operating system variation is published as its own `os-only.{osVersion}` identifier. See [OS-only Runtimes](/docs/framework/runtime/lifecycle#os-only-runtimes) for the base OS support windows and the IPC protocol compatibility guarantees.
 
 For full details on runtime support timelines, deprecation policy and lifecycle phases, see the [Runtime Lifecycle & Support Policy](/docs/framework/runtime/lifecycle).
 
@@ -2054,24 +2057,29 @@ For full details on runtime support timelines, deprecation policy and lifecycle 
 
 The Celerity runtime identifier is resolved to a concrete runtime in each environment. The CLI handles local development, and the Celerity deploy engine handles each deployment target.
 
-| Environment | Resolved by | Example for `python3.13.x` |
-|---|---|---|
-| Local development | Celerity CLI (`celerity dev run`) | Celerity runtime container image (`ghcr.io/newstack-cloud/celerity-runtime-python-3-13`) |
-| AWS Lambda | Celerity deploy engine | Lambda runtime `python3.13` |
-| AWS containerised (ECS/EKS) | Celerity deploy engine | Celerity runtime container image |
-| Google Cloud Functions | Celerity deploy engine | `python313` (🚀 Planned for v1) |
-| Google Cloud containerised (Cloud Run/GKE) | Celerity deploy engine | Celerity runtime container image (🚀 Planned for v1) |
-| Azure Functions | Celerity deploy engine | Python 3.13 worker or custom handler (🚀 Planned for v1) |
-| Azure containerised (Container Apps/AKS) | Celerity deploy engine | Celerity runtime container image (🚀 Planned for v1) |
+| Environment | Resolved by | Example for `python3.13.x` | Example for `os-only.debian13` |
+|---|---|---|---|
+| Local development | Celerity CLI (`celerity dev run`) | Celerity runtime container image (`ghcr.io/newstack-cloud/celerity-runtime-python-3-13`) | Celerity runtime container image (`ghcr.io/newstack-cloud/celerity-runtime-os-only-debian-13`) |
+| AWS Lambda | Celerity deploy engine | Lambda runtime `python3.13` | Lambda custom runtime `provided.al2023` |
+| AWS containerised (ECS) | Celerity deploy engine | Celerity runtime container image | Celerity runtime container image |
+| AWS containerised (EKS) | Celerity deploy engine | Celerity runtime container image (🚀 Planned for v1) | Celerity runtime container image (🚀 Planned for v1) |
+| Google Cloud Functions | Celerity deploy engine | `python313` (🚀 Planned for v1) | Not supported |
+| Google Cloud containerised (Cloud Run/GKE) | Celerity deploy engine | Celerity runtime container image (🚀 Planned for v1) | Celerity runtime container image (🚀 Planned for v1) |
+| Azure Functions | Celerity deploy engine | Python 3.13 worker or custom handler (🚀 Planned for v1) | Custom handler (🚀 Planned for v1) |
+| Azure containerised (Container Apps/AKS) | Celerity deploy engine | Celerity runtime container image (🚀 Planned for v1) | Celerity runtime container image (🚀 Planned for v1) |
 
 The Celerity deploy engine chooses the closest available runtime on each target platform. If a target doesn't support the exact version, it falls back to the nearest supported version and surfaces a warning during `celerity deploy`.
 
 <Callout title="Google Cloud Functions and OS-only runtimes" type="warning">
-Google Cloud Functions do not support OS-only runtimes where pre-compiled binaries are used for handlers. The only language supported in Google Cloud Functions that is compiled in other environments is Go.
+Google Cloud Functions does not offer a custom-runtime mechanism, so OS-only runtimes, where a pre-compiled handler binary is uploaded and executed directly, can not be deployed there. Compiled languages are supported (Go, Java and .NET all have first-class runtimes), but the platform builds your handler from source rather than running a binary you provide.
 </Callout>
 
 <Callout title="Azure Functions and OS-only runtimes" type="info">
-Azure Functions do not support OS-only runtimes in the same way as the Celerity runtime and AWS Lambda. Azure Functions do support custom handlers that are compiled light-weight HTTP servers that run in the Azure Functions runtime environment. Celerity will map OS-only runtime identifiers (`os.*`) to custom handlers in Azure Functions.
+Azure Functions do not support OS-only runtimes in the same way as the Celerity runtime and AWS Lambda. Azure Functions do support custom handlers that are compiled light-weight HTTP servers that run in the Azure Functions runtime environment. Celerity will map OS-only runtime identifiers (`os-only.*`) to custom handlers in Azure Functions.
+</Callout>
+
+<Callout title="OS-only handler binary compatibility" type="warning">
+The operating system in the table above describes the runtime image Celerity publishes for local development and containerised targets, not every environment your handler binary may run in — an OS-only runtime maps to each target platform's own custom-runtime mechanism, which may use a different base OS (AWS Lambda custom runtimes are Amazon Linux based, for example). Statically link your handler binary, or build it against the oldest glibc across the targets you deploy to.
 </Callout>
 
 <Callout title="Overriding the mapped runtime" type="info">
@@ -2090,7 +2098,9 @@ In the local development environment, event sources and datastore streams will f
 
 ### AWS
 
-🚀 **Planned for v1** - This target environment will be available in a future v0 evolution.
+✅ **Available in v0** for ECS-backed deployments.
+
+🚀 **Planned for v1** for EKS-backed deployments.
 
 In the AWS environment, handlers are loaded into the Celerity runtime in a single process.
 Depending on links and configuration, the handler will be wired up to the appropriate HTTP route, WebSocket route, event source, stream or scheduled trigger.

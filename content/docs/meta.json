@@ -5,8 +5,8 @@
     "workflow-runtime",
     "node-runtime",
     "python-runtime",
+    "go-sdk",
     "java-runtime",
-    "csharp-runtime",
-    "go-sdk"
+    "csharp-runtime"
   ]
 }

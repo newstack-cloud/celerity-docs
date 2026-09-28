@@ -16,6 +16,7 @@ import blueprintlangGrammar from './grammars/blueprintlang.tmLanguage.json' with
 export const docs = defineDocs({
   docs: {
     schema: frontmatterSchema,
+    async: true,
   },
   meta: {
     schema: metaSchema,

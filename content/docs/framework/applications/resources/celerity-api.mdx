@@ -12,8 +12,8 @@ description: The Celerity API resource type is used to define an HTTP API or a W
 **blueprint transform:** `celerity-2026-02-27-draft`
 
 <Callout title="Ecosystem Compatibility" type="info">
-- **v0 (Current)**: AWS only, supporting AWS API Gateway and Lambda deployments.
-- **v1 (Preview)**: Multi-cloud with support for deployment as containerised applications as well as FaaS deployments.
+- **v0 (Current)**: AWS only, supporting AWS API Gateway and Lambda deployments along with containerised deployments to Amazon ECS.
+- **v1 (Preview)**: Multi-cloud with support for deployment as containerised applications as well as FaaS deployments. Adds Amazon EKS for the AWS deployment target.
 
 Read more about Celerity versions [here](/docs/framework/versions).
 </Callout>
@@ -250,7 +250,9 @@ The kind of subnet that the API should be deployed to.
 
 ✅ **Available in v0** for serverless targets, where it selects the subnet tier for the handlers that inherit the API's VPC placement. Overridden by a handler's own `celerity.handler.vpc.subnetType` annotation.
 
-🚀 **Planned for v1** - Placement of the API itself when APIs can be deployed to a containerised environment, it may become available in a future v0 evolution.
+✅ **Available in v0** for the ECS-backed AWS target, where it selects the subnet tier for the ECS service running the API.
+
+🚀 **Planned for v1** - Placement of the API itself in the EKS-backed AWS target and in the Google Cloud and Azure containerised targets.
 
 **type**
 
@@ -294,7 +296,9 @@ ___
 The kind of subnet that the load balancer for an API should be deployed to.
 This is only relevant when the API is deployed to an environment that requires load balancers to run the API.
 
-🚀 **Planned for v1** - This annotation will be applicable when APIs can be deployed to containerised environments that support load balancers, it may become available in a future v0 evolution.
+✅ **Available in v0** for the ECS-backed AWS target, where it selects the subnet tier for the application load balancer fronting the API.
+
+🚀 **Planned for v1** - The EKS-backed AWS target and the Google Cloud and Azure containerised targets.
 
 **type**
 
@@ -1000,7 +1004,9 @@ When deploying to serverless environments such as AWS API Gateway, the API itsel
 
 ✅ **Available in v0** for serverless targets, where the link places the API's handlers. See [placing an application component in a VPC](/docs/framework/applications/resources/celerity-vpc#placing-an-application-component-in-a-vpc).
 
-🚀 **Planned for v1** - Placement of the API itself when APIs can be deployed to containerised environments, it may become available in a future v0 evolution.
+✅ **Available in v0** for the ECS-backed AWS target, where the link places the ECS service running the API and the load balancer fronting it.
+
+🚀 **Planned for v1** - Placement of the API itself in the EKS-backed AWS target and in the Google Cloud and Azure containerised targets.
 
 [Read more about Celerity VPCs](/docs/framework/applications/resources/celerity-vpc)
 
@@ -1527,7 +1533,7 @@ See the [WebSocket Configuration](#websocketconfiguration) section for the field
 
 #### `authMessage` approach
 
-✅ **Available in v0** - The `authMessage` approach is available in v0 as is applicable to AWS API Gateway WebSocket APIs.
+✅ **Available in v0** - The `authMessage` approach is available in v0 and is applicable to every target environment, including AWS API Gateway WebSocket APIs.
 
 On successful connection, the client must send a message with the token in the format:
 ```json
@@ -1597,7 +1603,7 @@ _the "event" field in the response message is not related to the route key, this
 
 #### `connect` approach
 
-🚀 **Planned for v1** - The `connect` approach is planned for v1 as is only applicable to WebSocket APIs deployed as containerised applications hosting the Celerity runtime, it may become available in a future v0 evolution.
+✅ **Available in v0** - The `connect` approach is only applicable to WebSocket APIs deployed as containerised applications hosting the Celerity runtime, which in v0 means the [ECS-backed AWS target](#ecs) and [local development](#local-development). It is **not** available for the [AWS Serverless target](#aws-serverless); use the [`authMessage`](#authmessage-approach) approach there.
 
 The token configured in the API's auth guard token source must be present in the WebSocket upgrade request. The server extracts the token and authenticates it before upgrading the connection.
 
@@ -1712,14 +1718,18 @@ Links from VPCs to APIs are ignored for this environment as the API is deployed 
 
 ### AWS
 
-🚀 **Planned for v1** - The AWS deployment target is planned for v1, it may become available in a future v0 evolution.
+✅ **Available in v0** for [ECS](#ecs).
+
+🚀 **Planned for v1** for [EKS](#eks).
 
 In the AWS environment, APIs are deployed as a containerised version of the Celerity runtime.
 Authentication, authorisation and CORS configuration defined for the API is taken care of by the runtime.
 
-APIs can be deployed to [ECS](https://aws.amazon.com/ecs/) or [EKS](https://aws.amazon.com/eks/) backed by [Fargate](https://aws.amazon.com/fargate/) or [EC2](https://aws.amazon.com/ec2/) using [compute configuration](/docs/framework/applications/compute-configuration#aws-configuration-options) that is shared between compute resource types in the app deploy configuration file.
+APIs can be deployed to [ECS](https://aws.amazon.com/ecs/) (v0) or [EKS](https://aws.amazon.com/eks/) (v1) backed by [Fargate](https://aws.amazon.com/fargate/) or [EC2](https://aws.amazon.com/ec2/) using [compute configuration](/docs/framework/applications/compute-configuration#aws-configuration-options) that is shared between compute resource types in the app deploy configuration file.
 
 #### ECS
+
+✅ **Available in v0**
 
 When an API is first deployed to ECS, a new cluster is created for the API.
 A service is provisioned within the cluster to run the application.
@@ -1750,6 +1760,8 @@ For a Fargate-backed cluster, in production app environments, the task housing t
 A sidecar [ADOT collector](https://aws-otel.github.io/docs/getting-started/collector) container is deployed with the API to collect traces and metrics for the application, this will take up a small portion of the memory and CPU allocated to the API. Traces are only collected when tracing is enabled for the API.
 
 #### EKS
+
+🚀 **Planned for v1** - Deploying APIs to EKS is planned for v1, it may become available in a future v0 evolution.
 
 When an API is first deployed to EKS, a new cluster is created for the API unless you specify an existing cluster to use in the deploy configuration.
 

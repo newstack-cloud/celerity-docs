@@ -1,0 +1,416 @@
+---
+title: Datastore SDK Operations
+description: The language-agnostic contract every Celerity SDK implements for NoSQL data stores
+---
+
+**Spec Version:** `v2026-02-27-draft`
+
+This is the contract for reading and writing a [`celerity/datastore`](/docs/framework/applications/resources/celerity-datastore) resource from handler code. It is language-agnostic. The Node.js, Python and Go SDKs each implement it in their own idiomatic way, and a handler written against it behaves the same on every target store.
+
+<Callout title="Feature Availability" type="info">
+- ✅ **Available in v0** - Features currently supported
+- 🔄 **Planned for v0** - Features coming in a future v0 evolution
+- 🚀 **Planned for v1** - Features coming in v1
+- 🔮 **Planned for v1+** - Features planned for after the v1 release
+</Callout>
+
+For the resource type itself (keys, indexes, TTL and deploy configuration), see [`celerity/datastore`](/docs/framework/applications/resources/celerity-datastore). For schemas, type generation and contracts, see [NoSQL Datastore Schema Management](/docs/framework/applications/nosql-datastore-schema-management).
+
+## What portability means here
+
+The contract is the intersection of what every target store can do, not the union. A capability is in it only when every store can express it correctly. Two tiers say what that costs:
+
+- **Tier A** - one request on every store. This is the majority case of the contract.
+- **Tier B** - correct on every store, but some stores need an extra read or a narrower shape to get there. Each Tier B capability says how stores deviate in their approach.
+
+A capability that cannot be expressed correctly on one of the stores is **not in the contract**, even when most stores have it. Those are listed under [Deliberately not in the contract](#deliberately-not-in-the-contract), each with the store that rules it out.
+
+### The target stores
+
+| Deploy target | Store | Status |
+|---|---|---|
+| `aws` / `aws-serverless` | Amazon DynamoDB | ✅ Available in v0 |
+| `gcloud` / `gcloud-serverless` | Google Cloud Firestore | 🚀 Planned for v1 |
+| `azure` / `azure-serverless` | Azure Cosmos DB | 🚀 Planned for v1 |
+
+Every driver lives in the language-specific SDK. There is no datastore driver in the Celerity runtime and nothing in this contract crosses the [IPC protocol](/docs/framework/runtime/handler-ipc-protocol), so the same operations behave identically whether a handler runs in a container or in a provider's serverless environment.
+
+### Two further stores the contract is designed against
+
+🔮 **Planned for v1+**
+
+[Self-hosted deployment](/docs/framework/versions#v1-future---post-v1-features) is planned for after v1. Its data store engines have been preliminarily decided, and this contract is written against them now rather than later:
+
+- **PostgreSQL**, JSONB-backed, as the default engine.
+- **ScyllaDB Alternator** as an opt-in for horizontal scale. Alternator speaks the DynamoDB API, so it is served by the DynamoDB driver pointed at another endpoint rather than by a driver of its own.
+
+They are named throughout the notes below on what each capability costs. A contract validated against three managed cloud stores can still turn out to be shaped by the one it was written for first, and PostgreSQL and Alternator disagree with DynamoDB in different places, so designing against all five keeps the contract stable when self-hosted arrives. Alternator is also the one store that cannot do everything here, as [Atomic writes](#atomic-writes) describes.
+
+Nothing in this section is needed to use a data store today. Handlers written against the contract run on the three stores above without knowing the other two exist.
+
+## Item keys
+
+An item is identified by the partition key, and the sort key where the data store declares one. Both come from [`keys`](/docs/framework/applications/resources/celerity-datastore#keys-required) in the blueprint, so the SDK is given values, never attribute names for the key itself.
+
+Key values are strings or numbers. A store that has no native number key type encodes numbers so that ordering is preserved.
+
+## Core operations
+
+| Operation | What it does | Tier |
+|---|---|---|
+| `getItem(key)` | Get a single item by its key. Reports not-found distinctly from an error | A |
+| `putItem(item)` | Put or replace a whole item | A |
+| `deleteItem(key)` | Delete by key. Idempotent, so deleting nothing is not an error | A |
+| `query(options)` | One page of a partition, with optional sort-key range and filters | A |
+| `scan(options)` | One page of the whole data store, with optional filters | A |
+| `batchGetItems(keys)` | Get many items by key in as few requests as the store allows | A |
+| `batchWriteItems(ops)` | Put and delete many items. **Not** atomic | A |
+| `updateItem(key, ops)` | Mutate parts of an existing item, leaving the rest alone | A |
+| `atomicWrite(partition, ops)` | All-or-none writes within one partition | B |
+
+## Reading
+
+### getItem
+
+Returns the item, or reports that nothing exists under that key. Each SDK reports absence in its own idiomatic way, as `null`, `None` or a not-found error, and never as an empty item.
+
+A read also returns the item's **revision**. See [Preconditions](#preconditions), the revision is what makes read-modify-write one request per step on every store.
+
+### query
+
+A query always names a partition. Within it:
+
+| Option | Meaning |
+|---|---|
+| `range` | A [range condition](#range-conditions) on the sort key |
+| `filter` | A [condition expression](#condition-expressions) on the item's own fields, applied after the read |
+| `indexName` | An index [declared in the blueprint](/docs/framework/applications/resources/celerity-datastore#indexes), queried instead of the base table |
+| `project` | The fields to return. See [Projection](#projection) |
+| `sortAscending` | Sort-key order. Ascending by default |
+| `maxResults` | The largest page the store should return |
+| `cursor` | Where to resume, from a previous call |
+
+A filter is applied by the store after items are read, so it reduces what crosses the network but not what the query costs. A range condition on the sort key is part of what the store seeks to and does reduce the cost, so prefer it where the data model allows.
+
+### scan
+
+The same, without a partition and without a range condition or an index. A scan reads every item in the data store; a query reads one partition. Reach for `scan` only for genuinely whole-store work such as an export or a backfill.
+
+### batchGetItems
+
+Takes a list of keys and splits them across as many requests as the store's limits require. It returns the items it fetched and the keys it could not. That second list is permanently empty on stores that cannot partly fail. See [Unprocessed items](#unprocessed-items).
+
+Items come back in no particular order. Match them to their keys by key, not by position.
+
+### Range conditions
+
+A range condition applies to the sort key. It does not carry a field name, because the sort key belongs to the data store the way the partition key does.
+
+`eq` | `lt` | `le` | `gt` | `ge` | `between` | `startsWith`
+
+All seven are Tier A, `startsWith` included. Where a store has no prefix operator, the driver rewrites it as a range over the sort key: from the prefix itself up to the least value that sorts after every string carrying it, which is the prefix with its last character incremented. Firestore is the store this applies to. DynamoDB and Alternator have `begins_with`, Cosmos DB has `STARTSWITH`, and PostgreSQL can use either form.
+
+The rewrite costs nothing, because prefix matching on a sorted index already is a range scan: seek to the first key at or after the prefix, then read forward until a key falls outside it. A native `begins_with` does the same internally, so the rewritten query issues one request, reads exactly the matching items and does not require post-read filters.
+
+`startsWith` applies to string sort keys only. A prefix of a number has no meaning in sort order.
+
+### Condition expressions
+
+A condition expression tests an item's own fields. The same type is used for query and scan **filters** and for [write preconditions](#preconditions), so an application learns one vocabulary.
+
+| Operator | Meaning | Tier as a filter |
+|---|---|---|
+| `eq` `ne` | Equal, not equal | A |
+| `lt` `le` `gt` `ge` | Ordered comparison | A |
+| `between` | Inclusive range, `low` and `high` | A |
+| `startsWith` | String prefix | A |
+| `contains` | Substring, or membership of a list | **B** |
+| `exists` `not_exists` | The field is present, or absent | **B** |
+
+Conditions combine with AND and OR, nesting freely:
+
+- **Array** `[condA, condB]` - implicit AND, all must match
+- **Explicit AND** `{ and: [...] }` - equivalent to the array
+- **OR** `{ or: [...] }` - at least one must match
+
+```typescript
+// (status = "active" OR status = "pending") AND age > 18
+filter: { and: [
+  { or: [
+    { name: "status", operator: "eq", value: "active" },
+    { name: "status", operator: "eq", value: "pending" },
+  ]},
+  { name: "age", operator: "gt", value: 18 },
+]}
+```
+
+<Callout title="contains, exists and not_exists cost more on Firestore" type="warn">
+Firestore does not index entries for a missing field and has no substring query, so these three cannot be evaluated server-side there. The Firestore driver evaluates them after reading, which is correct and returns the same items, but reads more than it returns.
+
+This applies to **filters only**. As write preconditions, `exists` and `not_exists` are native on every store, as [Existence](#existence) describes.
+</Callout>
+
+### Projection
+
+✅ In the contract. Native on every store.
+
+`project` takes the field names to return. Key fields are always returned whether or not they are listed, since without them a returned item cannot be identified.
+
+A projection reduces what crosses the network. It does not reduce what the read costs on any store.
+
+### Sort direction
+
+✅ In the contract. Native on every store.
+
+`sortAscending` defaults to true. Set it false to read a partition newest-first, which with a timestamp sort key is the common case and is much cheaper than reading the partition through and reversing it.
+
+### Cursor pagination
+
+A query or scan returns **one page** and an **opaque cursor**. Passing the cursor to a subsequent call with otherwise identical options resumes exactly where the previous page ended. An absent cursor means there are no further pages.
+
+The cursor is opaque and must be treated as such. It is not a key: resuming a query on a secondary index needs the index's position and the table's together, which no single key can carry. Do not parse it, do not construct one, and do not persist one across a deployment that might change store or engine.
+
+SDKs may additionally offer a read-through iterator that fetches pages as it goes: `ItemListing` in Node.js, `Items` in Go. That is a convenience over the same paging, not a second mechanism.
+
+### Read consistency
+
+There is no per-read consistency flag in this contract, because the flag means four different things across the stores. What the contract guarantees instead:
+
+- A read of the **base table** by key, after a write to that key completes, sees that write on every store.
+- A read through a **secondary index** may not yet see a very recent write. Eventual consistency on secondary indexes is the expectation, and portable code must tolerate it.
+
+Some stores provide stronger guarantees. Firestore and PostgreSQL are always strongly consistent, so a handler that reads its own write through an index is correct there and the staleness bug never appears in testing.
+It's up to the developer to make an informed decision based on their chosen platform, how likely it is to change,
+as to whether or not their implementation is truly portable when it comes to read consistency.
+
+## Writing
+
+### putItem and deleteItem
+
+`putItem` replaces the whole item. `deleteItem` is idempotent. Both accept the preconditions below, and `putItem` returns the item's new revision so that a sequence of writes needs no intervening read.
+
+To change part of an item rather than replacing it, see [updateItem](#updateitem).
+
+### updateItem
+
+**Tier A.** Mutates named parts of an existing item, leaving the rest untouched.
+
+```typescript
+await orders.updateItem(key, [
+  { op: "set", path: ["status"], value: "shipped" },
+  { op: "increment", path: ["attempts"], by: 1 },
+  { op: "remove", path: ["holdReason"] },
+]);
+```
+
+Three operations port to every store:
+
+| Operation | Meaning |
+|---|---|
+| `set` | Write a value at a path, creating the field if absent |
+| `remove` | Delete the field at a path |
+| `increment` | Add a number to the field at a path, atomically. Negative to decrement |
+
+`increment` is applied by the store, so two handlers incrementing the same field do not overwrite each other.
+
+Preconditions apply as they do to `putItem`, so an update can be both partial and conditional in one request.
+
+#### The four rules
+
+Each comes from a store that cannot do otherwise:
+
+| Rule | Why |
+|---|---|
+| **The item must already exist** | Firestore's `update` fails with not-found on a missing document, and a Cosmos DB patch requires one. So the contract reports **not found** rather than creating the item |
+| **At most 10 operations** | A Cosmos DB patch specification takes a maximum of 10 operations |
+| **Paths address object fields, not array elements** | Firestore cannot update, insert or delete an array element by index |
+| **No list append or set-membership operation** | Firestore has `arrayUnion`/`arrayRemove`, which have *set* semantics and silently drop duplicates, where every other store appends. Same call, different result, so it is not included |
+
+The first rule is where the stores disagree the most. DynamoDB's `UpdateItem` is an upsert and **creates** the item when it is absent, the opposite of Firestore and Cosmos DB. The contract normalises to the stricter behaviour, so the DynamoDB driver adds an existence precondition to every update. Without it, the same code creates a half-populated item on one store and reports not-found on another, and no handler would notice until it ran somewhere else.
+
+To replace a whole array, or to append to one, read the item and `putItem` it back with [`ifUnchanged`](#unchanged-since-a-read).
+
+### Preconditions
+
+A precondition is evaluated by the store as part of the write. When it does not hold, the write does not happen and the SDK reports a **condition-failed** error, distinct from every other failure so that a caller can retry rather than match on a provider's error code.
+
+#### Existence
+
+Tier A. Every store can do this in one request.
+
+- `exists` - write only if an item is already there. An update that must not create.
+- `not_exists` - write only if nothing is there. A create that must not overwrite.
+
+`not_exists` is the most portable write precondition there is: a native precondition on all five stores.
+
+#### Unchanged since a read
+
+Tier A, and the **recommended way to do read-modify-write**. Every read returns a revision; passing it back on a write requires that nothing else has written the item since.
+
+```typescript
+const { item, revision } = await orders.getItem(key);
+item.status = "paid";
+await orders.putItem(item, { ifUnchanged: revision });
+// condition-failed means something got there first: read again and retry
+```
+
+How the revision arrives alongside the item is each SDK's own choice: a result object in Node.js and Python, a second return value in Go. Every read returns one, including a read through a query, a scan or a batch get.
+
+This is one request per step on every store, which no other form of optimistic concurrency manages. Firestore's last-update-time precondition and Cosmos DB's `If-Match` on the ETag are native and atomic in a single call. DynamoDB, Alternator and PostgreSQL carry a revision the SDK maintains and condition on it.
+
+<Callout title="The reserved revision field" type="info">
+On stores with no native revision, the SDK maintains a reserved item field named **`_celerity_rev`**.
+
+- It is reserved. An application must not read, write or index it, and a schema must not declare it.
+- Schema validation, drift detection and schema exports exclude it. It will not appear as an unknown field in a drift report.
+- It is maintained only by the SDK. An item written by something other than a Celerity SDK, such as a data script, a console edit or a pipeline, will not have one. The first Celerity write to that item sets it.
+- Revisions are **not** comparable or ordered. A revision is only ever handed back to the store it came from.
+</Callout>
+
+A revision belongs to the item it was read from. Do not persist one, pass one between handlers, or use one obtained from a different data store.
+
+#### An arbitrary condition
+
+**Tier B.** A [condition expression](#condition-expressions) on the item's own fields, evaluated as a precondition on a write.
+
+```typescript
+// Refund only an order that is currently paid, without reading it first.
+await orders.updateItem(key, [{ op: "set", path: ["status"], value: "refunded" }], {
+  condition: { name: "status", operator: "eq", value: "paid" },
+});
+```
+
+**What it buys is skipping the read.** Without it, the same guarantee needs a `getItem`, a check in the handler, and a `putItem` guarded by [`ifUnchanged`](#unchanged-since-a-read). A condition lets the store make the decision, so the write is one request and there is no window for another writer to act between the read and the write.
+
+**Where it costs a read anyway:**
+
+| Store | On a `putItem` | On an [`updateItem`](#updateitem) |
+|---|---|---|
+| DynamoDB, Alternator | Native `ConditionExpression` | Native |
+| PostgreSQL | Native `WHERE` | Native |
+| Cosmos DB | Read, then write with the ETag | Native filter predicate on the patch |
+| Firestore | Read, then write with a revision precondition | Read, then write with a revision precondition |
+
+Firestore is the only store that always pays, and Cosmos DB pays only when replacing a whole item, because its filter predicate is available on a patch rather than a replace.
+
+**The emulated path keeps the same meaning.** Where a driver has to read first, it reads the item, evaluates the condition itself, and writes with a revision precondition so nothing can slip in between. Two cases follow from that:
+
+- The condition does not hold. The driver reports **condition failed** and writes nothing, which is what the native path does.
+- The condition holds, but another writer changes the item before the write lands, so the revision precondition fails. The driver reads and re-evaluates rather than surfacing this, because otherwise **condition failed** would mean two different things on two different stores: "your condition was false", where the right response is to stop, or "someone got there first", where the right response is to retry. A caller must be able to treat the error the same way everywhere.
+
+**If the item does not exist**, the condition cannot hold, so the write is refused with **condition failed** on every store. This matches DynamoDB, where a condition naming a field of an absent item evaluates false.
+
+Preconditions combine. An operation carrying both a condition and `ifUnchanged` is written only if both hold.
+
+**Choosing between this and `ifUnchanged`:** use a condition for facts about the **domain**, such as "the order is paid". Use [`ifUnchanged`](#unchanged-since-a-read) for **concurrency**, when what you need is that nobody has touched the item since you read it. The second is Tier A everywhere and says exactly what it means; reaching for a condition to express concurrency gets you the extra read on Firestore with no benefit.
+
+<Callout title="Inside an atomic write" type="info">
+A condition on an `update` operation inside an [atomic write](#atomic-writes) works on every store. A condition on a `put` operation does not: Cosmos DB would need the read its batch forbids. Use `ifUnchanged` on puts inside a batch, which is native everywhere.
+</Callout>
+
+### batchWriteItems
+
+Puts and deletes, split across as many requests as the store's limits require.
+
+**A batch write is not atomic.** Some operations may succeed while others fail, on every store. When you need all-or-none, use [atomicWrite](#atomic-writes).
+
+#### Unprocessed items
+
+A batch write returns the operations it could not process, and a batch get the keys it could not fetch. Both lists are permanently empty on Firestore, Cosmos DB and PostgreSQL, where a batch either applies or raises.
+
+This is a DynamoDB behaviour surfaced because ignoring it there loses writes. Handle it by retrying what comes back, with backoff. Do not build a design around it, and do not read an empty list as confirmation that a store cannot partly fail.
+
+### Atomic writes
+
+**Tier B.** All-or-none writes within one partition.
+
+```typescript
+await orders.atomicWrite(customerId, [
+  { type: "put", item: order, condition: { ifUnchanged: revision } },
+  { type: "update", key: counterKey, ops: [{ op: "increment", path: ["orders"], by: 1 }] },
+  { type: "delete", key: basketKey },
+]);
+```
+
+Puts, updates and deletes may all appear in a batch: DynamoDB's `TransactWriteItems` takes `Update`, and a Cosmos DB `TransactionalBatch` takes a patch operation alongside its create, replace and delete.
+
+The shape is the intersection of what the stores can do, which is narrower than DynamoDB's and is exactly Cosmos DB's native limit:
+
+| Constraint | Why |
+|---|---|
+| **Writes only, no reads inside** | DynamoDB and Cosmos DB both forbid reading inside a transaction |
+| **One logical partition** | Cosmos DB's `TransactionalBatch` is scoped to a single logical partition |
+| **At most 100 operations** | DynamoDB and Cosmos DB both stop at 100 |
+| **One data store** | Cosmos DB's batch cannot span containers |
+| Existence and `ifUnchanged` preconditions on each operation | Native everywhere the batch itself is. An [arbitrary condition](#an-arbitrary-condition) is not portable on a `put` inside a batch |
+
+The partition is a parameter rather than something inferred from the operations, so the one-partition rule cannot be broken by accident.
+
+The 100-operation limit is enforced by the SDK, which refuses a larger batch locally instead of sending it. That matters because the limit is not the same everywhere: PostgreSQL has no practical ceiling and Firestore's is far higher, so a 200-operation batch would succeed on those two and be refused by DynamoDB and Cosmos DB. Holding every store to the lowest limit means a batch that works in development works wherever it is deployed, rather than failing the first time the application runs on a different target.
+
+An over-size batch is a programming error, not a runtime condition, so it is reported as an invalid argument rather than as one of the three [errors](#errors) below. Nothing reaches the store, so nothing is charged and nothing is partly applied. An atomic write cannot be split across requests the way [`batchWriteItems`](#batchwriteitems) is, because splitting it would break the all-or-none guarantee, so a batch above the limit has to be restructured rather than retried.
+
+Read-modify-write does not need a read inside the batch. Take the revision from an earlier read and pass it as [`ifUnchanged`](#unchanged-since-a-read) on the operation that needs it.
+
+<Callout title="ScyllaDB Alternator cannot do this at all" type="warn">
+🔮 **Planned for v1+**. This applies to the self-hosted Scylla engine, which arrives after v1.
+
+Alternator supports single-item conditional writes and no multi-item transactions. Selecting `selfhosted.datastore.engine: scylla` therefore costs atomic multi-item writes: `atomicWrite` reports **not-supported**, naming the store and the capability.
+
+Atomic writes appear in handler code, not in the blueprint, so a deployment cannot detect the conflict from the resource definition alone. Where an SDK statically extracts handler dependencies, it records use of `atomicWrite` in the handler manifest so that a build for the Scylla engine can be refused rather than failing at runtime.
+</Callout>
+
+## Errors
+
+Every SDK distinguishes these three from ordinary failures, so a handler can branch on them without matching on a provider's error codes or strings.
+
+| Condition | Meaning |
+|---|---|
+| **Not found** | Nothing exists under that key. Reported by `getItem` in the language's own idiom |
+| **Condition failed** | A precondition did not hold. The write did not happen. Read again and retry |
+| **Not supported** | The configured store cannot do this. Names the store and the capability |
+
+Everything else, including throttling, timeouts, credentials and network failures, surfaces as the provider's own error, wrapped with the data store's name.
+
+## Named indexes are field sets
+
+Firestore and Cosmos DB have no index a query can name; you query by field and the store chooses an index for you.
+
+The blueprint's [`indexes`](/docs/framework/applications/resources/celerity-datastore#indexes) therefore survive as an **alias for a field set**, which is information the data store's declaration already carries. `indexName` names an index for drivers that have them, and is **resolved to its fields** by drivers that do not. It is never passed through to a store that has no such concept.
+
+This means an index name is part of the deployed application's shape, not a store's identifier: renaming an index in the blueprint changes handler code, and querying an index that the blueprint does not declare is an error at extraction or startup rather than at the store.
+
+## Deliberately not in the contract
+
+Each of these is available on most of the stores, and is left out because it cannot be made to mean the same thing on all of them. Where an SDK offers one, it is through a provider-specific class, clearly outside the portable surface.
+
+| Capability | Why not |
+|---|---|
+| **Strongly consistent read as a flag** | DynamoDB refuses it on a secondary index; Firestore and PostgreSQL are always strong, so it is a no-op; Cosmos DB expresses consistency as an account or request level, not a boolean. Four meanings for one flag. See [Read consistency](#read-consistency) |
+| **Scanning a named index** | Three of the five stores have no named index to scan, and on PostgreSQL the planner chooses the index, so naming one is meaningless |
+| **Reading inside a transaction** | DynamoDB and Cosmos DB both forbid it. [`ifUnchanged`](#unchanged-since-a-read) covers what it is usually wanted for |
+| **List append and set-membership updates** | Firestore's `arrayUnion`/`arrayRemove` have set semantics and drop duplicates where every other store appends, so the same call would produce different arrays. Read and [`putItem`](#putitem-and-deleteitem) the array back instead. See [updateItem](#updateitem) for the operations that do port |
+| **Updating an array element by index** | Firestore cannot address an array element by index for update, insert or delete |
+| **Cross-partition atomic writes** | Cosmos DB's batch is scoped to one logical partition. See [Atomic writes](#atomic-writes) |
+
+## Language bindings
+
+The operations above are named in the contract's conventions. Each SDK takes its language's:
+
+| Contract | Node.js | Python | Go |
+|---|---|---|---|
+| Operation names | `getItem`, `putItem`, `updateItem`, … | `get_item`, `put_item`, `update_item`, … | `Get`, `Put`, `Update`, `Query`, … |
+| Not found | `null` | `None` | `ErrNotFound` |
+| Condition failed | `ConditionalCheckFailedError` | `ConditionalCheckFailedError` | `ErrConditionFailed` |
+| Not supported | `NotSupportedError` | `NotSupportedError` | `ErrNotSupported` |
+| Read through pages | `ItemListing`, an async iterable | An async iterator | `Items`, returning `iter.Seq2` |
+| Preconditions | `condition` options | `condition` keyword arguments | `IfUnchanged`, `IfNotExists`, `If` options |
+| Update operations | `{ op: "set", … }` objects | `Set(...)`, `Remove(...)`, `Increment(...)` dataclasses | `resources.Set`, `resources.Remove`, `resources.Increment` |
+
+For language-specific documentation, see [Node.js SDK - Datastore](/docs/node-runtime/datastore), [Python SDK - Datastore](/docs/python-runtime/datastore) and [Go SDK - Datastore](/docs/go-sdk/datastore).
+
+<Callout title="Schema validation" type="info">
+The SDK does not validate writes against the schema. Validation is code generated from the schema, which an application calls where it wants it. In Python that is Pydantic model construction, so it is on by default there.
+
+Catching non-conforming data across every writer, including ones that never touch a Celerity SDK, is the job of [`celerity schema drift`](/docs/framework/applications/nosql-datastore-schema-management#drift-detection) run on a schedule. That is a sampled, contract-aware scan which observes the data regardless of how it was written.
+</Callout>

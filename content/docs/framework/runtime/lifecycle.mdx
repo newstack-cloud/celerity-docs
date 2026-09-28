@@ -3,7 +3,7 @@ title: Runtime Lifecycle & Support Policy
 description: Lifecycle phases, support timelines, and deprecation policy for Celerity runtimes
 ---
 
-Celerity maintains container-based runtimes for running handlers in containerised and local development environments. These runtimes are tied to upstream language versions and follow a formal lifecycle with defined support windows.
+Celerity maintains container-based runtimes for running handlers in containerised and local development environments. Language runtimes are tied to upstream language versions and follow a formal lifecycle with defined support windows. OS-only runtimes, which run pre-compiled handler binaries against the Celerity core runtime, are tied to their base operating system image and to the IPC protocol version instead, see [OS-only Runtimes](#os-only-runtimes).
 
 For cloud provider serverless runtimes (AWS Lambda, Google Cloud Functions, Azure Functions), the lifecycle is managed by the respective cloud provider. See [Cloud Provider Runtimes](#cloud-provider-runtimes) for details.
 
@@ -52,6 +52,7 @@ The Celerity CLI will emit errors (not just warnings) when attempting to build o
 |---------|------------|-----|----------------|-----------------|----------------------|--------------|
 | Node.js 24 | nodejs24.x | Debian 13 (trixie) | Active | Active LTS (until Apr 2027), _then Maintenance LTS until Apr 2028_ | When Node.js 25+ runtime is added to Celerity | Oct 2028 |
 | Python 3.13 | python3.13.x | Debian 13 (trixie) | Active | Full Support (until ~Oct 2026), Security fixes (until Oct 2029) | When Python 3.14+ runtime is added to Celerity | Apr 2030 |
+| OS-only Debian 13 | os-only.debian13 | Debian 13 (trixie) | Active | Debian security support (until Aug 2028), _then Debian LTS until Jun 2030_ | When an `os-only.debian14` runtime is added to Celerity | Dec 2030 |
 
 <Callout title="How Celerity dates are derived" type="info">
 Celerity's Active phase ends when a newer version of the same language is adopted by Celerity. The Security-Only phase aligns with the upstream language version's end of life for security fixes. Celerity then provides a minimum 6-month Deprecated window before reaching End of Life.
@@ -59,6 +60,63 @@ Celerity's Active phase ends when a newer version of the same language is adopte
 
 <Callout title="Node.js 24 lifecycle note" type="info">
 Node.js 24 entered Active LTS in October 2025, before the Celerity v0 release. Since it remains the only supported Node.js version in Celerity, it is classified as Active within the Celerity lifecycle. It will transition to Security-Only when Celerity adds support for Node.js 25 or a later LTS version.
+</Callout>
+
+<Callout title="OS-only runtime dates" type="info">
+The `os-only.debian13` runtime contains no language interpreter, so the "Upstream Status" column refers to the base operating system image rather than a language version. Debian 13 (trixie) was released in August 2025 and receives full Debian security support until August 2028, followed by Debian LTS until June 2030. See [OS-only Runtimes](#os-only-runtimes) for the full policy, including the separate IPC protocol compatibility guarantees.
+</Callout>
+
+## OS-only Runtimes
+
+An OS-only runtime ships the Celerity core runtime on a bare operating system image with no language interpreter or language-specific SDK bindings. Your handler is a pre-compiled binary that the core runtime starts as a separate process and communicates with over the **Celerity IPC protocol**.
+
+This is how Celerity supports compiled languages. Rather than publishing a runtime per compiled language, the language-specific part lives in the Celerity SDK for that language. The Go SDK, for example, produces a handler executable that speaks the IPC protocol, and that executable runs on any OS-only runtime. One OS-only runtime therefore serves every compiled language Celerity has an SDK for.
+
+Because there is no language version involved, two independent support clocks apply to an OS-only runtime:
+
+| Clock | What it governs | What happens when it runs out |
+|-------|-----------------|-------------------------------|
+| **Base OS image** | Security patching of the published runtime image | The runtime moves through the standard lifecycle phases and is eventually no longer published so you rebuild against a newer OS-only runtime and redeploy |
+| **IPC protocol version** | The wire contract between the core runtime and your handler binary | A handler binary built against an unsupported protocol major version can no longer communicate with the core runtime and must be rebuilt against a current SDK |
+
+### Runtime Identifiers
+
+Each supported operating system variation is published as its own runtime identifier in the form `os-only.{osVersion}`, for example, `os-only.debian13`. Each variation is listed as a separate runtime in [Current Runtime Support](#current-runtime-support), with its own lifecycle phase and its own dates. Variations are never rolled forward in place: adopting a new base OS means adding a new runtime identifier, not changing what an existing one resolves to.
+
+An OS-only runtime enters the Active phase when it is added, and the previous OS-only variation transitions to Security-Only at that point, mirroring the policy for language runtimes.
+
+### IPC Protocol Compatibility
+
+The IPC protocol is versioned as `MAJOR.MINOR` and is negotiated at the handshake, when your handler process connects to the core runtime. Both ends declare the version they speak, and a handler built against a major version the runtime does not serve is refused there rather than failing later on a frame it cannot read. See [Version Negotiation](/docs/framework/runtime/handler-ipc-protocol#version-negotiation). The Celerity SDK you compile your handler against determines the protocol version that binary speaks.
+
+| Protocol Version | Introduced In | Status | Supported Until |
+|------------------|---------------|--------|-----------------|
+| 1.0 | Celerity v0 (October 2026) | Active | — |
+
+The following guarantees apply:
+
+- **Minor versions are additive only.** A handler binary built against protocol `1.x` runs unmodified on any runtime image that supports protocol major version `1`, including later minor versions. New optional capabilities may be added in a minor version; existing messages and their semantics are never changed or removed.
+- **Major versions get a minimum 12-month dual-support window.** When a new major protocol version is released, runtime images continue to accept the previous major version for at least 12 months from the release date of the new major version. During that window the Celerity CLI emits warnings at build time for handlers still using the older protocol, and a migration guide is published.
+- **The protocol clock is independent of the OS clock.** A protocol major version is not tied to any particular OS-only runtime identifier, and its support window is not shortened by an OS-only runtime reaching End of Life. In practice, whichever of the two clocks expires first is the one that forces a rebuild.
+
+<Callout title="Protocol version and SDK version" type="info">
+You do not set the protocol version directly. It is determined by the version of the Celerity SDK your handler binary is compiled against. Upgrading the SDK and rebuilding is the migration path for a major protocol version change.
+</Callout>
+
+### Handler Binary Compatibility
+
+The "OS" column for an OS-only runtime describes the image that Celerity publishes for local development and containerised targets. It does **not** describe every environment your handler binary may end up running in, the deploy engine maps OS-only runtime identifiers onto each target platform's own custom-runtime mechanism, which may be based on a different operating system.
+
+| Environment | What `os-only.debian13` resolves to | Base OS |
+|---|---|---|
+| Local development | Celerity OS-only runtime container image | Debian 13 (trixie) |
+| AWS Lambda | Lambda custom runtime (`provided.al2023`) | Amazon Linux 2023 |
+| Containerised targets (ECS/EKS and equivalents) | Celerity OS-only runtime container image | Debian 13 (trixie) |
+| Azure Functions | Azure Functions custom handler | Platform-defined |
+| Google Cloud Functions | Not supported | — |
+
+<Callout title="Build for the oldest target" type="warning">
+Because the base OS differs across targets, a dynamically linked handler binary built on Debian 13 may fail to start on a target with an older glibc. Statically link your handler binary, or build it against the oldest glibc across the targets you deploy to. The lifecycle dates on this page cover the runtime images Celerity publishes, they say nothing about what your binary links against.
 </Callout>
 
 ## Adoption Policy for New Runtimes
@@ -75,7 +133,18 @@ When a new version is added:
 
 ### New languages
 
-New language runtimes (Go, Java, C#) are planned for the v1 release (target: July 2027). New languages will enter the Active phase upon their initial Celerity release and will follow the same lifecycle policy defined on this page.
+New language runtimes (Java, C#) are planned for the v1 release (target: October 2027). New languages will enter the Active phase upon their initial Celerity release and will follow the same lifecycle policy defined on this page.
+
+This applies only to languages that need an interpreter or virtual machine in the runtime image. A compiled language such as Go is supported through its Celerity SDK, which produces a handler executable that runs on an existing OS-only runtime; adding a compiled-language SDK does not add a runtime to this page, and the OS-only lifecycle and IPC protocol guarantees are what apply to those handlers.
+
+### New OS-only runtime variations
+
+Celerity aims to add an OS-only runtime for a new base operating system version within 3 months of that version's stable release. Each variation is added as a new `os-only.{osVersion}` identifier rather than by changing an existing one, so handler binaries pinned to an existing identifier are unaffected.
+
+When a new OS-only variation is added:
+- The new runtime enters the Active phase.
+- The previous OS-only variation transitions to Security-Only.
+- The IPC protocol version supported by the new image is unchanged unless separately announced; adopting a new base OS is not, by itself, a protocol change.
 
 See the [Celerity versions](/docs/framework/versions) page for the full roadmap.
 
@@ -96,11 +165,20 @@ When a runtime approaches end of life, the following steps are carried out:
 | Upstream language version is in its final 12 months of security support, or has reached EOL | Security-Only → Deprecated |
 | 6 months have elapsed since entering the Deprecated phase, or upstream has fully ceased all support | Deprecated → End of Life |
 
+For OS-only runtimes, the base operating system image replaces the upstream language version as the trigger, and the IPC protocol carries its own separate trigger:
+
+| Trigger | Transition |
+|---------|-----------|
+| A newer OS-only variation is added to Celerity (e.g. `os-only.debian14`) | Active → Security-Only |
+| The base OS image enters the final 12 months of its security or LTS support, or has reached EOL | Security-Only → Deprecated |
+| 6 months have elapsed since entering the Deprecated phase, or the base OS image has fully ceased all support | Deprecated → End of Life |
+| A new major IPC protocol version is released | Previous major protocol → Deprecated, supported for a minimum of 12 months |
+
 ## Cloud Provider Runtimes
 
 When deploying handlers to cloud provider serverless platforms, the runtime lifecycle is governed by the respective cloud provider. Celerity does not control these runtimes and cannot extend their support beyond what the provider offers.
 
-You always specify a [Celerity runtime identifier](/docs/framework/applications/resources/celerity-handler#runtimes) in the blueprint — the Celerity deploy engine maps it to the concrete provider runtime at deploy time. Celerity tracks cloud provider runtime deprecations and will update the mapping, documentation and CLI warnings when a provider deprecates a runtime version.
+You always specify a [Celerity runtime identifier](/docs/framework/applications/resources/celerity-handler#runtimes) in the blueprint, the Celerity deploy engine maps it to the concrete provider runtime at deploy time. Celerity tracks cloud provider runtime deprecations and will update the mapping, documentation and CLI warnings when a provider deprecates a runtime version.
 
 ### AWS Lambda
 
@@ -111,7 +189,7 @@ The Celerity deploy engine maps each Celerity runtime identifier to a [supported
 The Celerity deploy engine maps each Celerity runtime identifier to a [supported Google Cloud Functions runtime](https://cloud.google.com/functions/docs/concepts/execution-environment#runtimes). When Google deprecates a Cloud Functions runtime that a mapping targets, Celerity will update the mapping and emit CLI warnings for affected applications.
 
 <Callout title="Warning" type="warning">
-Google Cloud Functions do not support OS-only runtimes where pre-compiled binaries are used for handlers. The only supported language in Google Cloud Functions that is compiled in other environments is Go.
+Google Cloud Functions does not offer a custom-runtime mechanism, so OS-only runtimes, where a pre-compiled handler binary is uploaded and executed directly, can not be deployed there. Compiled languages are supported (Go, Java and .NET all have first-class runtimes), but the platform builds your handler from source rather than running a binary you provide.
 </Callout>
 
 ### Azure Functions
@@ -119,17 +197,25 @@ Google Cloud Functions do not support OS-only runtimes where pre-compiled binari
 The Celerity deploy engine maps each Celerity runtime identifier to a [supported Azure Functions runtime](https://docs.microsoft.com/en-us/azure/azure-functions/supported-languages). When Azure deprecates a Functions runtime that a mapping targets, Celerity will update the mapping and emit CLI warnings for affected applications.
 
 <Callout title="Note" type="info">
-Azure Functions do not support OS-only runtimes in the same way as the Celerity runtime and AWS Lambda. Azure Functions do support custom handlers that are compiled light-weight HTTP servers that run in the Azure Functions runtime environment. Celerity will map OS-only runtime identifiers (`os.*`) to custom handlers in Azure Functions.
+Azure Functions do not support OS-only runtimes in the same way as the Celerity runtime and AWS Lambda. Azure Functions do support custom handlers that are compiled light-weight HTTP servers that run in the Azure Functions runtime environment. Celerity will map OS-only runtime identifiers (`os-only.*`) to custom handlers in Azure Functions.
 </Callout>
 
 ## Future Runtime Roadmap
 
-| Language | Target Celerity Version | Expected Language Version | Status |
-|----------|------------------------|--------------------------|--------|
-| Node.js 26 | v1 (July 2027) | Node.js 26 LTS | 🚀 Planned for v1 |
-| Python 3.14 | v1 (July 2027) | Python 3.14 | 🚀 Planned for v1 |
-| Go | v1 (July 2027) | TBD | 🚀 Planned for v1 |
-| Java | v1 (July 2027) | TBD | 🚀 Planned for v1 |
-| C# | v1 (July 2027) | TBD | 🚀 Planned for v1 |
+| Runtime | Expected Availability | Expected Upstream Version | Status |
+|---------|----------------------|---------------------------|--------|
+| Node.js 26 | v1 (October 2027) | Node.js 26 LTS | 🚀 Planned for v1 |
+| Python 3.14 | v1 (October 2027) | Python 3.14 | 🚀 Planned for v1 |
+| Java | v1 (October 2027) | TBD | 🚀 Planned for v1 |
+| C# | v1 (October 2027) | TBD | 🚀 Planned for v1 |
+| OS-only Debian 14 | Within 3 months of the Debian 14 release | Debian 14 (forky), expected mid-2027 | 🚀 Planned |
 
 _Lifecycle dates for planned runtimes will be published when the runtimes are released. Each will follow the same lifecycle policy defined on this page._
+
+<Callout title="Debian 14 timing" type="info">
+Debian 14 (forky) is expected in the middle of 2027. The `os-only.debian14` runtime will be added within 3 months of that release under the [adoption policy for new OS-only variations](#new-os-only-runtime-variations), which puts it around the v1 release rather than tied to it. When it is added, `os-only.debian13` transitions to Security-Only; existing handlers pinned to `os-only.debian13` are unaffected.
+</Callout>
+
+<Callout title="Compiled languages are not listed here" type="info">
+Compiled languages such as Go do not appear in this roadmap because they do not get a language-specific runtime. Language support for a compiled language lives entirely in its Celerity SDK, which produces a handler executable that runs on an OS-only runtime. See [OS-only Runtimes](#os-only-runtimes).
+</Callout>
