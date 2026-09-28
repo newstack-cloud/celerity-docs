@@ -133,7 +133,9 @@ When a new version is added:
 
 ### New languages
 
-New language runtimes (Java, C#) are planned for the v1 release (target: October 2027). New languages will enter the Active phase upon their initial Celerity release and will follow the same lifecycle policy defined on this page.
+v1 (target: October 2027) adds C#. It enters the Active phase upon its initial Celerity release and follows the same lifecycle policy defined on this page.
+
+Languages beyond it are considered case by case on demonstrated demand rather than committed in advance. A language runtime is a standing commitment rather than a one-off piece of work: everything on this page applies to it from the day it ships, including a published runtime image, security patching, adoption of new upstream versions within 3 months, and the Security-Only, Deprecated and End of Life windows.
 
 This applies only to languages that need an interpreter or virtual machine in the runtime image. A compiled language such as Go is supported through its Celerity SDK, which produces a handler executable that runs on an existing OS-only runtime; adding a compiled-language SDK does not add a runtime to this page, and the OS-only lifecycle and IPC protocol guarantees are what apply to those handlers.
 
@@ -206,7 +208,6 @@ Azure Functions do not support OS-only runtimes in the same way as the Celerity 
 |---------|----------------------|---------------------------|--------|
 | Node.js 26 | v1 (October 2027) | Node.js 26 LTS | 🚀 Planned for v1 |
 | Python 3.14 | v1 (October 2027) | Python 3.14 | 🚀 Planned for v1 |
-| Java | v1 (October 2027) | TBD | 🚀 Planned for v1 |
 | C# | v1 (October 2027) | TBD | 🚀 Planned for v1 |
 | OS-only Debian 14 | Within 3 months of the Debian 14 release | Debian 14 (forky), expected mid-2027 | 🚀 Planned |
 

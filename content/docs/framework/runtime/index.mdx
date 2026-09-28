@@ -173,7 +173,7 @@ The HTTP server will then listen for incoming requests and route them to the app
 
 ## Supported Languages
 
-The Celerity runtime provides tailored SDK support for the following languages. In v0, Node.js (TypeScript) and Python are available; Go, C# and Java are planned for v1. See the [Celerity versions](/docs/framework/versions) documentation for the full roadmap.
+The Celerity runtime provides tailored SDK support for the following languages. v1 adds C#. Languages beyond it are considered case by case on demonstrated demand rather than committed in advance. See the [Celerity versions](/docs/framework/versions) documentation for the full roadmap.
 
 | Language | Tailored SDK support |
 |---|---|
@@ -181,7 +181,7 @@ The Celerity runtime provides tailored SDK support for the following languages. 
 | Python | ✅ Available in v0 |
 | Go | ✅ Available in v0 |
 | C# | 🚀 Planned for v1 |
-| Java | 🚀 Planned for v1 |
+| Java | 💬 Under consideration |
 
 <Callout title="Compiled languages do not have their own runtime" type="info">
 Tailored SDK support is not the same as a language-specific runtime. For an interpreted language such as Node.js or Python, Celerity publishes a runtime image containing that language's interpreter. For a compiled language such as Go, there is no Go runtime image — the SDK produces a handler executable, and that executable runs on an [OS-only runtime](/docs/framework/runtime/lifecycle#os-only-runtimes), which is a bare OS image containing only the Celerity core runtime. The core runtime starts your executable as a separate process and communicates with it over the Celerity IPC protocol. One OS-only runtime serves every compiled language, so compiled languages do not appear in the [future runtime roadmap](/docs/framework/runtime/lifecycle#future-runtime-roadmap).

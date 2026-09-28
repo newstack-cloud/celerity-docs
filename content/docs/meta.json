@@ -6,7 +6,6 @@
     "node-runtime",
     "python-runtime",
     "go-sdk",
-    "java-runtime",
     "csharp-runtime"
   ]
 }

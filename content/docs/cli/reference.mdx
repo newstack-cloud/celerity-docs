@@ -1560,15 +1560,15 @@ celerity schema codegen --lang go --out ./internal/generated/
 
 **Allowed Values**: `typescript` | `python` | `go` | `java` | `csharp`
 
-The target language for code generation. Java and C# follow their language runtimes in v1.
+The target language for code generation. C# follows its language runtime in v1. Java follows a language runtime that is under consideration rather than committed. See [Celerity versions](/docs/framework/versions).
 
 | Language | Output | Status |
 |---|---|---|
 | `typescript` | Interfaces, column constants, table name constants | ✅ Available in v0 |
 | `python` | Pydantic model classes | ✅ Available in v0 |
 | `go` | Structs with `db` tags (SQL) or `json` tags (NoSQL), column/table or field/index constants, and scan or validation helpers | ✅ Available in v0 |
-| `java` | Record classes | 🚀 Planned for v1 |
 | `csharp` | Record types | 🚀 Planned for v1 |
+| `java` | Record classes | 💬 Under consideration |
 
 #### `--out`
 

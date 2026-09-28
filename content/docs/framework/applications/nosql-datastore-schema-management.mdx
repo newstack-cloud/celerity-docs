@@ -708,7 +708,7 @@ Generate types from the schema YAML: TypeScript interfaces, Python Pydantic mode
 
 Each language gets the design that language would have chosen, not a shoehorning of another's: optionality is `?` in TypeScript, `Optional[...]` in Python and a pointer in Go; defaults are a Pydantic field default, an exported constant and a constructor respectively. What is identical across all three is the item shape on the wire, so an item written by one language's generated types reads correctly through another's.
 
-Java and C# follow their language runtimes in v1.
+C# follows its language runtime in v1. Languages beyond it are considered on a case by case basis.
 
 For SDK usage examples with generated types, see the [Node.js SDK - Datastore](/docs/node-runtime/datastore), [Python SDK - Datastore](/docs/python-runtime/datastore) and [Go SDK - Datastore](/docs/go-sdk/datastore) documentation. For the operations the generated types are used with, see [Datastore SDK Operations](/docs/framework/applications/datastore-sdk-operations).
 
@@ -967,13 +967,13 @@ A field that is both optional and nullable has three states (absent, present-and
 This is a real gap rather than a Go quirk: `nullable` fields that are also required do write an explicit null, because there is nowhere for a required field to be absent. For the optional-and-nullable case, model the absence instead of writing a null. That is the portable choice anyway, since Firestore indexes no entry for a missing field, so a null and an absence are not interchangeable there. See [`not_exists` in the datastore contract](/docs/framework/applications/datastore-sdk-operations#existence).
 </Callout>
 
-### Java
-
-🚀 **Planned for v1** - Java type generation (record classes) is planned for a future release.
-
 ### C#
 
-🚀 **Planned for v1** - C# type generation (record types) is planned for a future release.
+🚀 **Planned for v1** - C# type generation (record types) arrives with the C# runtime in v1.
+
+### Java
+
+💬 **Under consideration** - Type generation follows the language runtime, and Java is considered rather than committed. It would generate record classes. See [Celerity versions](/docs/framework/versions).
 
 ### Defaults
 

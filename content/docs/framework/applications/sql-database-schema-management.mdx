@@ -1013,13 +1013,13 @@ if err := rows.Scan(order.ScanDest()...); err != nil { ... }
 
 Integer widths are faithful to the column rather than collapsed: `smallint` is `int16`, `integer` is `int32`, `bigint` is `int64`. TypeScript has only `number` and Python only `int`, so Go is the one language that can say which, and a `bigint` quietly truncated to 32 bits is a bug worth the extra precision.
 
-### Java
-
-🚀 **Planned for v1** - Java type generation (record classes) is planned for a future release, with the Java runtime.
-
 ### C#
 
-🚀 **Planned for v1** - C# type generation (record types) is planned for a future release, with the C# runtime.
+🚀 **Planned for v1** - C# type generation (record types) arrives with the C# runtime in v1.
+
+### Java
+
+💬 **Under consideration** - Type generation follows the language runtime, and Java is considered rather than committed. It would generate record classes. See [Celerity versions](/docs/framework/versions).
 
 ## Schema Contracts
 
