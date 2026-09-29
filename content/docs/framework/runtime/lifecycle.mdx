@@ -191,7 +191,7 @@ The Celerity deploy engine maps each Celerity runtime identifier to a [supported
 The Celerity deploy engine maps each Celerity runtime identifier to a [supported Google Cloud Functions runtime](https://cloud.google.com/functions/docs/concepts/execution-environment#runtimes). When Google deprecates a Cloud Functions runtime that a mapping targets, Celerity will update the mapping and emit CLI warnings for affected applications.
 
 <Callout title="Warning" type="warning">
-Google Cloud Functions does not offer a custom-runtime mechanism, so OS-only runtimes, where a pre-compiled handler binary is uploaded and executed directly, can not be deployed there. Compiled languages are supported (Go, Java and .NET all have first-class runtimes), but the platform builds your handler from source rather than running a binary you provide.
+Google Cloud Functions does not offer a custom-runtime mechanism, so OS-only runtimes, where a pre-compiled handler binary is uploaded and executed directly, can not be deployed there. Languages that compile ahead of time are supported (Go to a native binary, Java and .NET to bytecode on a virtual machine), but the platform builds your handler from source rather than running a binary you provide.
 </Callout>
 
 ### Azure Functions

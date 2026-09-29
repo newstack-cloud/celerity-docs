@@ -2071,7 +2071,7 @@ The Celerity runtime identifier is resolved to a concrete runtime in each enviro
 The Celerity deploy engine chooses the closest available runtime on each target platform. If a target doesn't support the exact version, it falls back to the nearest supported version and surfaces a warning during `celerity deploy`.
 
 <Callout title="Google Cloud Functions and OS-only runtimes" type="warning">
-Google Cloud Functions does not offer a custom-runtime mechanism, so OS-only runtimes, where a pre-compiled handler binary is uploaded and executed directly, can not be deployed there. Compiled languages are supported (Go, Java and .NET all have first-class runtimes), but the platform builds your handler from source rather than running a binary you provide.
+Google Cloud Functions does not offer a custom-runtime mechanism, so OS-only runtimes, where a pre-compiled handler binary is uploaded and executed directly, can not be deployed there. Languages that compile ahead of time are supported (Go to a native binary, Java and .NET to bytecode on a virtual machine), but the platform builds your handler from source rather than running a binary you provide.
 </Callout>
 
 <Callout title="Azure Functions and OS-only runtimes" type="info">

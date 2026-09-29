@@ -885,6 +885,10 @@ type UserStoreItem struct {
 	LastLogin *float64 `json:"lastLogin,omitempty"`
 	// ExpiresAt is a Unix timestamp (s) for TTL.
 	ExpiresAt *float64 `json:"expiresAt,omitempty"`
+
+	// Set by a read, for a write that must require the item has not changed.
+	// Unexported and untagged: it is the SDK's, and never part of the item.
+	rev datastore.Revision
 }
 
 type UserStoreProfile struct {
@@ -939,11 +943,16 @@ func (i UserStoreItem) Validate() error { ... }
 // as a decoded map, and reports every violation it finds.
 func ValidateUserStoreItem(value any) []resources.SchemaViolation { ... }
 
+// SetRevision and Revision carry the revision of the item a read produced, so
+// that items found by a query can be written back without reading each again.
+func (i *UserStoreItem) SetRevision(r datastore.Revision) { ... }
+func (i UserStoreItem) Revision() datastore.Revision      { ... }
+
 // UserStore binds the datastore name, the item type and the validator.
 func UserStore(host resources.Host) resources.TypedDatastore[UserStoreItem] { ... }
 ```
 
-Go's generation differs from TypeScript's and Python's in five places, each because of something about Go rather than about the schema:
+Go's generation differs from TypeScript's and Python's in six places, each because of something about Go rather than about the schema:
 
 **Optionality is a pointer, not a `?`.** Go has no optional-field syntax, so a field that is not in `required` generates as a pointer with `omitempty`: nil means the field is absent from the item. A required field generates as a value type and is always written. Pointers rather than bare values matter here, because `omitempty` on a `string` would silently drop a deliberately-written empty string, whereas `*string` distinguishes "not set" from "set to empty".
 
@@ -952,6 +961,8 @@ Go's generation differs from TypeScript's and Python's in five places, each beca
 **Validation is an explicit method.** Pydantic validates on model construction, which has no Go equivalent and would be surprising if it did, so `Validate() error` is explicit, for handler code that wants to check an item before doing anything with it. `ValidateUserStoreItem` handles values that are not the item type, such as a decoded map, and returns [violations](#what-validation-reports) rather than an error so a caller can decide what is fatal. Both call the same generated checks.
 
 **A generated `Key()` method.** Go's datastore operations take a `resources.Key` rather than a map, so the partition and sort key are ordinary struct fields on the item. Generating `Key()` means the key is derived from the item, and a handler cannot pass a key whose fields disagree with the item it is writing.
+
+**The revision is a field on the item.** Every read returns a revision, and one read returns many items. A TypeScript or Python SDK can hand back a result object per item; a Go destination is a slice of the application's own type, with nowhere to put a second value per element. So the generated type implements the SDK's revision interface and carries the value in an unexported field, which is also why that field has no tag: it is the SDK's, not part of the item, and a read strips it from the stored attributes either way. A hand-written item type implements the same two methods where it needs them.
 
 **Numbers are `float64`.** The schema's `number` covers integers and floats, so `float64` is the faithful mapping and matches Python's `float` and TypeScript's `number`. Integer-typed fields would need an integer type in the schema format first; without one, generating `int64` would be a guess that silently truncates.
 

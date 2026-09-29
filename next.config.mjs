@@ -8,7 +8,6 @@ const config = {
   output: "export",
   basePath: process.env.PAGES_BASE_PATH,
   trailingSlash: true,
-  skipTrailingSlashRedirect: true,
   images: { unoptimized: true },
 };
 

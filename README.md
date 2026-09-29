@@ -48,7 +48,6 @@ The following components are independently versioned:
 - Node.js Runtime/SDK
 - Python Runtime/SDK
 - C#/.NET Runtime/SDK
-- Java Runtime/SDK
 - Go SDK
 
 Versioning is implemented using folders as per the [fumadocs versioning documentation](https://fumadocs.dev/docs/versioning).
