@@ -1,0 +1,14 @@
+---
+title: SDK - Bucket
+description: Go Celerity SDK operations for Celerity buckets
+---
+
+🔄 **Planned for v0** - Full SDK documentation is coming soon.
+
+The bucket package in the Celerity Go SDK provides a cloud-agnostic interface to object storage (Amazon S3, Google Cloud Storage, Azure Blob Storage). Reads, writes, listings, server-side copies, versioning and signed URLs are covered, along with removing many objects in one request.
+
+For the operations themselves - the full language-agnostic contract, including versioning, ranged reads and what a signed URL can and cannot promise - see [Bucket SDK Operations](/docs/framework/applications/bucket-sdk-operations). For the resource type, see [`celerity/bucket`](/docs/framework/applications/resources/celerity-bucket).
+
+Two shapes are Go's own. A write takes an `io.Reader`, and a body of unknown length is cut into parts by the transfer manager, so a handler streaming a large object never holds it whole. A read answers with a `*bucket.Object` carrying both the content and the metadata, since S3 sends them together and a second request to learn the content type would be one a handler need not pay for.
+
+A `Range` is a start and a length rather than two positions, so its zero value is the whole object: a last byte of zero would otherwise be indistinguishable from asking for the first byte alone. Reading a listing through is `bucket.Objects` and `bucket.AllVersions`, which return `iter.Seq2` and fetch a page at a time.

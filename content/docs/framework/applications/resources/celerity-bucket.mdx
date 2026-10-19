@@ -738,7 +738,9 @@ Which events are delivered (and any object key prefix/suffix filters) is configu
 
 When a bucket is linked to a consumer, the consumer will be configured to receive notifications from the bucket for events such as object creation, deletion, and updates. This is useful for processing events that can then perform actions based on the events received from the bucket.
 
-For FaaS-based target environments, the handlers configured for the consumer will be triggered directly through a rule in the cloud provider's event system (e.g. Amazon EventBridge). To gain greater control over throughput and processing of events, you can link the bucket to a queue or topic and have the application consume events from there.
+For FaaS-based target environments, the handlers configured for the consumer are triggered directly by the object storage service's own event notifications (in AWS, an S3 notification configuration targeting the handler function). Because that configuration belongs to the bucket rather than to each consumer, two consumers listening for the same event type on one bucket must narrow to non-overlapping object key prefixes or suffixes.
+
+To gain greater control over throughput and processing of events, or to deliver the same events to several consumers without that constraint, you can link the bucket to a queue or topic and have the application consume events from there.
 
 ✅ **Available in v0**
 

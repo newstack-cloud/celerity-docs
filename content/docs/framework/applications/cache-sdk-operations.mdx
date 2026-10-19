@@ -1,0 +1,242 @@
+---
+title: Cache SDK Operations
+description: The language-agnostic contract every Celerity SDK implements for key-value caches
+---
+
+**Spec Version:** `v2026-02-27-draft`
+
+This is the contract for reading and writing a [`celerity/cache`](/docs/framework/applications/resources/celerity-cache) resource from handler code. It is language-agnostic. The Node.js, Python and Go SDKs each implement it in their own idiomatic way, and a handler written against it behaves the same on every target cache.
+
+<Callout title="Feature Availability" type="info">
+- ✅ **Available in v0** - Features currently supported
+- 🔄 **Planned for v0** - Features coming in a future v0 evolution
+- 🚀 **Planned for v1** - Features coming in v1
+- 🔮 **Planned for v1+** - Features planned for after the v1 release
+</Callout>
+
+For the resource type itself (cluster mode, engine version, authentication and deploy configuration), see [`celerity/cache`](/docs/framework/applications/resources/celerity-cache).
+
+## Why this contract is wide where the datastore's is narrow
+
+The [datastore contract](/docs/framework/applications/datastore-sdk-operations) is the intersection of four unrelated databases, so a capability is in it only when every one of them can express it correctly, and most of that document is about what each capability costs where.
+
+A cache has no such problem. **Every managed cache speaks the Redis protocol**: Amazon ElastiCache, Google Memorystore, Azure Cache for Redis, and the Valkey a `celerity dev` session runs. There is one wire protocol, one set of data structures and one set of semantics, so the contract is close to the whole of what the protocol offers rather than the part several products agree on.
+
+| Deploy target | Cache | Status |
+|---|---|---|
+| `aws` / `aws-serverless` | Amazon ElastiCache | ✅ Available in v0 |
+| `gcloud` / `gcloud-serverless` | Google Memorystore | 🚀 Planned for v1 |
+| `azure` / `azure-serverless` | Azure Cache for Redis | 🚀 Planned for v1 |
+| local development | Valkey | ✅ Available in v0 |
+
+What differs between them is not the operations but **how a password is obtained**: a recorded secret on one platform, a signed identity token on another. That is the only platform-specific part of a cache in any SDK, which is why there is a cache driver per language rather than a cache driver per platform.
+
+Every driver lives in the language-specific SDK. Nothing here crosses the [IPC protocol](/docs/framework/runtime/handler-ipc-protocol), so the same operations behave identically whether a handler runs in a container or in a provider's serverless environment.
+
+### More than one cache
+
+An application may link several caches, and each is reached over its own connection. Two linked caches are two managed caches: two endpoints, two sets of credentials and, where one is a cluster and the other is not, two kinds of client, so there is nothing for them to share.
+
+In practice two or three is as far as this is worth taking. Each connection is a pool held open for the life of the execution environment, and on a serverless platform that cost is paid per concurrent invocation. Where several things are cached, prefer one cache with keys that say what they hold over several caches that each hold one thing.
+
+Handles are independent: closing or failing to reach one does not affect the others, and each carries its own [credentials](#credentials-provider).
+
+### What is deliberately not in the contract
+
+| Capability | Why not |
+|---|---|
+| **Pub/sub and streams** | A cache resource is a cache. Messaging is [`celerity/topic`](/docs/framework/applications/resources/celerity-topic) and [`celerity/queue`](/docs/framework/applications/resources/celerity-queue), which are backed by the platform's own messaging rather than by the cache |
+| **`WATCH`-based optimistic locking** | Check-and-set interacts with connection state: the watch belongs to a connection, and an SDK that pools connections cannot offer it without leaking that. Use a conditional write for the common case, or the [credentials provider](#credentials-provider) for the rest |
+| **Lua scripting** | A script is code sent to the cache, so it is neither typed nor portable across a future non-Redis cache. Available through the credentials provider |
+| **Geo commands, HyperLogLog, bitmaps** | Specialised structures with no cross-language shape worth fixing. Available through the credentials provider |
+| **`KEYS`** | Blocks the cache while it walks the whole keyspace. [`scan`](#key-management-operations) is the same question asked without stopping the world |
+| **Selecting a database by number** | ElastiCache in cluster mode has one database, so an application using several would not deploy |
+
+Everything in that list is reachable with your own client through the [credentials provider](#credentials-provider). It is outside the portable surface, not outside reach.
+
+## Cluster mode
+
+All single-key operations work identically in single-instance and cluster mode - the SDK routes them automatically.
+
+A clustered cache divides the keyspace into shards, and a command that names several keys can only be applied where they are all on the same one. Which shard a key is on is decided by its name, and **a hash tag** - the part of a key inside braces - is how an application decides deliberately: `{user:123}:session` and `{user:123}:prefs` hash on `user:123`, so they are guaranteed to be together.
+
+What happens when keys span shards depends on the operation:
+
+| Operation | Keys on one shard | Keys spanning shards |
+|---|---|---|
+| [`mget`](#batch-key-value-operations) | One command | The SDK reads shard by shard and merges. Safe: a batch read is not atomic on any cache |
+| [`mset`](#batch-key-value-operations), [`mdelete`](#batch-key-value-operations) | One command, atomic | The SDK groups by shard and applies each group atomically. **Across shards it is not atomic** - one group may be applied and another refused |
+| [`setUnion`](#set-operations), [`setIntersect`](#set-operations), [`setDiff`](#set-operations), [`rename`](#key-management-operations), [`transaction`](#transaction-operations) | One command | **Refused** with a cross-slot error, before anything is sent. A fan-out would have to read every key whole and combine them in the handler, which is a different operation wearing the same name |
+| [`scan`](#key-management-operations) | Names no keys, so there is nothing to co-locate | Every shard is walked and the results merged, so the order is not the cache's own |
+
+The SDK works out which shard a key is on locally, so a cross-shard operation is refused by name rather than by the cache's own answer, which names a slot number and not the keys that disagreed.
+
+## Core key-value operations
+
+- **`get(key)`** - Get a value by key. Reports absence in the language's own idiom.
+- **`set(key, value, options?)`** - Set a value with an optional TTL and conditional flags. `options.ttl` is the time to live. `options.nx` only sets the key if it does not already exist. `options.xx` only sets the key if it already exists. Returns `true` if the value was set, `false` otherwise. A `false` is not a failure: it is the answer to a condition that did not hold, which is how a caller learns it lost a race it deliberately entered.
+- **`delete(key)`** - Delete a value by key. Returns `true` if the key existed and was deleted. Deleting nothing is not an error.
+- **`ttl(key)`** - How long a key has left. Three answers: a duration, no expiry, or the key is not there. The Redis protocol returns `-1` and `-2` for the last two; SDKs are free to separate them rather than hand a caller a number to compare against `-2`.
+- **`getSet(key, value)`** - Atomically set a new value and return the old one. Reports absence where there was no previous value.
+- **`append(key, value)`** - Append to a value. Returns the length after appending. Creates the key with the given value if it does not exist.
+
+## Batch key-value operations
+
+Batch operations over multiple keys, split by shard as [Cluster mode](#cluster-mode) describes.
+
+- **`mget(keys)`** - Get multiple values in a single call. Keys the cache holds nothing under are reported as absent; how, is each SDK's own choice, since an empty string is a value a cache can legitimately hold and cannot stand in for one.
+- **`mset(entries)`** - Set multiple key-value pairs in a single call.
+- **`mdelete(keys)`** - Delete multiple keys in a single call. Returns the number of keys that were there.
+
+## Key management operations
+
+- **`exists(key)`** - Check if a key exists.
+- **`expire(key, ttl)`** - Set a lifetime on an existing key. Returns `true` if one was set, `false` if the key does not exist.
+- **`persist(key)`** - Remove the lifetime from a key. Returns `true` if one was removed, `false` if the key does not exist or had none.
+- **`type(key)`** - Which of the five structures a key holds: `string`, `list`, `set`, `zset` or `hash`. Reports absence where the key holds nothing. The protocol answers `none` rather than failing, and that is the case SDKs report as not-found.
+- **`rename(key, newKey)`** - Rename a key. Reports not-found if the source key does not exist, which the protocol raises rather than answering. In cluster mode both keys must be on one shard.
+- **`scan(options?)`** - Walk the keys of the cache. `options.match` is a glob pattern (e.g. `session:*`), `options.count` hints how many keys the cache should look at per round trip, and `options.type` keeps only one structure. The cache is being written to while this runs, so a key may be missed or seen twice.
+
+`scan` yields keys as it goes rather than returning a page and a cursor, which is where it differs from a [datastore listing](/docs/framework/applications/datastore-sdk-operations#cursor-pagination): a cache cursor is only valid against the cache's current contents, so it is not something to hand to a client and resume a later request with.
+
+## Atomic counter operations
+
+- **`incr(key, amount?)`** - Atomically add to an integer value. Returns the new value. A key that holds nothing counts as zero.
+- **`decr(key, amount?)`** - Atomically subtract from an integer value. Returns the new value.
+- **`incrFloat(key, amount)`** - Atomically add to a value that is not whole. Negative to subtract.
+
+The arithmetic is done by the cache, which is the point of these: a read, an add and a write from a handler loses a count whenever two invocations overlap, and two invocations overlapping is the ordinary case.
+
+## Hash operations
+
+Hashes store field-value pairs under a single key. Ideal for structured objects such as user profiles or session data, without serialising the whole value to a string: a write names the fields it changes and leaves the rest alone.
+
+- **`hashGet(key, field)`** - Get one field. Reports absence where the key or the field holds nothing.
+- **`hashSet(key, fields)`** - Set one or more fields, creating the hash if it does not exist and leaving unnamed fields alone.
+- **`hashDelete(key, fields)`** - Remove fields. Returns the number that were there.
+- **`hashGetAll(key)`** - Get every field and value. An **empty collection** where the key holds nothing, rather than an absence: a hash with no fields does not exist on this protocol, so the two cases are one answer.
+- **`hashExists(key, field)`** - Check if a field is there.
+- **`hashIncr(key, field, amount?)`** - Atomically add to an integer field. A field that is not there counts as zero.
+- **`hashKeys(key)`** - Get the field names.
+- **`hashLen(key)`** - Get the number of fields. Zero where the key holds nothing.
+
+## List operations
+
+Lists are ordered and can be pushed and popped at either end, which makes them queues, recent-activity feeds and bounded buffers.
+
+- **`listPush(key, values, end?)`** - Push values onto a list. `end` defaults to the tail. Returns the length after the push.
+- **`listPop(key, end?, count?)`** - Remove and return elements. `end` defaults to the head, `count` to `1`. An **empty collection** where the list holds nothing: a pop that found nothing is the ordinary answer for a drained queue rather than an absence.
+- **`listRange(key, start, stop)`** - Read by index range without modifying the list. `0` is the first element, `-1` the last.
+- **`listLen(key)`** - The length of a list. Zero where the key holds nothing.
+- **`listTrim(key, start, stop)`** - Discard everything outside a range.
+- **`listIndex(key, index)`** - Read one element. Reports absence where the index is outside the list or the key holds nothing.
+
+The two defaults - push to the tail, pop from the head - are what make an untouched list first-in-first-out. Push then `listTrim` is what bounds one, so it never grows past the length wanted however long the application runs.
+
+## Set operations
+
+Sets hold unique members in no order, for tagging, membership and counting something once however many times it happens.
+
+- **`setAdd(key, members)`** - Add members. Returns the number that were new.
+- **`setRemove(key, members)`** - Remove members. Returns the number that were there.
+- **`setMembers(key)`** - Every member. An empty collection where the key holds nothing.
+- **`setIsMember(key, member)`** - Check membership.
+- **`setLen(key)`** - The number of members. Zero where the key holds nothing.
+- **`setUnion(keys)`** - The union of several sets, without storing the result. One shard in cluster mode.
+- **`setIntersect(keys)`** - The intersection, without storing the result. One shard.
+- **`setDiff(keys)`** - The members of the first set that are in none of the rest, without storing the result. One shard.
+
+## Sorted set operations
+
+Sorted sets hold unique members each carrying a score, kept in score order. Leaderboards, priority queues, time indexes and the window of a rate limiter.
+
+- **`sortedSetAdd(key, members)`** - Add members, or move the score of ones already there. Returns the number that were new.
+- **`sortedSetRemove(key, members)`** - Remove members. Returns the number that were there.
+- **`sortedSetScore(key, member)`** - A member's score. Reports absence where the member or the key holds nothing.
+- **`sortedSetRank(key, member, reverse?)`** - A member's position in score order, counting from zero. `reverse` counts down from the highest score. Reports absence where the member is not there.
+- **`sortedSetRange(key, start, stop, options?)`** - Members by position, where `0` is the lowest-scoring and `-1` the highest. `options.reverse` reads from the highest, which is how the top of a leaderboard is read without reading the whole of it. `options.withScores` returns the scores alongside the members, where the language can express both shapes.
+- **`sortedSetRangeByScore(key, min, max, options?)`** - Members within a score band. The band may be **open at either end**, which is what a leaderboard read wants when the question is "everything above this" and there is no ceiling to name. `options.offset` and `options.count` page within the band.
+- **`sortedSetIncr(key, member, amount)`** - Atomically add to a member's score. Adds the member where it is not there.
+- **`sortedSetLen(key)`** - The number of members. Zero where the key holds nothing.
+- **`sortedSetCountByScore(key, min, max)`** - Count the members in a score band without reading them.
+- **`sortedSetRemoveByRank(key, start, stop)`** - Remove the members in a position range. Returns the number removed.
+- **`sortedSetRemoveByScore(key, min, max)`** - Remove the members in a score band. Returns the number removed. This is what keeps a rate limiter's window the size of the window rather than the size of the traffic.
+
+## Transaction operations
+
+- **`transaction(fn)`** - Apply a group of writes as one. The callback receives a builder whose methods queue commands and return the builder for chaining; nothing is sent until the callback returns. Returns what each queued command answered, in the order they were queued.
+
+The builder carries the write operations of the contract: `set`, `delete`, `getSet`, `append`, `incr`, `decr`, `incrFloat`, `hashSet`, `hashDelete`, `hashIncr`, `listPush`, `listTrim`, `setAdd`, `setRemove`, `sortedSetAdd`, `sortedSetRemove`, `sortedSetIncr`, `expire`, `persist` and `rename`.
+
+**There is nothing to read inside.** The cache answers a queued command only once the whole group has been applied, so a value read in the callback would be one from before the transaction began. Where a decision depends on what the cache currently holds, read before the transaction and guard the write with `nx` or `xx`, or take the [credentials provider](#credentials-provider) and use the cache's own check-and-set.
+
+**A command the cache refused is in the results, not in place of them.** A conditional write inside a transaction that did not hold means the group was applied and one member of it did nothing, which is not the same as the group failing.
+
+**Key prefixes apply inside a transaction** exactly as they do to a single command. A local development session gives each application its own prefix on one shared cache, and a transaction that bypassed it would write into another application's keys.
+
+In cluster mode every key in a transaction must be on one shard, which the SDK checks before anything is sent.
+
+## Credentials provider
+
+The credentials provider returns connection details for creating your own client. This is how the [capabilities outside the contract](#what-is-deliberately-not-in-the-contract) are reached - pub/sub, streams, `WATCH`, Lua scripting, pipelining, geo commands, HyperLogLog and bitmaps.
+
+Using it means your application code may need changes if you switch between single-instance and cluster mode, since a cluster needs a cluster-aware client. That is the trade: the SDK's own operations route themselves, and a client you build does not.
+
+The shape depends on the `authMode`:
+
+**`password` mode** (default):
+- **`host`** - Cache endpoint (the configuration endpoint in cluster mode)
+- **`port`** - Cache port
+- **`tls`** - Whether TLS is enabled
+- **`clusterMode`** - Whether the cache is in cluster mode
+- **`authMode`** - `"password"`
+- **`authToken`** - AUTH password (may be absent for local development with no auth)
+
+**`iam` mode** ✅ Available in v0:
+- **`host`** - Cache endpoint (the configuration endpoint in cluster mode)
+- **`port`** - Cache port
+- **`tls`** - Always `true`. An IAM token is a credential in its own right, so the connection carrying it has to be one nobody can read
+- **`clusterMode`** - Whether the cache is in cluster mode
+- **`user`** - IAM-mapped cache user ID
+- **`authMode`** - `"iam"`
+- **`getToken()`** - A fresh short-lived token. The SDK caches and refreshes it internally, minting a new one when the current is within about a minute of expiry
+
+## Errors
+
+| Condition | Meaning |
+|---|---|
+| **Not found** | The cache holds nothing under that key, which for a cache is an ordinary answer rather than a failure. Reported in the language's own idiom |
+| **Cross-slot** | A multi-key operation whose keys are not all on one shard. Reported before anything is sent, naming the keys that disagreed |
+
+Everything else, including throttling, timeouts, credentials and network failures, surfaces as the provider's own error wrapped with the cache's name.
+
+## Language bindings
+
+The operations above are named in the contract's conventions. Each SDK takes its language's:
+
+| Contract | Node.js | Python | Go |
+|---|---|---|---|
+| Operation names | `get`, `hashSet`, `sortedSetAdd`, … | `get`, `hash_set`, `sorted_set_add`, … | `Get`, `HashSet`, `SortedSetAdd`, … |
+| Not found | `null` | `None` | `ErrNotFound` |
+| Cross-slot | `CacheError` | `CacheError` | `ErrCrossSlot` |
+| Values | `string` | `str` | `string` |
+| `mget` result | array positional to the keys, `null` for a miss | list positional to the keys, `None` for a miss | `map[string]string`, misses omitted |
+| `ttl` result | `number`, `-1` / `-2` | `int`, `-1` / `-2` | `(time.Duration, bool, error)` |
+| `incr` / `decr` | `incr`, `decr` | `incr`, `decr` | `Increment`, `Decrement` |
+| `mget` / `mset` / `mdelete` | `mget`, `mset`, `mdelete` | `mget`, `mset`, `mdelete` | `GetMany`, `SetMany`, `DeleteMany` |
+| `type(key)` | `type` | `key_type` | `Type`, returning `KeyType` |
+| `scan` | `AsyncIterable<string>` | async iterator | `iter.Seq2[string, error]` |
+| Options | options object | keyword arguments | functional options: `cache.Expires(…)`, `cache.IfNotExists()` |
+| Score bands | `min` / `max`, `"-inf"` / `"+inf"` | `min` / `max`, `"-inf"` / `"+inf"` | `cache.Scores(…)`, `cache.ScoresFrom(…)`, `cache.AllScores()` |
+| Transaction builder | `CacheTransaction` | `CacheTransaction` | `cache.Tx` |
+| Credentials provider | `getCacheCredentials(container, name?)` | `get_cache_credentials(container, name=None)` | `Connection(ctx)` on the cache handle |
+
+Go reaches the credentials provider from the cache handle rather than from a container, since it has no dependency injection: the handle an application already holds answers `Connection(ctx)`.
+
+Three further places where Go takes a different shape rather than a different name, each because the contract's shape is not expressible:
+
+- **`ttl`** returns a duration, whether the key expires at all, and an error. Go has no reason to hand back a number the caller compares against `-2`.
+- **`mget`** returns a map with misses omitted. A positional list would have to put an empty string where the other SDKs put `null`, and an empty string is a value a cache can hold.
+- **`sortedSetRange`** always returns members with their scores. `withScores` changes the type of the result, which Go cannot express in one method; the cost is a number per member on the wire.
+
+For language-specific documentation, see [Node.js SDK - Cache](/docs/node-runtime/cache), [Python SDK - Cache](/docs/python-runtime/cache) and [Go SDK - Cache](/docs/go-sdk/cache).

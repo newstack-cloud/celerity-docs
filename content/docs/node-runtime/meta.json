@@ -3,5 +3,11 @@
   "description": "The Node.js runtime and SDK for Celerity applications",
   "icon": "Hexagon",
   "root": true,
-  "pages": ["index", "datastore", "sql-database", "cache"]
+  "pages": [
+    "index",
+    "bucket",
+    "cache",
+    "datastore",
+    "sql-database"
+  ]
 }

@@ -5,7 +5,9 @@ description: Go Celerity SDK operations for Celerity SQL databases
 
 🔄 **Planned for v0** - Full SDK documentation is coming soon.
 
-The SQL database package in the Celerity Go SDK provides a credentials provider and an optional connection factory for SQL database access.
+The SQL database package in the Celerity Go SDK provides a credentials provider and a connection factory for SQL database access, handing out separate writer and reader endpoints so a read replica is used where one exists.
+
+Go's own shape is a narrow interface over `database/sql` rather than a query builder or an ORM: a connection offers `ExecContext`, `QueryContext`, `QueryRowContext`, `PingContext`, `PrepareContext` and `BeginTx`, and a transaction offers the same less the ping. The interface exists so that a driver is never forced on a caller - the SDK imports none, and `celerity-go generate --sql-engine` writes the import for the engine the blueprint declares.
 
 For an overview of SQL database operations, see the [Celerity SQL Database resource type](/docs/framework/applications/resources/celerity-sql-database#sdk-operations).
 

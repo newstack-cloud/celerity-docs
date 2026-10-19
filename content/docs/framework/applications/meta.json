@@ -6,6 +6,8 @@
     "resources",
     "consumer-events",
     "sql-database-schema-management",
+    "bucket-sdk-operations",
+    "cache-sdk-operations",
     "datastore-sdk-operations",
     "nosql-datastore-schema-management",
     "compute-configuration",

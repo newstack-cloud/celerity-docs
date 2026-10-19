@@ -1,0 +1,14 @@
+---
+title: SDK - Bucket
+description: Node.js Celerity SDK operations for Celerity buckets
+---
+
+🔄 **Planned for v0** - Full SDK documentation is coming soon.
+
+The `@celerity-sdk/bucket` package provides a cloud-agnostic interface to object storage (Amazon S3, Google Cloud Storage, Azure Blob Storage). Reads, writes, listings, server-side copies, versioning and signed URLs are covered, along with removing many objects in one request.
+
+For the operations themselves - the full language-agnostic contract, including versioning, ranged reads and what a signed URL can and cannot promise - see [Bucket SDK Operations](/docs/framework/applications/bucket-sdk-operations). For the resource type, see [`celerity/bucket`](/docs/framework/applications/resources/celerity-bucket).
+
+A write takes a `Readable`, a `Buffer` or a string. A stream is uploaded in parts, so its length need not be known in advance and the object may exceed the five-gigabyte ceiling S3 puts on a single request; a buffer or a string is sent in one request, which is cheaper.
+
+A listing is an `AsyncIterable` that also exposes a `cursor`, so a handler can iterate it and hand the position back to a client to resume from.

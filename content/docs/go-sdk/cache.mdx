@@ -1,0 +1,12 @@
+---
+title: SDK - Cache
+description: Go Celerity SDK operations for Celerity caches
+---
+
+🔄 **Planned for v0** - Full SDK documentation is coming soon.
+
+The cache package in the Celerity Go SDK provides a platform-agnostic interface to a key-value cache (Amazon ElastiCache, Google Memorystore, Azure Cache for Redis, and the Valkey a development session runs). All five Redis data structures are covered - strings, hashes, lists, sets and sorted sets - along with key management, counters and transactions.
+
+For the operations themselves - the full language-agnostic contract, including cluster-mode behaviour, transactions and the credentials provider - see [Cache SDK Operations](/docs/framework/applications/cache-sdk-operations). For the resource type, see [`celerity/cache`](/docs/framework/applications/resources/celerity-cache).
+
+Unlike the other resources, a cache has one implementation for every deploy target rather than one per platform: every managed cache speaks the Redis protocol, so what differs by platform is only how a password is obtained. The cache therefore lives in its own module, `resources/redis`, and a platform module contributes credentials to it.

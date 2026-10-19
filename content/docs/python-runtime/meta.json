@@ -5,8 +5,9 @@
   "root": true,
   "pages": [
     "index",
+    "bucket",
+    "cache",
     "datastore",
-    "sql-database",
-    "cache"
+    "sql-database"
   ]
 }

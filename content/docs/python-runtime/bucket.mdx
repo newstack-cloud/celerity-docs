@@ -1,0 +1,14 @@
+---
+title: SDK - Bucket
+description: Python Celerity SDK operations for Celerity buckets
+---
+
+🔄 **Planned for v0** - Full SDK documentation is coming soon.
+
+The bucket package in the Celerity Python SDK provides a cloud-agnostic interface to object storage (Amazon S3, Google Cloud Storage, Azure Blob Storage). Reads, writes, listings, server-side copies, versioning and signed URLs are covered, along with removing many objects in one request.
+
+For the operations themselves - the full language-agnostic contract, including versioning, ranged reads and what a signed URL can and cannot promise - see [Bucket SDK Operations](/docs/framework/applications/bucket-sdk-operations). For the resource type, see [`celerity/bucket`](/docs/framework/applications/resources/celerity-bucket).
+
+A write takes a string, bytes, an async iterable of byte chunks, or a file object open for reading bytes - synchronous or asynchronous. A stream is uploaded in parts, so its length need not be known in advance; a synchronous read is handed to a worker thread so a disk read does not hold the event loop.
+
+A read answers with a `GetObjectResult` whose body is an async iterator, with `read()` and `read_text()` for the common case of wanting the whole thing.

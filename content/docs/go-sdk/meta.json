@@ -3,5 +3,11 @@
   "description": "The Go SDK for Celerity applications",
   "icon": "Code",
   "root": true,
-  "pages": ["index", "datastore", "sql-database"]
+  "pages": [
+    "index",
+    "bucket",
+    "cache",
+    "datastore",
+    "sql-database"
+  ]
 }

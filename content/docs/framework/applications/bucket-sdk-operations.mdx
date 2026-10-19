@@ -1,0 +1,216 @@
+---
+title: Bucket SDK Operations
+description: The language-agnostic contract every Celerity SDK implements for object storage
+---
+
+**Spec Version:** `v2026-02-27-draft`
+
+This is the contract for reading and writing a [`celerity/bucket`](/docs/framework/applications/resources/celerity-bucket) resource from handler code. It is language-agnostic. The Node.js, Python and Go SDKs each implement it in their own idiomatic way, and a handler written against it behaves the same on every target store.
+
+<Callout title="Feature Availability" type="info">
+- ✅ **Available in v0** - Features currently supported
+- 🔄 **Planned for v0** - Features coming in a future v0 evolution
+- 🚀 **Planned for v1** - Features coming in v1
+- 🔮 **Planned for v1+** - Features planned for after the v1 release
+</Callout>
+
+For the resource type itself (versioning, replication, lifecycle rules, CORS and deploy configuration), see [`celerity/bucket`](/docs/framework/applications/resources/celerity-bucket).
+
+| Deploy target | Object storage | Status |
+|---|---|---|
+| `aws` / `aws-serverless` | Amazon S3 | ✅ Available in v0 |
+| `gcloud` / `gcloud-serverless` | Google Cloud Storage | 🚀 Planned for v1 |
+| `azure` / `azure-serverless` | Azure Blob Storage | 🚀 Planned for v1 |
+| local development | MinIO | ✅ Available in v0 |
+
+## Why a bucket needs no local driver
+
+Unlike a queue or a topic, object storage has a de-facto standard protocol. MinIO answers S3 requests, so a `celerity dev` session reaches a bucket through the same driver a deployment uses, with the endpoint pointed at the session's own MinIO. There is no bucket driver per environment, only a bucket driver per platform, and locally the AWS one serves.
+
+What a session sets is an endpoint and a pair of credentials, which the SDKs read from the environment and nothing in handler code is aware of.
+
+## What is deliberately not in the contract
+
+| Capability | Why not |
+|---|---|
+| **Bucket creation and deletion** | A bucket is a deployed resource. Creating one from a handler would produce something the blueprint does not know about and the deploy engine will not manage |
+| **Lifecycle rules, CORS, replication, website hosting** | Deploy configuration, declared on the [resource](/docs/framework/applications/resources/celerity-bucket). A handler changing them would drift from the blueprint |
+| **Access control lists and bucket policies** | Permissions come from the deployed role. A handler that could widen its own access is a handler whose blueprint no longer describes what it can reach |
+| **Multipart upload as separate operations** | `put` cuts a stream into parts on its own. Exposing initiate, upload-part and complete would make a caller responsible for abandoning an upload whose parts are charged for until it is completed or abandoned |
+| **Event notifications** | A bucket that notifies on write links to a [`celerity/consumer`](/docs/framework/applications/resources/celerity-consumer), which is a blueprint link rather than an SDK call |
+| **Storage class transitions** | A lifecycle rule's job. A per-object transition from a handler is a cost decision made in the wrong place |
+
+## Reading and writing
+
+- **`get(key, options?)`** - ✅ **Available in v0** Read an object's content and what the store knows about it. Both come back together because the store sends them together, so a handler serving a download does not pay for a second request to learn what it is serving. `options.range` reads part of an object rather than the whole of it. `options.versionId` reads one version. Reports absence in the language's own idiom.
+- **`put(key, body, options?)`** - ✅ **Available in v0** Store an object, and report what the store recorded about it: an etag, and a version id where the bucket has versioning on. `options.contentType` and `options.metadata` are stored alongside. A body whose length is known goes in one request; a stream is cut into parts, so its length need not be known in advance and the object may exceed the five-gigabyte ceiling a store puts on a single request.
+- **`delete(key, options?)`** - ✅ **Available in v0** Remove an object. Idempotent: a key that holds nothing is not an error, since reporting one would make a retry look like a failure. On a versioned bucket this hides the current version behind a marker; `options.versionId` removes one version for good.
+- **`deleteMany(refs)`** - ✅ **Available in v0** Remove several objects in as few requests as the store allows. See [Deleting many at once](#deleting-many-at-once).
+- **`info(key, options?)`** - ✅ **Available in v0** What the store knows about an object, without fetching it. `options.versionId` describes one version. Reports absence where the key holds nothing.
+- **`exists(key, options?)`** - ✅ **Available in v0** Whether the store holds an object under the key. A key that holds nothing is `false` rather than an absence: the question was whether it is there, and an answer of no is an answer. `options.versionId` asks about one version instead; see [Versioning](#versioning).
+- **`copy(sourceKey, destination, options?)`** - ✅ **Available in v0** Copy an object. The store does the copying, so the content does not pass through the handler and an object too large to hold is no harder to copy than a small one. See [Copying between buckets](#copying-between-buckets).
+- **`signUrl(key, options)`** - ✅ **Available in v0** A URL granting access to one object until it expires, so a browser can read or write it without the bytes passing through a handler and without credentials of its own. See [Signed URLs](#signed-urls).
+
+### Ranges
+
+A range reads part of an object. A read reports **two** sizes, because a ranged read has two and they are not the same number:
+
+| | What it is | Node | Python | Go |
+|---|---|---|---|---|
+| The object's size | The whole object's, however it was asked for | `metadata.size` | `info.size` | `Object.Info.Size` |
+| The bytes that came back | The part for a ranged read, the whole otherwise | `contentLength` | `content_length` | `Object.ContentLength` |
+
+The size stays the whole object's whatever range was asked for, so that it means one thing rather than two. The length of what actually arrived is its own field.
+
+Both are the store's to report rather than the caller's to work out, because **the range asked for is not the range returned** in two cases:
+
+- **No end.** A range with no end reads to the end of the object, so the length is whatever was left.
+- **An end past the object.** A store satisfies a range that overruns the object with the bytes that remain rather than refusing it, so a range of a thousand bytes starting eight from the end returns eight.
+
+A caller deriving the length from its own range has to clamp for the second and special-case the first. Reading the field avoids both.
+
+A handler answering an HTTP range request has what it needs in the pair: the whole size is the total in `Content-Range: bytes <start>-<end>/<total>`, the returned length is `Content-Length`, and the last byte is `start + length - 1`.
+
+Where a store answers a ranged read without a usable total, as one does with `bytes 0-4/*`, the size falls back to the length that came back: the whole is not knowable from that answer, and the part is the best there is.
+
+## Listing
+
+- **`list(options?)`** - ✅ **Available in v0** The objects under a prefix. `options.prefix` narrows, and a cursor resumes where an earlier listing stopped. Lists the current version of each key.
+- **`listVersions(options?)`** - ✅ **Available in v0** Every version of every object under a prefix, newest first per key, including the delete markers a delete left behind. See [Versioning](#versioning).
+
+A listing returns one page at a time and an opaque cursor, the same way a [datastore listing](/docs/framework/applications/datastore-sdk-operations#cursor-pagination) does, and each SDK also offers a way to read one through to the end. A prefix can hold far more than a handler means to look at, so the pages are fetched as they are read and stopping early stops the fetching.
+
+**A listing does not carry each object's content type or user metadata.** A store answers a listing with the keys and their sizes rather than with every object's headers, and a request per object to fill them in is not something a listing should do behind a caller's back. Use `info` for one object, or `get` where the content is wanted too.
+
+## Versioning
+
+Versioning is declared on the [resource](/docs/framework/applications/resources/celerity-bucket#versioning) and is ✅ **Available in v0** on every target. With it on, a write keeps what was there rather than replacing it, and the SDKs expose three things:
+
+- **The version a write created.** `put` reports a version id. Worth keeping if the object may need reading back as it was written: it is what a later read or delete names, and the only way to reach a version without listing for it.
+- **Reading and describing one version.** `get` and `info` take a version id. A bucket without versioning has nothing to name and reports the version asked for as a missing object.
+- **Removing one version.** `delete` with a version id removes that version for good. Without one it writes a **delete marker**: nothing is removed, the versions stay, and a read stops finding them.
+- **Asking whether one version is there.** `exists` takes a version id, and the two questions have different answers. Without one it is about the current version, which is `false` once a delete has left a marker as the newest, even though every version under it is still there. With one it is about that version, which is `true` until the version itself is removed.
+
+`listVersions` is how a handler discovers versions it did not write. It merges the versions and the markers into one list, newest first per key, because a marker is a version of the key as far as a handler is concerned and what it most often needs to know is **which version is the newest that is not a marker**. That is the version a restore reads.
+
+| Field | Meaning |
+|---|---|
+| `versionId` | The version's own name, for `get`, `info` and `delete` |
+| `isCurrent` | Whether this is the version a read that names none returns |
+| `isDeleteMarker` | Whether this version records a deletion rather than content. There is nothing to read: it is what makes the versions under it stop being found, and removing it is what brings them back |
+
+A marker has no size and no etag, because it has no content. Reading one is an
+**absence**: `get` and `info` report the version as missing and `exists` answers
+`false`, rather than failing. The marker is still listed - that is where its
+existence is visible - but there is nothing under it to read.
+
+### What differs between the stores
+
+The three stores model a versioned delete differently, and the contract is
+written so that the answers a portable handler can reach are the same on all of
+them:
+
+| | Amazon S3 | Google Cloud Storage | Azure Blob Storage |
+|---|---|---|---|
+| What a versioned delete does | Writes a delete marker as the new current version | Archives the live generation; there is no tombstone | The current version becomes a previous version; there is no tombstone |
+| `exists(key)` afterwards | `false` - the current version is a marker | `false` - no live generation | `false` - no current version |
+| `exists(key, versionId)` for an archived version | `true` | `true` | `true` |
+| `exists(key, versionId)` after that version is purged | `false` | `false` | `false` |
+| What a version id is | An opaque string | A generation, a 64-bit integer | An ISO 8601 timestamp |
+
+Two consequences worth knowing before writing against this:
+
+- **`isDeleteMarker` is only ever true on S3.** Google Cloud Storage and Azure
+  archive the current version instead of writing a tombstone, so a listing there
+  has no markers in it. Code that skips markers still works everywhere - it
+  simply never skips anything - which is why the restore recipe above is
+  portable. The field is in the contract because S3 needs it, not because every
+  store has the concept.
+- **A version id is opaque.** The three stores produce entirely different kinds
+  of value, so an SDK never parses, compares or orders one. Where order matters,
+  read it from a listing, which is already newest-first per key.
+
+`isDeleteMarker` is the **only** field in this contract that is meaningful on one
+store and constant on the others, and it is meant to stay the only one. Every
+other difference between the stores is kept behind the call rather than surfaced
+as a field: how many objects one delete request carries, whether a copy is one
+request or several, whether a signed upload URL can bind a content type. A
+second always-false field would mean the contract had started describing a store
+rather than object storage, and is the point at which the capability belongs
+behind the call instead.
+
+One difference the SDKs cannot hide, because it is about what a handler writes
+rather than what it reads: **user metadata key names**. S3 lowercases them,
+Azure requires them to be letters, digits and underscores not starting with a
+digit. A key that round-trips on one store may be rejected or changed on
+another, so keep metadata keys to lowercase words and underscores if the
+application may be deployed to more than one.
+
+<Callout title="Restoring an object" type="info">
+Reading `listVersions` for the key, skipping the markers and reading the newest version that remains is the whole of a restore. Deleting the current marker also works where one is the current version, and is cheaper, but only if nothing has been written since.
+</Callout>
+
+## Deleting many at once
+
+`deleteMany` takes references rather than keys, so one call can remove a mixture of current versions and named ones. Stores put a ceiling on how many a single request may carry - 1000 on S3 - and the SDKs chunk above it.
+
+**Every reference handed over appears in exactly one of three lists**, so a caller works out what to do next by reading them rather than by comparing them against what it asked for:
+
+| List | Meaning | What to do |
+|---|---|---|
+| `deleted` | The store removed it | Nothing |
+| `failed` | The store was asked and refused, with a code and a message | Fix it, or decide it cannot be |
+| `unsent` | The store never answered for it: the request carrying it did not complete, or an earlier one did not and the rest were not attempted | Try again |
+
+This is the same shape a [batch send](/docs/framework/applications/resources/celerity-queue) uses, for the same reason: a store takes a request partially, and a caller handed back a single failure for the whole thing cannot tell which of their objects are gone. A delete of 2500 keys is three requests, and if the second fails the first thousand are already removed.
+
+A key that holds nothing counts as deleted. A store answers a delete of something absent the same way it answers one that was there, which is what makes a retry safe.
+
+## Copying between buckets
+
+A copy within one bucket names only the key it is stored under. A copy into **another** bucket names that bucket by **the handle the application already holds for it**, not by the name the deployment gave it:
+
+```
+// conceptually, in whichever language's idiom
+archive = bucket("archiveBucket")
+uploads.copy("invoice.pdf", { key: "2026/invoice.pdf", store: archive })
+```
+
+A handler names blueprint resources and takes handles for them; the name a deployment gave a bucket is not something it is written against. The two have to be the same provider's: the store does the copying, and one service cannot reach into another's. A destination an SDK cannot resolve is refused by name rather than failing as a type error, since the likely cause is a handle from another provider.
+
+By default a copy carries the source's content type and metadata. Giving either **replaces both**, which is what the stores do: the two travel together, so there is no way to override one and inherit the other.
+
+## Signed URLs
+
+A signed URL is the one way bytes reach object storage without passing through a handler, and the one way a browser reads a private object without credentials.
+
+- **Read** grants a download.
+- **Write** grants an upload, in a single request. A content type given with it is signed into the URL where the store supports it, so an upload declaring anything else is refused rather than stored as something nobody expected.
+
+The expiry asked for is the longest the URL can live, not a promise: a URL signed with credentials that expire sooner stops working sooner. On a serverless platform the process holds the execution role's session credentials, which is usually shorter than a long expiry suggests. The SDKs report the expiry alongside the URL so a caller can pass it to whoever receives the link.
+
+## Absence
+
+A key that holds nothing is reported in each language's own idiom rather than as a shared type: `null` in Node.js, `None` in Python, a sentinel error in Go. `exists` is the one operation that answers `false` instead, because its question was whether the object is there.
+
+A **version** that is not there is the same answer. Stores distinguish a missing key from a missing version - S3 says `NoSuchKey` for one and `NoSuchVersion` for the other - and the SDKs report both as absence, since both are the same thing to a handler. So is a version that records a deletion: S3 answers a read of a delete marker with `405 Method Not Allowed` rather than a `404`, which is a different answer to the same question, and the SDKs report it as absence too. That is only consulted on a read; a refusal from anything else stays a failure.
+
+## Language-specific shapes
+
+| Concept | Node.js | Python | Go |
+|---|---|---|---|
+| Operation names | `get`, `put`, `deleteMany`, `listVersions`, `signUrl` | `get`, `put`, `delete_many`, `list_versions`, `sign_url` | `Get`, `Put`, `DeleteMany`, `Versions`, `SignedURL` |
+| Version on an operation | `{ versionId }` on get, info, exists and delete | `version_id` on the options dataclass for each | `VersionID` on `GetOptions`, `InfoOptions`, `ExistsOptions`, `DeleteOptions` |
+| Not found | `null` | `None` | `bucket.ErrNotFound` |
+| Options | options object | options dataclass | functional options |
+| Body on write | `Readable \| Buffer \| string` | `str \| bytes \| AsyncIterable[bytes]` or a file object | `io.Reader` |
+| Content on read | `Readable` plus metadata | async iterator plus info, with `read()` helpers | `*bucket.Object`, holding the body and the info |
+| Range | `range: { start, end? }` | `range_start` / `range_end` | `Range{Start, Length}`, whose zero value is the whole object |
+| Bytes returned | `contentLength` | `content_length` | `Object.ContentLength` |
+| Listing | `AsyncIterable` with a `cursor` | async iterator with a `cursor` | one page plus a cursor, with `bucket.Objects` / `bucket.AllVersions` as iterators |
+| Signed URL action | `action: "read" \| "write"` | `method: "get" \| "put"` | `bucket.SignRead` / `bucket.SignWrite` |
+| Copy destination | `{ key, store? }` | `CopyDestination(key, store)` | `bucket.Destination{Key, Store}` |
+
+Go's `Range` is a start and a length rather than two positions so that its zero value means the whole object: a last byte of zero would otherwise be indistinguishable from asking for the first byte alone.
+
+For language-specific documentation, see [Node.js SDK - Bucket](/docs/node-runtime/bucket), [Python SDK - Bucket](/docs/python-runtime/bucket) and [Go SDK - Bucket](/docs/go-sdk/bucket).
