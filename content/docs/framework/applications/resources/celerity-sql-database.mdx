@@ -249,6 +249,15 @@ When a VPC links to an SQL database, the database will be placed within the VPC'
 
 [Read more about Celerity VPCs](/docs/framework/applications/resources/celerity-vpc)
 
+### `celerity/workflow`
+
+When a workflow links to an SQL database, the database is used as the execution store for the Celerity workflow runtime instead of Celerity provisioning a dedicated database for the workflow.
+The workflow runtime creates its own tables in the database and applies its schema migrations on startup. Only PostgreSQL databases can be used as a workflow execution store.
+
+🚀 **Planned for v1** - Workflow to SQL database links are planned for v1.
+
+[Read more about Celerity workflows](/docs/framework/applications/resources/celerity-workflow#execution-store)
+
 ## Links To
 
 The `celerity/sqlDatabase` resource type does not link to other resources.

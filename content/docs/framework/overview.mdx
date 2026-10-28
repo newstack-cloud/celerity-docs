@@ -47,7 +47,7 @@ The channel building block ([`celerity/channel`](/docs/framework/applications/re
 
 ### Workflow
 
-The workflow building block ([`celerity/workflow`](/docs/framework/applications/resources/celerity-workflow)) is used to define a workflow that orchestrates the execution of multiple handlers in a blueprint as a series of steps. Workflows can be deployed to different target environments. Serverless environments will use the cloud provider's workflow service, such as AWS Step Functions, Google Cloud Workflows, or Azure Logic Apps. Containerised and custom server environments will use the Celerity workflow runtime to execute the workflow steps.
+The workflow building block ([`celerity/workflow`](/docs/framework/applications/resources/celerity-workflow)) is used to define a workflow that orchestrates the execution of multiple handlers in a blueprint as a series of steps. Workflows are run by the Celerity workflow runtime as a containerised service, deployed with the containerised target environment for each cloud provider. Compute configuration determines whether it runs on a container orchestrator or on serverless container infrastructure such as AWS Fargate, Google Cloud Run or Azure Container Apps. On Cloud Run and Container Apps, it can also scale to zero. Workflows are not mapped to cloud provider workflow services such as AWS Step Functions, so a workflow behaves the same way wherever it is deployed.
 
 🚀 **Planned for v1**
 
@@ -137,7 +137,7 @@ The Celerity runtimes allow you to run your Celerity applications in containers 
 
 The core runtime acts as a host for your handlers that will deal with setting up the appropriate application type such as a HTTP API, WebSocket API, scheduled job, queue consumer, etc.
 
-The [Workflow runtime](/docs/workflow-runtime) provides a way to run your `celerity/workflow` applications in a container or on a VM and is the best way to leverage the full capabilities of a [Celerity Workflow application](/docs/framework/applications/resources/celerity-workflow).
+The [Workflow runtime](/docs/workflow-runtime) runs your [`celerity/workflow`](/docs/framework/applications/resources/celerity-workflow) applications in a container, storing execution state in PostgreSQL.
 
 [Read more about Celerity Runtimes](/docs/framework/runtime).
 

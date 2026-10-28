@@ -390,7 +390,7 @@ string
 Marks the handler to be used as a step in a workflow; a step in this context is a state of type `executeStep` in a workflow.
 This is only required when there is ambiguity where a handler is linked from multiple resources in a blueprint (e.g. a consumer, API and workflow). If the handler is only linked to a workflow, this annotation is not required and the default behaviour is to use the handler with the workflow.
 
-✅ **Available in v0**
+🚀 **Planned for v1**
 
 **type**
 
@@ -403,7 +403,7 @@ ___
 The unique name of the state that the handler will be used to execute in the workflow.
 The state in the workflow must be of the `executeStep` type.
 
-🚀 **Planned for v1** - This annotation is applicable for workflow applications deployed to AWS serverless (Step Functions) and local development environments.
+🚀 **Planned for v1** - This annotation is applicable for workflow applications in all target environments.
 
 **type**
 
@@ -559,9 +559,9 @@ The `subscribe` handler acts as an authz hook — the auth guard on the channel 
 
 ### `celerity/workflow`
 
-When a handler is linked to a workflow, it will be used to execute a step in the workflow. The configuration defined in the handler annotations determines the behaviour of the handler in respect to the workflow.
+When a handler is linked to a workflow, it will be used to execute a step in the workflow. The configuration defined in the handler annotations determines the behaviour of the handler in respect to the workflow. Handlers used for workflow steps are loaded into the container of the Celerity workflow runtime, which is deployed with the containerised `aws`, `gcloud` or `azure` target environment, and must be idempotent as they can be invoked more than once for the same step ([read more](/docs/framework/applications/resources/celerity-workflow#execution-guarantees)).
 
-🚀 **Planned for v1** - This link is applicable for workflow applications deployed to AWS serverless (Step Functions) and local development environments.
+🚀 **Planned for v1** - This link is applicable for workflow applications in all target environments.
 
 [Read more about Celerity workflows](/docs/framework/applications/resources/celerity-workflow)
 
@@ -658,13 +658,12 @@ The Celerity SDK provides a cache abstraction (`createCacheClient`) covering all
 
 When a handler links out to a workflow, it will be configured with permissions and environment variables that enable the handler to trigger the workflow. If a secret store is associated with the handler or the application that it is a part of, the workflow configuration will be added to the secret store instead of environment variables. You can use guides and templates to get an intuition for how to source the configuration and trigger the workflow using the handlers SDK.
 
-<Callout title="Opting out of the handlers SDK for workflows" type="warning">
+<Callout title="Opting out of the handlers SDK for workflows" type="info">
 You don't have to use the handlers SDK abstraction for workflows,
-you can also grab the populated configuration directly and interact directly with the SDK for the workflow service for the chosen target environment. Doing so will require application code changes if you decide to switch target environments.
-For example, you can use the AWS Step Functions SDK to trigger a workflow in AWS Step Functions but this will not translate to Google Cloud Workflows, Azure Logic Apps or the Celerity Workflow runtime.
+you can also grab the populated configuration directly and call the workflow API of the [Celerity workflow runtime](/docs/workflow-runtime) yourself. Workflows are run by the Celerity workflow runtime in every target environment that supports workflows, so this does not tie your application code to a specific target environment.
 </Callout>
 
-🚀 **Planned for v1** - This link is applicable for workflow applications deployed to AWS serverless (Step Functions) and local development environments.
+🚀 **Planned for v1** - This link is applicable for workflow applications in all target environments.
 
 [Read more about Celerity workflows](/docs/framework/applications/resources/celerity-workflow)
 
@@ -2115,7 +2114,7 @@ Depending on links and configuration, the handler will be wired up to the approp
 HTTP and WebSocket handlers will be wired up to API Gateway, event sources such as DynamoDB Streams and S3 will be wired up to the Lambda function directly.
 For scheduled triggers, Amazon EventBridge rules will be configured to trigger the Lambda function at the specified schedule.
 For queues, SQS queues will be configured as triggers for the Lambda function.
-For workflows, AWS Step Functions will be configured to trigger the Lambda function as a step in the workflow.
+Workflows can not be deployed to the AWS Serverless target environment, so handlers used as steps in a workflow are deployed with the `aws` target, loaded into the container of the Celerity workflow runtime ([read more](/docs/framework/applications/resources/celerity-workflow#serverless-target-environments)).
 
 ### Google Cloud
 
@@ -2130,7 +2129,7 @@ Google Cloud Pub/Sub will be wired up directly to the application in the runtime
 🚀 **Planned for v1** - This target environment will be available in a future v0 evolution.
 
 In the Google Cloud Serverless environment, handlers are deployed as Google Cloud Functions.
-Depending on the links and configuration, the handler will be wired up to the appropriate HTTP route, event source, stream or scheduled trigger. HTTP handlers will be wired up to Google Cloud API Gateway, event sources such as Google Cloud Pub/Sub, Google Cloud Storage and Google Cloud Firestore will be wired up to the Cloud Function directly. For scheduled triggers, Cloud Scheduler and Pub/Sub will be combined to trigger the function. For queues, Google Cloud Pub/Sub topics will be configured as triggers for the Cloud Function. For workflows, Google Cloud Workflows will be configured to trigger the Cloud Function as a step in the workflow.
+Depending on the links and configuration, the handler will be wired up to the appropriate HTTP route, event source, stream or scheduled trigger. HTTP handlers will be wired up to Google Cloud API Gateway, event sources such as Google Cloud Pub/Sub, Google Cloud Storage and Google Cloud Firestore will be wired up to the Cloud Function directly. For scheduled triggers, Cloud Scheduler and Pub/Sub will be combined to trigger the function. For queues, Google Cloud Pub/Sub topics will be configured as triggers for the Cloud Function. Workflows can not be deployed to the Google Cloud Serverless target environment, so handlers used as steps in a workflow are deployed with the `gcloud` target, loaded into the container of the Celerity workflow runtime ([read more](/docs/framework/applications/resources/celerity-workflow#serverless-target-environments)).
 
 <Callout title="Warning" type="warning">
 Google Cloud Serverless does not support WebSocket APIs, meaning handlers linked from WebSocket APIs can not be deployed to Google Cloud Functions.
@@ -2150,21 +2149,17 @@ Azure Queue Storage queues will be wired up directly to the application in the r
 
 In the Azure Serverless environment, handlers are deployed as Azure Functions.
 Depending on links and configuration, the handler will be wired up to the appropriate HTTP route, WebSocket route, event source, stream or scheduled trigger.
-HTTP handlers will be wired up to Azure API Management, event sources such as Azure Event Hubs, Azure Blob Storage and Azure Queue Storage will be wired up to the Azure Function directly. For scheduled triggers, a timer trigger is configured for the function. For queues, Azure Queue Storage queues will be configured as triggers for the Azure Function. For workflows, Azure Logic Apps will be configured to trigger the Azure Function as a step in the workflow.
+HTTP handlers will be wired up to Azure API Management, event sources such as Azure Event Hubs, Azure Blob Storage and Azure Queue Storage will be wired up to the Azure Function directly. For scheduled triggers, a timer trigger is configured for the function. For queues, Azure Queue Storage queues will be configured as triggers for the Azure Function. Workflows can not be deployed to the Azure Serverless target environment, so handlers used as steps in a workflow are deployed with the `azure` target, loaded into the container of the Celerity workflow runtime ([read more](/docs/framework/applications/resources/celerity-workflow#serverless-target-environments)).
 
 ## Timeouts and long-running tasks
 
 In a Serverless environment, the maximum execution time for a handler is limited.
 Often, there are tasks that require more time to complete than the maximum timeout allowed by FaaS providers. In such cases, you can choose to deploy your application to the containerised alternative for your chosen cloud provider.
 
-In the case that your application is a `celerity/workflow`, you could consider breaking down the long-running task into smaller tasks, if that isn't possible, you can switch to the containerised environment where the Celerity workflow runtime will be used to orchestrate your workflows instead of the cloud service equivalent.
-
-<Callout title="Note" type="info">
-When using the Celerity workflow runtime, you can still define timeouts for individual tasks, the limits are a lot higher than those of FaaS providers.
-</Callout>
+Handlers used as steps in a `celerity/workflow` are not subject to FaaS timeout limits, as they always run in the container of the Celerity workflow runtime, which is deployed with a containerised target environment. You can still define timeouts for individual steps, and the limits are a lot higher than those of FaaS providers.
 
 <Callout title="Warning" type="warning">
-Using the Celerity workflow runtime as an alternative to cloud provider workflow orchestration services requires persistence of workflow state to a database, this is managed by Celerity but will use the resources in your cloud provider account. See the [`celerity/workflow`](/docs/framework/applications/resources/celerity-workflow) documentation for more information.
+The Celerity workflow runtime stores workflow execution state in a PostgreSQL database. By default, this database is provisioned by Celerity in your cloud provider account. See the [`celerity/workflow`](/docs/framework/applications/resources/celerity-workflow#execution-store) documentation for more information.
 </Callout>
 
 <table>

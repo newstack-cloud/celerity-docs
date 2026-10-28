@@ -11,16 +11,22 @@ description: Celerity resource type for workflows
 **blueprint transform:** `celerity-2026-02-27-draft`
 
 <Callout title="Ecosystem Compatibility" type="info">
-- **v1 (Preview)**: Multi-cloud with support for deployment as containerised applications as well as serverless workflow deployments across all cloud providers and all language runtimes.
+- **v1 (Preview)**: Multi-cloud, with every workflow run by the Celerity workflow runtime as a containerised service on every target environment, across all cloud providers and all language runtimes.
 
 Read more about Celerity versions [here](/docs/framework/versions).
 </Callout>
 
-🚀 **Planned for v1** - Workflow support is planned for v1 with multi-cloud and containerised deployment support across all cloud providers and all language runtimes.
+🚀 **Planned for v1** - Workflow support is planned for v1, running on the Celerity workflow runtime as a containerised service across all cloud providers and all language runtimes.
 
 The `celerity/workflow` resource type is used to define a workflow that orchestrates the execution of multiple handlers in a blueprint as a series of steps.
 
-Workflows can be deployed to different target environments. Serverless environments will use the cloud provider's workflow service, such as AWS Step Functions, Google Cloud Workflows, or Azure Logic Apps. Containerised and custom server environments will use the Celerity workflow runtime to execute the workflow steps.
+Every workflow is run by a single implementation, the [Celerity workflow runtime](/docs/workflow-runtime), in every environment. Workflows are not mapped to cloud provider workflow services such as AWS Step Functions, Google Cloud Workflows or Azure Logic Apps. The workflow runtime is a long-running containerised service that exposes the workflow API. Workflows are deployed with the containerised `aws`, `gcloud` and `azure` deploy targets. As with other application resource types, [compute configuration](/docs/framework/applications/compute-configuration) determines whether the runtime runs on a container orchestrator such as Amazon ECS on EC2, Amazon EKS, GKE or AKS, or on serverless container infrastructure such as AWS Fargate, Google Cloud Run or Azure Container Apps. On Google Cloud Run and Azure Container Apps, the runtime can also scale to zero, see [Hosting Profiles](#hosting-profiles) for more information.
+
+Because there is one implementation, a workflow behaves the same way on every target environment. Every state type, template function and condition function is available everywhere, and the error structure and JSON path behaviour documented on this page apply to every target.
+
+<Callout title="Why workflows can't use serverless deploy targets" type="warning">
+For `celerity/api`, `celerity/consumer` and `celerity/schedule`, a cloud provider's native service is a **trigger** that gets events to your handlers, which works much the same way on every platform. For workflows, the native service would be the **execution engine**, owning control flow, state persistence, retries, error handling and data transformation between steps. That is where the platforms differ most, so the same workflow would behave differently depending on where it was deployed. Running the Celerity workflow runtime everywhere avoids this, at the cost of requiring a container service and a PostgreSQL database.
+</Callout>
 
 Workflows can be used to define complex logic that requires multiple steps to be executed in a specific order. Handlers can be used for states which have the type `executeStep`. Workflows can also be used to define error handling and retries for each step to create robust and fault-tolerant applications.
 
@@ -29,7 +35,7 @@ Workflows can be used to define complex logic that requires multiple steps to be
 The specification is the structure of the resource definition that comes under the `spec` field of the resource in a blueprint.
 The rest of this section lists fields that are available to configure the `celerity/workflow` resource followed by examples of different configurations for the resource type, a section outlining the behaviour in supported target environments along with additional documentation.
 
-The specification for a workflow is influenced by the concept of a workflow as a state machine emphasised by Amazon's States Language created for AWS Step Functions.
+The specification for a workflow is influenced by the concept of a workflow as a state machine inspired by Amazon's States Language created for AWS Step Functions.
 
 ### startAt (required)
 
@@ -57,13 +63,12 @@ Annotations define additional metadata that can determine the behaviour of the r
 The following are a set of annotations that determine the behaviour of a workflow in relation to a VPC.
 Appropriate security groups are managed by the VPC to workflow link.
 
-When a VPC is not defined for the container-backed AWS, Google Cloud and Azure target environments, the default VPC for the account will be used.
+Workflows are always deployed as containerised services, so VPC annotations apply to every target environment that supports workflows. How each annotation is honoured varies by container platform; see the [Target Environments](#target-environments) section for details.
 
-VPC annotations and links do not have any effect for serverless environments.
-Serverless workflows are managed by cloud provider services and do not support customer-defined VPC configurations.
+When a VPC is not defined, the default VPC for the account will be used.
 
 <Callout title="Warning" type="warning">
-When a VPC is not defined for container-backed cloud environments, annotations in the `celerity/workflow` will apply to the default VPC for the account.
+When a VPC is not defined, annotations in the `celerity/workflow` will apply to the default VPC for the account.
 </Callout>
 
 <FieldHeading fieldName="celerity.workflow.vpc.subnetType" />
@@ -108,7 +113,7 @@ For example, if the resource name is `myWorkflow`, the output would be accessibl
 
 ### id
 
-The ID of the created workflow in the target environment.
+The ID of the workflow deployed to the Celerity workflow runtime.
 
 **type**
 
@@ -116,11 +121,7 @@ string
 
 **examples**
 
-`arn:aws:states:us-east-1:123456789012:stateMachine:Example-StateMachine` (AWS Step Functions)
-
-`projects/123456789012/locations/us-central1/workflows/example-workflow` (Google Cloud Workflows)
-
-`691802b3-351e-4599-8785-2353ce970613` (Celerity Workflow Runtime)
+`691802b3-351e-4599-8785-2353ce970613`
 
 ## Data Types
 
@@ -911,8 +912,7 @@ ___
 
 ### `celerity/vpc`
 
-Depending on the target environment, the workflow may be deployed to a VPC for private access.
-When deploying to serverless environments such as AWS API Step Functions, Google Cloud Workflows, or Azure Logic Apps, the workflow will be managed by the cloud provider and will not be deployed to a VPC.
+The VPC is used to place the workflow runtime service in the target environment. A workflow is always deployed as a containerised service, so a VPC link applies to every target environment, with platform-specific behaviour described in the [Target Environments](#target-environments) section.
 
 [Read more about Celerity VPCs](/docs/framework/applications/resources/celerity-vpc)
 
@@ -929,6 +929,12 @@ When a handler links out to a workflow, it will be configured with permissions a
 Handlers are used to execute steps in a workflow. In the context of a workflow, a step is the state of the `executeStep` type. The handler is configured with [annotations](/docs/framework/applications/resources/celerity-handler#celerityworkflow--celerityhandler) that determine the state in the workflow that will trigger the handler.
 
 [Read more about Celerity handlers](/docs/framework/applications/resources/celerity-handler)
+
+### `celerity/sqlDatabase`
+
+A workflow can link to a `celerity/sqlDatabase` resource to use that PostgreSQL database as its [execution store](#execution-store), instead of having Celerity provision a dedicated database for the workflow. The workflow runtime creates its own tables in the linked database and applies its schema migrations on startup.
+
+[Read more about Celerity SQL databases](/docs/framework/applications/resources/celerity-sql-database)
 
 ### `celerity/config`
 
@@ -1904,11 +1910,9 @@ Built-in errors that can be caught include the following:
 - `NoDecisionMatched` - No decision rule matched in a decision state.
 - `InvalidCondition` - The condition specified in a decision rule is invalid.
 
-These errors will map to the closest corresponding built-in error type in the target environment.
-
 ### Error Output
 
-When an error is caught by a state, the catcher will yield an object with the following structure in the Celerity workflow runtime:
+When an error is caught by a state, the catcher will yield an object with the following structure:
 
 ```json
 {
@@ -1956,11 +1960,6 @@ Will result in an object like the following:
 
 This will be passed into the next state as the input object.
 
-<Callout title="Warning" type="warning">
-This exact error structure is only available in the Celerity workflow runtime, the error structure will map to the
-closest corresponding structure in serverless target environments such as AWS Step Functions, Google Cloud Workflows, and Azure Logic Apps.
-</Callout>
-
 ## JSON Path Injections
 
 States and catchers can have a `resultPath` field that is used to inject the result of the state or error into the input object passed to the next state.
@@ -1968,13 +1967,6 @@ States and catchers can have a `resultPath` field that is used to inject the res
 There are limitations around how JSON paths behave in this context;
 JSON path injection only supports injecting values into fields of the root JSON object.
 The `$.<field>` and `$['<field>']` syntax is supported for injecting values into fields of the root object.
-
-<Callout title="Warning" type="warning">
-The behaviour outlined above is that of the Celerity workflow runtime.
-In serverless target environments where a cloud service such as AWS Step Functions
-is used to run the workflow, the behaviour may differ. Where possible, it is best to keep
-JSON path injections simple, where values are injected into fields in the root object.
-</Callout>
 
 ##  Payload Template
 
@@ -2484,10 +2476,6 @@ This function provides a way to generate an ID that is shorter than a UUID while
 
 See the [nanoid](https://github.com/ai/nanoid) project repo for more information on how the IDs are generated.
 
-<Callout title="Warning" type="warning">
-The `nanoid` function is not supported in all target environments.
-</Callout>
-
 **Parameters:**
 
 The `nanoid` function does not take any parameters.
@@ -2672,17 +2660,6 @@ This function checks if a string matches a regular expression pattern.
 1. `string` - The string to match against the regular expression pattern, can be a path or a literal value.
 2. `string` - The regular expression pattern to match against.
 
-<Callout title="Warning" type="warning">
-Regex matching is not supported in all target environments.
-
-The following environments support regex matching:
-- Celerity Workflow Runtime
-- Azure Logic Apps (Via inline expressions)
-- Google Cloud Workflows (Via [text.match_regex](https://cloud.google.com/workflows/docs/reference/stdlib/text/match_regex))
-
-Regular expression syntax across different environments may vary, when switching target environments, you will need to ensure that the regular expression syntax is compatible with the new target environment.
-</Callout>
-
 ### `string_match`
 
 This function checks if a string matches a template using `*` as a wildcard character.
@@ -2709,13 +2686,74 @@ If the workflow definition is a part of a blueprint defined in a JSON file, the 
 1. `string` - The string to match against the template, can be a path or a literal value.
 2. `string` - The template to match against.
 
-<Callout title="Warning" type="warning">
-String matching is not supported in all target environments.
+## Execution Guarantees
 
-The following environments support string matching:
-- Celerity Workflow Runtime
-- AWS Step Functions
-- Azure Logic Apps (Via inline expressions)
+The Celerity workflow runtime provides **exactly-once state transitions** and **at-least-once handler invocation**.
+
+State transitions are writes to the [execution store](#execution-store), guarded by conditional updates and fencing leases, so each transition is committed once. Handler invocation for `executeStep` states is at-least-once; if the instance running an execution stops while a handler is running (for example, due to a crash, a deployment or scale-in), it is not possible to know whether the handler completed, so the handler is invoked again when the execution is resumed.
+
+<Callout title="Handlers must be idempotent" type="warning">
+Handlers used for `executeStep` states can be invoked more than once for the same step of the same execution. Design them so that running them more than once has the same effect as running them once, for example by using the execution ID and state name as an idempotency key for side effects such as payments or outbound messages.
+</Callout>
+
+Executions are durable and survive crashes, deployments and scale-in. Any instance of the workflow runtime can resume an execution that another instance was running. When an execution is resumed:
+
+| Prior state status | Behaviour on resume |
+|---|---|
+| Succeeded | Skipped, its output is read from the execution store. |
+| Failed with retries remaining | Resumed at the next retry, preserving the attempt count. |
+| In progress on an `executeStep` state | The handler is invoked again. |
+| In progress on a `wait` state | Resumed from the stored deadline. |
+| In progress on a `parallel` state | Only branches that have not reached a terminal status are run again. |
+
+An execution is always resumed against the version of the workflow definition it started with, so deploying a change to a workflow does not affect executions that are already in progress, including those suspended in a long `wait` state.
+
+Triggering an execution with an execution name that is already in use returns the existing execution rather than starting a second one, so a trigger can be safely retried.
+
+## Hosting Profiles
+
+The workflow runtime is a long-running service that can be deployed under one of two hosting profiles. The hosting profile is deploy configuration, not a property of the workflow; workflow behaviour is the same under both, and a workflow does not need to change when switching between them.
+
+| Profile | Runs on | Idle cost |
+|---|---|---|
+| **Always-on** (default) | Amazon ECS (Fargate or EC2), Amazon EKS, Google Cloud Run, GKE, Azure Container Apps, AKS | At least one running instance |
+| **Scale-to-zero** | Google Cloud Run, Azure Container Apps | No compute cost while idle |
+
+### Always-on
+
+One or more instances of the workflow runtime are always running. An execution suspended in a `wait` state sleeps in the running process and costs nothing extra. If an instance crashes or is replaced during a deployment, the executions it was running are resumed by another instance.
+
+### Scale-to-zero
+
+The container platform stops all instances of the workflow runtime when it is idle. A periodic schedule (Cloud Scheduler for Google Cloud, a scheduled job for Azure Container Apps) wakes the service every few minutes so that it can resume executions that are due, such as those that have reached the end of a `wait` state. This is one schedule per deployment, not one per execution.
+
+Under this profile, `wait` states shorter than a threshold (60 seconds by default) sleep in the running process. Longer `wait` states store their deadline in the execution store and release the instance, and the execution is resumed by the first instance to run after the deadline has passed. This means that a `wait` state can resume up to one schedule interval after its deadline.
+
+<Callout title="Scale-to-zero does not remove all idle cost" type="info">
+The execution store is a PostgreSQL database that is always running, so scale-to-zero removes the idle cost of the workflow runtime's compute but not of its database. See [Execution Store](#execution-store) for ways to reduce the cost of the database.
+</Callout>
+
+## Execution Store
+
+The workflow runtime stores execution state in **PostgreSQL on every target environment**. The same schema and queries are used everywhere, which is part of what keeps workflow behaviour identical across target environments.
+
+| Environment | Execution store |
+|---|---|
+| Local development | A PostgreSQL container in the local development stack |
+| AWS | Amazon RDS for PostgreSQL or Aurora PostgreSQL, fronted by RDS Proxy |
+| Google Cloud | Cloud SQL for PostgreSQL |
+| Azure | Azure Database for PostgreSQL |
+
+There are three ways to provide the execution store for a workflow:
+
+1. **Provisioned by Celerity** (default) - Celerity creates a PostgreSQL database for the workflow in your cloud account.
+2. **A linked `celerity/sqlDatabase`** - Link the workflow to a [`celerity/sqlDatabase`](/docs/framework/applications/resources/celerity-sql-database) resource in the same blueprint to use that database as the execution store.
+3. **A connection string** - Supply the connection string of a PostgreSQL database you already run through the `{cloud}.workflow.store.connectionString` [deploy configuration](#app-deploy-configuration) option. Any PostgreSQL service can be used, including serverless and free-tier offerings.
+
+The workflow runtime creates the tables and indexes it needs and applies its schema migrations on startup.
+
+<Callout title="Cost and operation of the execution store" type="warning">
+A PostgreSQL database has an idle cost, even when no workflows are running, and needs backups, version upgrades and storage growth to be looked after. Celerity sets up the database when it is provisioned by Celerity, but it runs in your cloud account and is billed to you. To reduce this cost, use a linked `celerity/sqlDatabase` that your application already uses, or supply a connection string for an existing database or a lower-cost PostgreSQL service.
 </Callout>
 
 ## Target Environments
@@ -2726,23 +2764,18 @@ The following environments support string matching:
 
 In the local development environment, a workflow is deployed as a containerised version of the Celerity workflow runtime in a local container orchestrator.
 The workflow API will be exposed to the host machine on a configurable port, allowing manually testing your workflow application and enabling other applications to interact with the workflow API.
-In the local environment, the runtime is backed by a [SQLite](https://www.sqlite.org/) database for storing workflow execution state.
+In the local environment, the runtime is backed by a PostgreSQL container in the local development stack for storing workflow execution state, the same `postgres:17-alpine` container used for [`celerity/sqlDatabase`](/docs/framework/applications/resources/celerity-sql-database) resources. Using PostgreSQL locally means that workflow execution behaves the same way on a developer machine as it does when deployed.
 Links from VPCs to APIs are ignored for this environment as the workflow is deployed to a local container network on a developer or CI machine.
 
 ### AWS
 
 🚀 **Planned for v1** - This target environment will be available in a future v0 evolution.
 
-In the AWS environment, workflows are deployed as a containerised version of the Celerity workflow runtime.
+In the AWS environment, workflows are deployed as a containerised version of the Celerity workflow runtime under the [always-on](#always-on) hosting profile.
 
-Workflows can be deployed to [ECS](https://aws.amazon.com/ecs/) or [EKS](https://aws.amazon.com/eks/) backed by [Fargate](https://aws.amazon.com/fargate/) or [EC2](https://aws.amazon.com/ec2/) using [compute configuration](/docs/framework/applications/compute-configuration#aws-configuration-options) that is shared between compute resource types in the app deploy configuration file.
+Workflows can be deployed to [ECS](https://aws.amazon.com/ecs/) or [EKS](https://aws.amazon.com/eks/) backed by [Fargate](https://aws.amazon.com/fargate/) or [EC2](https://aws.amazon.com/ec2/) using [compute configuration](/docs/framework/applications/compute-configuration#aws-configuration-options) that is shared between compute resource types in the app deploy configuration file. To run the workflow runtime on serverless container infrastructure, set [`aws.compute.launchType`](/docs/framework/applications/compute-configuration#awscomputelaunchtype) to `fargate`. Handlers for `executeStep` states are loaded into the workflow runtime's container.
 
-The workflow runtime requires persistence for storing workflow execution state, this is provided by a set of DynamoDB tables that are created when the workflow is deployed. The DynamoDB tables are provisioned with on-demand capacity mode by default, this can be changed to provisioned capacity mode in the deploy configuration.
-
-<Callout title="Note" type="info">
-DynamoDB was chosen as the persistence layer for the workflow runtime in AWS environments as it provides a scalable and highly available NoSQL database that is more than sufficient for the requirements of the workflow runtime.
-This also removes the need to manage a relational database cluster for each workflow-based application that is deployed.
-</Callout>
+The workflow runtime stores execution state in PostgreSQL. By default, an [Amazon RDS for PostgreSQL](https://aws.amazon.com/rds/postgresql/) database fronted by [RDS Proxy](https://aws.amazon.com/rds/proxy/) is created when the workflow is deployed, provisioned in the same way as a [`celerity/sqlDatabase`](/docs/framework/applications/resources/celerity-sql-database#aws). You can use a linked `celerity/sqlDatabase` or an existing database instead; see [Execution Store](#execution-store) for more information.
 
 #### ECS
 
@@ -2785,7 +2818,7 @@ You also need to make sure there is enough memory and CPU allocated for node gro
 
 <Callout title="Cost of running on EKS" type="warning">
 Running a Celerity application on EKS will often not be the most cost-effective option for APIs with low traffic or applications that are not expected to use a lot of resources. All EKS clusters have a fixed cost of $74 per month for the control plane, in addition to the cost of the EC2 instances or Fargate tasks that are used to run the application along with cost of the load balancer, data transfer and networking components.
-If you are looking for a cost-effective solution for low-traffic/low-load applications on AWS, consider using [ECS](#ecs) or switching to a [serverless deployment](#aws-serverless) instead.
+If you are looking for a cost-effective solution for low-traffic/low-load applications on AWS, consider using [ECS](#ecs) backed by Fargate instead.
 </Callout>
 
 The cluster is configured with a private endpoint for the Kubernetes API server by default, this can be overridden in the deploy configuration. (VPC links will be required to access the Kubernetes API server with the default configuration)
@@ -2816,35 +2849,23 @@ For a Fargate-backed cluster, in production app environments, the pod for the ap
 
 A sidecar [ADOT collector](https://aws-otel.github.io/docs/getting-started/collector) container is deployed in the pod with the workflow application to collect traces and metrics for the application, this will take up a small portion of the memory and CPU allocated to the workflow. Traces are always collected for workflow executions, however, they are only collected for handlers when tracing is enabled for the handler.
 
-### AWS Serverless
-
-🚀 **Planned for v1**
-
-In the AWS Serverless environment, workflows are deployed to AWS Step Functions with AWS Lambda for the handlers.
-
-When tracing is enabled for handlers, an [ADOT lambda layer](https://aws-otel.github.io/docs/getting-started/lambda) is bundled with and configured to instrument each handler to collect traces and metrics.
-AWS Step Functions traces are collected in AWS X-Ray, Step Functions specific traces can be collected in to tools like Grafana with plugins that use AWS X-Ray as a data source.
-
 ### Google Cloud
 
 🚀 **Planned for v1** - This target environment will be available in a future v0 evolution.
 
 In the Google Cloud environment, workflows are deployed as a containerised version of the Celerity workflow runtime.
 
-Workflows can be deployed to [Cloud Run](https://cloud.google.com/run), as well as [Google Kubernetes Engine (GKE)](https://cloud.google.com/kubernetes-engine) in [Autopilot](https://cloud.google.com/kubernetes-engine/docs/concepts/autopilot-overview) or [Standard](https://cloud.google.com/kubernetes-engine/docs/how-to/creating-a-regional-cluster) mode using [deploy configuration](/docs/framework/applications/compute-configuration#google-cloud-configuration-options) for the Google Cloud target environment.
+Workflows can be deployed to [Cloud Run](https://cloud.google.com/run), as well as [Google Kubernetes Engine (GKE)](https://cloud.google.com/kubernetes-engine) in [Autopilot](https://cloud.google.com/kubernetes-engine/docs/concepts/autopilot-overview) or [Standard](https://cloud.google.com/kubernetes-engine/docs/how-to/creating-a-regional-cluster) mode using [deploy configuration](/docs/framework/applications/compute-configuration#google-cloud-configuration-options) for the Google Cloud target environment. Cloud Run, a serverless container platform, is used by default, set by the [`gcloud.compute.containerService`](/docs/framework/applications/compute-configuration#gcloudcomputecontainerservice) option. Handlers for `executeStep` states are loaded into the workflow runtime's container.
 
-The workflow runtime requires persistence for storing workflow execution state, this is provided by a set of Firestore documents that are created when the workflow is deployed.
-
-<Callout title="Note" type="info">
-Firestore was chosen as the persistence layer for the workflow runtime in Google Cloud environments as it provides a scalable and highly available NoSQL database that is more than sufficient for the requirements of the workflow runtime.
-This also removes the need to manage a relational database cluster for each workflow-based application that is deployed.
-</Callout>
+The workflow runtime stores execution state in PostgreSQL. By default, a [Cloud SQL for PostgreSQL](https://cloud.google.com/sql/docs/postgres) database is created when the workflow is deployed. You can use a linked `celerity/sqlDatabase` or an existing database instead; see [Execution Store](#execution-store) for more information.
 
 #### Cloud Run
 
 Cloud Run is a relatively simple environment to deploy workflows to, the workflow is deployed as a containerised application that is fronted by either an internal or external load balancer.
 
-Autoscaling is configured with the use of Cloud Run annotations through `autoscaling.knative.dev/minScale` and `autoscaling.knative.dev/maxScale` [annotations](https://cloud.google.com/run/docs/reference/rest/v1/ObjectMeta). The knative autoscaler will scale the number of instances based on the number of requests and the CPU and memory usage of the instances. By default, for production environments, the application will be configured to scale the number of instances with a minimum of 2 instances and a maximum of 5 instances. The default values for development app environments are a minimum of 1 instance and a maximum of 3 instances. Deploy configuration can be used to override this behaviour.
+Cloud Run supports both [hosting profiles](#hosting-profiles). The always-on profile is used by default. When the `gcloud.workflow.hostingProfile` deploy configuration option is set to `scaleToZero`, the minimum number of instances is set to 0 and a [Cloud Scheduler](https://cloud.google.com/scheduler) job is created to wake the service periodically so that it can resume executions that are due.
+
+Autoscaling is configured with the use of Cloud Run annotations through `autoscaling.knative.dev/minScale` and `autoscaling.knative.dev/maxScale` [annotations](https://cloud.google.com/run/docs/reference/rest/v1/ObjectMeta). The knative autoscaler will scale the number of instances based on the number of requests and the CPU and memory usage of the instances. By default, under the always-on hosting profile, for production environments, the application will be configured to scale the number of instances with a minimum of 2 instances and a maximum of 5 instances. The default values for development app environments are a minimum of 1 instance and a maximum of 3 instances. Deploy configuration can be used to override this behaviour.
 
 When domain configuration is provided and the load balancer is public-facing and Google-managed, a [managed TLS certificate](https://cloud.google.com/load-balancing/docs/ssl-certificates) is created for the domain and attached to the load balancer, you will need to verify the domain ownership before the certificate can be used.
 
@@ -2865,7 +2886,7 @@ When using an existing cluster, the cluster must be configured in a way that is 
 
 <Callout title="Cost of running on GKE" type="warning">
 Running a Celerity application on GKE will often not be the most cost-effective option for APIs with low traffic or applications that are not expected to use a lot of resources. All GKE clusters have a fixed cost of around $72 per month for cluster management (control plane etc.), in addition to the cost of the nodes (VMs) that are used to run the application pods along with cost of the load balancer, data transfer and networking components.
-If you are looking for a cost-effective solution for low-traffic/low-load applications on Google Cloud, consider using [Cloud Run](#cloud-run) or switching to a [serverless deployment](#google-cloud-serverless) instead.
+If you are looking for a cost-effective solution for low-traffic/low-load applications on Google Cloud, consider using [Cloud Run](#cloud-run) with the scale-to-zero hosting profile instead.
 </Callout>
 
 When in standard mode, for production app environments, the cluster will be regional with 2 zones for better availability guarantees. A node pool is created with autoscaling enabled, by default, for production app environments, the pool will have a minimum of 1 node and a maximum of 3 nodes per zone. As the cluster has 2 zones, this will be a minimum of 2 nodes and a maximum of 6 nodes overall. The [cluster autoscaler](https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-autoscaler) is used to manage scaling and choosing the appropriate instance type to use given the requirements of the workflow service. For development app environments, the cluster will be regional with 1 zone. The node pool will have a minimum of 1 node and a maximum of 3 nodes in the signle zone for development app environments. The minimum and maximum number of nodes can be overridden in the deploy configuration.
@@ -2888,35 +2909,23 @@ If memory and CPU is not defined in the deploy configuration and can not be deri
 
 The [OpenTelemetry Operator](https://cloud.google.com/blog/topics/developers-practitioners/easy-telemetry-instrumentation-gke-opentelemetry-operator/) is used to configure a sidecar collector container for the workflow to collect traces and metrics. Traces will always be collected for workflow executions, however, they are only collected for handlers when tracing is enabled for the handler.
 
-### Google Cloud Serverless
-
-🚀 **Planned for v1** - This target environment will be available in a future v0 evolution.
-
-In the Google Cloud Serverless environment, workflows are deployed as Google Cloud Workflows with Google Cloud Functions for the handlers.
-
-For tracing, the built-in Google Cloud metrics and tracing offerings will be used to collect traces and metrics for the handlers. Traces and metrics can be collected into tools like Grafana with plugins that use Google Cloud Trace as a data source. Logs and metrics are captured out of the box for the Cloud Workflows and will be collected in Google Cloud Logging and Monitoring. You can export logs and metrics to other tools like Grafana with plugins that use Google Cloud Logging and Monitoring as a data source.
-
 ### Azure
 
 🚀 **Planned for v1** - This target environment will be available in a future v0 evolution.
 
 In the Azure environment, workflows are deployed as a containerised version of the Celerity workflow runtime.
 
-Workflows can be deployed to [Azure Container Apps](https://azure.microsoft.com/en-us/products/container-apps/) or [Azure Kubernetes Service (AKS)](https://azure.microsoft.com/en-us/products/kubernetes-service) using [deploy configuration](/docs/framework/applications/compute-configuration#azure-configuration-options) for the Azure target environment.
+Workflows can be deployed to [Azure Container Apps](https://azure.microsoft.com/en-us/products/container-apps/) or [Azure Kubernetes Service (AKS)](https://azure.microsoft.com/en-us/products/kubernetes-service) using [deploy configuration](/docs/framework/applications/compute-configuration#azure-configuration-options) for the Azure target environment. Azure Container Apps, a serverless container platform, is used by default, set by the [`azure.compute.containerService`](/docs/framework/applications/compute-configuration#azurecomputecontainerservice) option. Handlers for `executeStep` states are loaded into the workflow runtime's container.
 
-The workflow runtime requires persistence for storing workflow execution state, this is provided by Azure Cosmos DB resources that are created when the workflow is deployed.
-The workflow runtime uses the [NoSQL API for Cosmos DB](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/).
-
-<Callout title="Note" type="info">
-Cosmos DB was chosen as the persistence layer for the workflow runtime in Azure environments as it provides a scalable and highly available NoSQL database that is more than sufficient for the requirements of the workflow runtime.
-This also removes the need to manage a relational database cluster for each workflow-based application that is deployed.
-</Callout>
+The workflow runtime stores execution state in PostgreSQL. By default, an [Azure Database for PostgreSQL](https://azure.microsoft.com/en-us/products/postgresql) flexible server is created when the workflow is deployed. You can use a linked `celerity/sqlDatabase` or an existing database instead; see [Execution Store](#execution-store) for more information.
 
 #### Container Apps
 
 Container Apps is a relatively simple environment to deploy applications to, the workflow is deployed as a containerised application that is fronted by either external HTTPS ingress or internal ingress.
 
-Autoscaling is determined based on the number of concurrent HTTP requests for public APIs, for private workflow APIs [KEDA-supported](https://keda.sh/docs/2.15/scalers/) CPU and memory scaling triggers are used. By default, in production app environments, the [scale definition](https://learn.microsoft.com/en-us/azure/container-apps/scale-app?pivots=azure-cli#scale-definition) is set to scale from 2 to 5 replicas per revision. For development app environments, the default scale definition is set to scale from 1 to 3 replicas per revision. The minimum and maximum number of replicas can be overridden in the deploy configuration.
+Container Apps supports both [hosting profiles](#hosting-profiles). The always-on profile is used by default. When the `azure.workflow.hostingProfile` deploy configuration option is set to `scaleToZero`, the minimum number of replicas is set to 0 and a [scheduled Container Apps job](https://learn.microsoft.com/en-us/azure/container-apps/jobs) is created to wake the service periodically so that it can resume executions that are due.
+
+Autoscaling is determined based on the number of concurrent HTTP requests for public APIs, for private workflow APIs [KEDA-supported](https://keda.sh/docs/2.15/scalers/) CPU and memory scaling triggers are used. By default, under the always-on hosting profile, in production app environments, the [scale definition](https://learn.microsoft.com/en-us/azure/container-apps/scale-app?pivots=azure-cli#scale-definition) is set to scale from 2 to 5 replicas per revision. For development app environments, the default scale definition is set to scale from 1 to 3 replicas per revision. The minimum and maximum number of replicas can be overridden in the deploy configuration.
 
 When domain configuration is provided and the workflow API is configured to be public-facing, a [managed TLS certificate](https://learn.microsoft.com/en-us/azure/container-apps/custom-domains-managed-certificates?pivots=azure-portal) is provisioned and attached to the Container App's HTTP ingress configuration. You will need to verify the domain ownership before the certificate can be used. 
 
@@ -2936,7 +2945,7 @@ When using an existing cluster, it must be configured in a way that is compatibl
 
 <Callout title="Cost of running on AKS" type="warning">
 Running a Celerity application on AKS will often not be the most cost-effective option for APIs with low traffic or applications that are not expected to use a lot of resources. The default configuration uses instances that meet the minimum requirements to run Kubernetes in AKS that will cost hundreds of US dollars a month to run.
-If you are looking for a cost-effective solution for low-traffic/low-load applications on Azure, consider using [Azure Container Apps](#container-apps) instead.
+If you are looking for a cost-effective solution for low-traffic/low-load applications on Azure, consider using [Azure Container Apps](#container-apps) with the scale-to-zero hosting profile instead.
 </Callout>
 
 The cluster is created across 2 availability zones for better availability guarantees. Best effort zone balancing is used with [Azure VM Scale Sets](https://learn.microsoft.com/en-us/azure/virtual-machine-scale-sets/virtual-machine-scale-sets-use-availability-zones?tabs=portal-2#zone-balancing). 2 separate node pools will be configured for the cluster, 1 for the Kubernetes system components and 1 for your workflow application. When using an existing cluster, a new node pool will be created specifically for this application.
@@ -2961,17 +2970,17 @@ Memory and CPU resources allocated to the workflow pod can be defined in the dep
 
 The [OpenTelemetry Operator](https://opentelemetry.io/docs/kubernetes/operator/) is used to configure a sidecar collector container for the workflow application to collect traces and metrics. Traces will always be collected for workflow executions, however, they are only collected for handlers when tracing is enabled for the handler.
 
-### Azure Serverless
+### Serverless Target Environments
 
-🚀 **Planned for v1** - This target environment will be available in a future v0 evolution.
+Workflows can **not** be deployed to the `aws-serverless`, `gcloud-serverless` and `azure-serverless` deploy targets. Workflows are not mapped to AWS Step Functions, Google Cloud Workflows or Azure Logic Apps, and the Celerity workflow runtime is always deployed as a containerised service.
 
-In the Azure Serverless environment, workflows are deployed as Azure Logic Apps with Azure Functions for the handlers.
+To run a workflow on serverless infrastructure, deploy it with the containerised deploy target for your cloud provider and choose a serverless container service with [compute configuration](/docs/framework/applications/compute-configuration), as you would for other application resource types:
 
-Azure Monitor Metrics and Azure Monitor Logs can be used as sources for traces, logs and metrics for the Logic App. This data can be exported to other tools like Grafana with plugins that use Azure Monitor as a data source.
-When it comes to the Azure Functions that power the endpoints, traces and metrics go to Application Insights by default, from which you can export logs, traces and metrics to other tools like Grafana with plugins that use Azure Monitor as a data source.
-[OpenTelemetry for Azure Functions](https://learn.microsoft.com/en-us/azure/azure-functions/opentelemetry-howto?tabs=otlp-export&pivots=programming-language-csharp) is also supported for some languages, you can use the deploy configuration to enable OpenTelemetry for Azure Functions.
-
-Workflows can be deployed to Azure Logic Apps using [deploy configuration](/docs/cli/app-deploy-configuration) for the Azure Serverless target environment.
+| Cloud provider | Deploy target | Serverless container service |
+|---|---|---|
+| AWS | `aws` | [ECS](#ecs) with `aws.compute.launchType` set to `fargate` |
+| Google Cloud | `gcloud` | [Cloud Run](#cloud-run), the default `gcloud.compute.containerService` |
+| Azure | `azure` | [Container Apps](#container-apps), the default `azure.compute.containerService` |
 
 ## App Deploy Configuration
 
@@ -2985,11 +2994,11 @@ Compute configuration that can be used for the `celerity/api`, `celerity/consume
 
 ### AWS Configuration Options
 
-#### aws.workflow.dynamodb.capacityMode
+#### aws.workflow.store.connectionString
 
-This option can be used to set the capacity mode for the DynamoDB tables that are created for the workflow runtime.
-By default, the capacity mode is set to `onDemand`, which means that the tables will automatically scale to handle the workload without requiring any manual intervention.
-This is used when deploying to the `aws` target environment.
+The connection string of an existing PostgreSQL database to use as the [execution store](#execution-store) for the workflow runtime. When set, Celerity does not provision a database for the workflow in Amazon RDS. The workflow runtime creates its own tables in the database and applies its schema migrations on startup.
+
+The connection string contains credentials, so avoid committing a deploy configuration file that contains it to version control.
 
 **Type**
 
@@ -2999,85 +3008,155 @@ string
 
 `aws`
 
+**Default Value**
+
+There is no default value for this option. When it is not set and the workflow is not linked to a `celerity/sqlDatabase`, Celerity provisions a database for the workflow.
+
+**Example**
+
+```javascript
+{
+  "deployTarget": {
+    "name": "aws",
+    "appEnv": "production",
+    "config": {
+      "aws.workflow.store.connectionString": "postgresql://workflow_user:password@my-db.example.us-east-1.rds.amazonaws.com:5432/workflows"
+    }
+  }
+}
+```
+
+### Google Cloud Configuration Options
+
+#### gcloud.workflow.hostingProfile
+
+The [hosting profile](#hosting-profiles) for the workflow runtime. This only applies when the workflow runtime is deployed to Cloud Run, which is the default `gcloud.compute.containerService`.
+
+**Type**
+
+string
+
+**Deploy Targets**
+
+`gcloud`
+
 **Allowed Values**
 
-`onDemand` | `provisioned`
+`alwaysOn` | `scaleToZero`
 
 **Default Value**
 
-`onDemand`
+`alwaysOn`
 
 **Example**
 
 ```javascript
 {
   "deployTarget": {
-    "name": "aws",
+    "name": "gcloud",
     "appEnv": "production",
     "config": {
-      "aws.workflow.dynamodb.capacityMode": "provisioned"
+      "gcloud.workflow.hostingProfile": "scaleToZero"
     }
   }
 }
 ```
 
-#### aws.workflow.dynamodb.readCapacityUnits
+#### gcloud.workflow.store.connectionString
 
-This option can be used to set the read capacity units for the DynamoDB tables that are created for the workflow runtime when the capacity mode is set to `provisioned` and the target environment is `aws`.
+The connection string of an existing PostgreSQL database to use as the [execution store](#execution-store) for the workflow runtime. When set, Celerity does not provision a database for the workflow in Cloud SQL. The workflow runtime creates its own tables in the database and applies its schema migrations on startup.
+
+The connection string contains credentials, so avoid committing a deploy configuration file that contains it to version control.
 
 **Type**
 
-integer
+string
 
 **Deploy Targets**
 
-`aws`
+`gcloud`
 
 **Default Value**
 
-There is no default value for this option, it must be set when the capacity mode is set to `provisioned`.
+There is no default value for this option. When it is not set and the workflow is not linked to a `celerity/sqlDatabase`, Celerity provisions a database for the workflow.
 
 **Example**
 
 ```javascript
 {
   "deployTarget": {
-    "name": "aws",
+    "name": "gcloud",
     "appEnv": "production",
     "config": {
-      "aws.workfow.dynamodb.capacityMode": "provisioned",
-      "aws.workflow.dynamodb.readCapacityUnits": 15
+      "gcloud.workflow.store.connectionString": "postgresql://workflow_user:password@10.0.0.5:5432/workflows"
     }
   }
 }
 ```
 
-#### aws.workflow.dynamodb.writeCapacityUnits
+### Azure Configuration Options
 
-This option can be used to set the write capacity units for the DynamoDB tables that are created for the workflow runtime when the capacity mode is set to `provisioned` and the target environment is `aws`.
+#### azure.workflow.hostingProfile
+
+The [hosting profile](#hosting-profiles) for the workflow runtime. This only applies when the workflow runtime is deployed to Azure Container Apps, which is the default `azure.compute.containerService`.
 
 **Type**
 
-integer
+string
 
 **Deploy Targets**
 
-`aws`
+`azure`
+
+**Allowed Values**
+
+`alwaysOn` | `scaleToZero`
 
 **Default Value**
 
-There is no default value for this option, it must be set when the capacity mode is set to `provisioned`.
+`alwaysOn`
 
 **Example**
 
 ```javascript
 {
   "deployTarget": {
-    "name": "aws",
+    "name": "azure",
     "appEnv": "production",
     "config": {
-      "aws.workflow.dynamodb.capacityMode": "provisioned",
-      "aws.workflow.dynamodb.writeCapacityUnits": 30
+      "azure.workflow.hostingProfile": "scaleToZero"
+    }
+  }
+}
+```
+
+#### azure.workflow.store.connectionString
+
+The connection string of an existing PostgreSQL database to use as the [execution store](#execution-store) for the workflow runtime. When set, Celerity does not provision a database for the workflow in Azure Database for PostgreSQL. The workflow runtime creates its own tables in the database and applies its schema migrations on startup.
+
+The connection string contains credentials, so avoid committing a deploy configuration file that contains it to version control.
+
+**Type**
+
+string
+
+**Deploy Targets**
+
+`azure`
+
+**Default Value**
+
+There is no default value for this option. When it is not set and the workflow is not linked to a `celerity/sqlDatabase`, Celerity provisions a database for the workflow.
+
+**Example**
+
+```javascript
+{
+  "deployTarget": {
+    "name": "azure",
+    "appEnv": "production",
+    "config": {
+      "azure.workflow.store.connectionString": "postgresql://workflow_user:password@my-db.postgres.database.azure.com:5432/workflows"
     }
   }
 }
@@ -3085,10 +3164,12 @@ There is no default value for this option, it must be set when the capacity mode
 
 ## ⚠️ Limitations
 
-Celerity Workflows do not support the full set of features that each cloud provider's workflow service provides. The Celerity runtime will provide a subset of features that are common across all cloud providers and are compatible with the Celerity workflow runtime.
+Celerity workflows are run by the Celerity workflow runtime on every target environment, not by a cloud provider's workflow service, so features specific to those services are not available.
 
-- Parallel execution of steps is supported; however, parallel execution is limited by available compute resources when opting to deploy to an environment that runs the Celerity workflow runtime to execute workflows. In the Celerity workflow runtime, parallel execution is achieved by running multiple handlers concurrently using the [tokio runtime](https://tokio.rs/), tokio is configured to make use of multiple threads but is primarily an asynchronous runtime that uses a concurrency model optimised for efficiently using a single core to carry out I/O bound tasks. Using parallel execution for CPU-bound tasks may not have the desired effect when using the Celerity workflow runtime.
-- Only handlers can be executed as steps in a workflow, not containers or third-party services, a workflow needs to be able to run end-to-end within the Celerity Workflow runtime process when deployed to a containerised or custom server environment.
+- Workflows always require a container service and a PostgreSQL database, and can not be deployed to the `aws-serverless`, `gcloud-serverless` and `azure-serverless` target environments. See [Execution Store](#execution-store) for ways to reduce the cost of the database.
+- Execution history is not visible in a cloud provider's workflow console, such as the AWS Step Functions console. Executions are accessed through the workflow API of the [Celerity workflow runtime](/docs/workflow-runtime).
+- Parallel execution of steps is supported; however, parallel execution is limited by the compute resources available to the workflow runtime. In the Celerity workflow runtime, parallel execution is achieved by running multiple handlers concurrently using the [tokio runtime](https://tokio.rs/), tokio is configured to make use of multiple threads but is primarily an asynchronous runtime that uses a concurrency model optimised for efficiently using a single core to carry out I/O bound tasks. Using parallel execution for CPU-bound tasks may not have the desired effect when using the Celerity workflow runtime.
+- Only handlers can be executed as steps in a workflow, not containers or third-party services, a workflow needs to be able to run end-to-end within the Celerity workflow runtime process.
 - Nested workflows are not supported. A workflow can only contain handlers as steps, to get around this, you can trigger another workflow from a handler used for one of the steps and wait for the result.
 - Mapping or iterating over a list of items as a part of a previous state's output is not supported in the Celerity workflow runtime. You will have to operate in the list of items within the application code of a handler that is executed as a step in the workflow.
-- Celerity workflows only support handlers of the `celerity/handler` resource type for the `executeStep` state type. For integrations with cloud provider services, you will either need to use the cloud provider's workflow service or use a handler that can interact with the cloud provider's API.
+- Celerity workflows only support handlers of the `celerity/handler` resource type for the `executeStep` state type. There are no direct service integrations like those available in cloud services such as AWS Step Functions, where a state can call a cloud service API without a handler. To integrate with a cloud provider service, use a handler that interacts with the service's API. Built-in integration steps for Celerity resource types are being considered for a future iteration of workflows.

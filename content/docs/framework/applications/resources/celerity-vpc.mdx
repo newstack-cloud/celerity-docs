@@ -192,9 +192,9 @@ The `celerity.schedule.vpc.egress` annotation narrows their outbound access, and
 
 ### `celerity/workflow`
 
-When a VPC resource links to a `celerity/workflow` resource, the VPC will be used to place the workflow application component in the target environment when the workflow is deployed as a containerised application.
+When a VPC resource links to a `celerity/workflow` resource, the VPC will be used to place the workflow runtime service in the target environment. Workflows are always deployed as containerised services with the `aws`, `gcloud` or `azure` target environment, where they can also run on serverless container infrastructure such as AWS Fargate, Google Cloud Run or Azure Container Apps.
 
-🚀 **Planned for v1** - A VPC resource will be able to link to `celerity/workflow` resources when containerised deployments and workflows are supported.
+🚀 **Planned for v1** - A VPC resource will be able to link to `celerity/workflow` resources when workflows are supported.
 
 [Read more about Celerity workflows](/docs/framework/applications/resources/celerity-workflow)
 

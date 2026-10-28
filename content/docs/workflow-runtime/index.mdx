@@ -4,3 +4,9 @@ description: The Workflow runtime for Celerity applications
 ---
 
 🚀 **Planned for v1** - The Workflow runtime is planned for v1 with support for local development and cloud deployments across all providers and all language runtimes. Full documentation is coming soon. See the [Celerity versions](/docs/framework/versions) page for more information.
+
+The Celerity workflow runtime runs every [`celerity/workflow`](/docs/framework/applications/resources/celerity-workflow), deployed with the containerised `aws`, `gcloud` and `azure` target environments. Workflows are not mapped to cloud provider workflow services such as AWS Step Functions, Google Cloud Workflows or Azure Logic Apps, so a workflow behaves the same way wherever it is deployed.
+
+The runtime is a long-running containerised service that exposes the workflow API for triggering executions and reading their state. As with other Celerity applications, compute configuration determines whether it runs on a container orchestrator such as Amazon ECS on EC2, or on serverless container infrastructure such as AWS Fargate, Google Cloud Run or Azure Container Apps. On Cloud Run and Container Apps, it can also scale to zero. Handlers for workflow steps are loaded into the runtime's container.
+
+Execution state is stored in PostgreSQL in every environment, making executions durable across crashes, deployments and scale-in. See the [`celerity/workflow`](/docs/framework/applications/resources/celerity-workflow#execution-guarantees) documentation for the execution guarantees, hosting profiles and execution store options.
