@@ -25,6 +25,13 @@ URL: ${page.url}
 ${processed.value}`;
 }
 
+/**
+ * The static export writes a page that has child pages to `<path>/index`, since
+ * `<path>` is also their directory (see `generateStaticParams` in
+ * `app/llms.mdx/[[...slug]]/route.ts`), so its markdown URL ends in `/index`.
+ */
 export function toMarkdownUrl(url: string): string {
-    return url.replace('docs', 'llms.mdx');
+    const markdownUrl = url.replace('docs', 'llms.mdx');
+    const hasChildren = source.getPages().some((page) => page.url.startsWith(`${url}/`));
+    return hasChildren ? `${markdownUrl}/index` : markdownUrl;
 }
