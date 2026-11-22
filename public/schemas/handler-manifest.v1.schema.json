@@ -4,13 +4,7 @@
   "title": "Celerity Handler Manifest",
   "description": "Output schema for Celerity language-specific extractor tools. Describes all handlers discovered in a Celerity application module via language-specific metadata scanning. Consumed by the Celerity CLI to merge with blueprint infrastructure configuration.",
   "type": "object",
-  "required": [
-    "version",
-    "handlers",
-    "functionHandlers",
-    "guardHandlers",
-    "dependencyGraph"
-  ],
+  "required": ["version", "handlers", "functionHandlers", "guardHandlers", "dependencyGraph"],
   "additionalProperties": false,
   "properties": {
     "version": {
@@ -99,15 +93,7 @@
     "ClassHandlerEntry": {
       "type": "object",
       "description": "A single handler method discovered from an annotated controller or consumer class.",
-      "required": [
-        "resourceName",
-        "className",
-        "methodName",
-        "sourceFile",
-        "handlerType",
-        "annotations",
-        "spec"
-      ],
+      "required": ["resourceName", "className", "methodName", "sourceFile", "handlerType", "annotations", "spec"],
       "additionalProperties": false,
       "properties": {
         "resourceName": {
@@ -138,13 +124,7 @@
     "FunctionHandlerEntry": {
       "type": "object",
       "description": "A function-based handler registered via a framework-provided handler registration function.",
-      "required": [
-        "resourceName",
-        "exportName",
-        "sourceFile",
-        "handlerType",
-        "spec"
-      ],
+      "required": ["resourceName", "exportName", "sourceFile", "handlerType", "spec"],
       "additionalProperties": false,
       "properties": {
         "resourceName": {
@@ -171,14 +151,7 @@
     "GuardHandlerEntry": {
       "type": "object",
       "description": "A guard handler discovered from an annotated guard class or a guard registration function.",
-      "required": [
-        "resourceName",
-        "guardName",
-        "sourceFile",
-        "guardType",
-        "annotations",
-        "spec"
-      ],
+      "required": ["resourceName", "guardName", "sourceFile", "guardType", "annotations", "spec"],
       "additionalProperties": false,
       "properties": {
         "resourceName": {
