@@ -14,20 +14,43 @@ import {
 } from 'fumadocs-ui/components/dialog/search';
 import { HighlightResultOption, Hit, LiteClient, liteClient } from 'algoliasearch/lite';
 import { SortedResult } from 'fumadocs-core/server';
-import { Fragment, ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { BaseIndex } from 'fumadocs-core/search/algolia';
-import { HighlightedText } from 'fumadocs-core/search/server';
 
-const appId = process.env.NEXT_PUBLIC_ALGOLIA_APP_ID!;
-const apiKey = process.env.NEXT_PUBLIC_ALGOLIA_API_KEY!;
-const indexName = process.env.NEXT_PUBLIC_ALGOLIA_INDEX_NAME!;
-const client = liteClient(appId, apiKey);
+const appId = process.env.NEXT_PUBLIC_ALGOLIA_APP_ID;
+const apiKey = process.env.NEXT_PUBLIC_ALGOLIA_API_KEY;
+const indexName = process.env.NEXT_PUBLIC_ALGOLIA_INDEX_NAME;
+const client = appId && apiKey ? liteClient(appId, apiKey) : null;
 
 export default function CustomSearchDialog(props: SharedProps) {
     const { search, setSearch, query } = useAlgoliaSearch({
         client,
-        indexName,
+        indexName: indexName || '',
     });
+
+    if (!client || !indexName) {
+        // Return a simple search dialog if Algolia is not configured
+        return (
+            <SearchDialog
+                search=""
+                onSearchChange={() => { }}
+                isLoading={false}
+                {...props}
+            >
+                <SearchDialogOverlay />
+                <SearchDialogContent>
+                    <SearchDialogHeader>
+                        <SearchDialogIcon />
+                        <SearchDialogInput placeholder="Search is not configured..." disabled />
+                        <SearchDialogClose />
+                    </SearchDialogHeader>
+                    <div className="p-4 text-center text-fd-muted-foreground">
+                        Search is not configured. Please set up Algolia environment variables.
+                    </div>
+                </SearchDialogContent>
+            </SearchDialog>
+        );
+    }
 
     return (
         <SearchDialog
@@ -62,7 +85,7 @@ export default function CustomSearchDialog(props: SharedProps) {
 }
 
 type AlgoliaSearchParams = {
-    client: LiteClient;
+    client: LiteClient | null;
     indexName: string;
 };
 
@@ -90,7 +113,7 @@ function useAlgoliaSearch({ client, indexName }: AlgoliaSearchParams): AlgoliaSe
     });
 
     useEffect(() => {
-        if (search.trim() === '') {
+        if (!client || search.trim() === '') {
             setQuery({
                 isLoading: false,
                 data: 'empty',
