@@ -181,10 +181,13 @@ The Celerity runtime provides tailored SDK support for the following languages. 
 | Python | ✅ Available in v0 |
 | Go | ✅ Available in v0 |
 | C# | 🚀 Planned for v1 |
-| Java | 💬 Under consideration |
 
-<Callout title="Compiled languages do not have their own runtime" type="info">
-Tailored SDK support is not the same as a language-specific runtime. For an interpreted language such as Node.js or Python, Celerity publishes a runtime image containing that language's interpreter. For a compiled language such as Go, there is no Go runtime image — the SDK produces a handler executable, and that executable runs on an [OS-only runtime](/docs/framework/runtime/lifecycle#os-only-runtimes), which is a bare OS image containing only the Celerity core runtime. The core runtime starts your executable as a separate process and communicates with it over the Celerity IPC protocol. One OS-only runtime serves every compiled language, so compiled languages do not appear in the [future runtime roadmap](/docs/framework/runtime/lifecycle#future-runtime-roadmap).
+<Callout title="Language runtimes and the IPC protocol" type="info">
+Tailored SDK support is not the same as a language-specific runtime, and languages reach the core runtime in one of three ways:
+
+- **Interpreted languages** such as Node.js and Python get a runtime image containing that language's interpreter, and handlers run in the runtime's own process.
+- **C#** gets a runtime image containing the .NET runtime, which C# code needs to run. The core runtime starts the C# handler as a separate process and communicates with it over the [Celerity IPC protocol](/docs/framework/runtime/handler-ipc-protocol).
+- **Languages that compile to a native executable**, such as Go, have no runtime image of their own. The SDK produces a handler executable that runs on an [OS-only runtime](/docs/framework/runtime/lifecycle#os-only-runtimes), a bare OS image containing only the Celerity core runtime, which starts the executable as a separate process and communicates with it over the same IPC protocol. One OS-only runtime serves every such language, so they do not appear in the [future runtime roadmap](/docs/framework/runtime/lifecycle#future-runtime-roadmap).
 </Callout>
 
 <Callout title="Ahead-of-time compiled languages" type="info">

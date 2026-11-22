@@ -15,7 +15,7 @@ this file and the repo's own docs cover what a contribution needs.
 
 | Path | Holds |
 |---|---|
-| `content/docs/` | The docs, in MDX, one folder per section (`framework`, `cli`, the runtimes, `go-sdk`), ordered by `meta.json`. `index.mdx` (`/docs`) and `test.mdx` (`/docs/test`, unlisted but built) are still the Fumadocs starter pages |
+| `content/docs/` | The docs, in MDX, one folder per section (`framework`, `cli`, the runtimes, `go-sdk`), ordered by `meta.json`. `index.mdx` is the `/docs` landing page linking each section |
 | `public/schemas/handler-manifest.v1.schema.json` | A copy of the Node SDK's handler manifest schema, served at the URL its `$id` names |
 | `src/` | The site: `app/` (pages, plus the `static.json` search export and `llms` routes), `components/`, `lib/`, `data/` (release data) |
 | `grammars/blueprintlang.tmLanguage.json` | A copy of bluelink-vscode's grammar, for highlighting `blueprintlang` blocks |
@@ -72,7 +72,10 @@ dates and the sitemap come from git history, so a shallow clone gives wrong date
 
 - Commits: mostly plain lowercase imperative subjects without a conventional-commit type
   (`update workflow resource type docs ...`); nothing checks them, and there are no releases.
-- Language support claims follow `content/docs/framework/versions.mdx`.
+- Language support claims follow `content/docs/framework/versions.mdx`. Interpreted languages
+  (Node.js, Python) run in-process in their runtime image; C# has a runtime image providing .NET,
+  with its handler running as a separate process over the handler IPC protocol; natively
+  compiled languages (Go) run on an OS-only runtime over the same protocol.
 
 ## Safety
 

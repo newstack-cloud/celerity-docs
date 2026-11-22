@@ -7,9 +7,9 @@ description: The protocol between the Celerity core runtime and a handlers execu
 **Protocol Version:** `1.0`  
 **Ecosystem Compatibility:** v0 (Current)
 
-Protocol `1.0` was introduced in v0, along with the Go SDK, which is the tailored SDK built on it. What a protocol version change would mean for an existing handler binary is covered under [IPC Protocol Compatibility](/docs/framework/runtime/lifecycle#ipc-protocol-compatibility). Read more about Celerity versions [here](/docs/framework/versions).
+Protocol `1.0` was introduced in v0, along with the Go SDK, which is the tailored SDK built on it. The C# SDK, planned for v1, builds on it too. What a protocol version change would mean for an existing handler binary is covered under [IPC Protocol Compatibility](/docs/framework/runtime/lifecycle#ipc-protocol-compatibility). Read more about Celerity versions [here](/docs/framework/versions).
 
-For an interpreted language, Celerity publishes a runtime image containing that language's interpreter, and handlers run in the runtime's own process. For a compiled language there is no such image. The SDK produces a handler executable, the core runtime starts it as a separate process on an [OS-only runtime](/docs/framework/runtime/lifecycle#os-only-runtimes), and the two communicate over this protocol.
+For an interpreted language, Celerity publishes a runtime image containing that language's interpreter, and handlers run in the runtime's own process. Other languages run as a separate process that the core runtime starts and communicates with over this protocol. C# has its own runtime image, which provides the .NET runtime its handler process needs. A language that compiles to a native executable, such as Go, has no image of its own: the SDK produces a handler executable that runs on an [OS-only runtime](/docs/framework/runtime/lifecycle#os-only-runtimes).
 
 This document is for anyone implementing the handler side of that contract, which in practice means an SDK author adding a language. Application authors using an existing SDK do not need it.
 
