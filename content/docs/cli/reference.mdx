@@ -652,7 +652,7 @@ omitted, you are prompted to choose a template.
 
 **Configuration Key**: `initLanguage`
 
-**Allowed Values**: `nodejs` | `python` | `java` | `dotnet` | `go`
+**Allowed Values**: `nodejs` | `python` | `dotnet` | `go`
 
 The language or framework to use for a new Celerity project.
 
@@ -1558,9 +1558,9 @@ celerity schema codegen --lang go --out ./internal/generated/
 
 **Type**: `string`
 
-**Allowed Values**: `typescript` | `python` | `go` | `java` | `csharp`
+**Allowed Values**: `typescript` | `python` | `go` | `csharp`
 
-The target language for code generation. C# follows its language runtime in v1. Java follows a language runtime that is under consideration rather than committed. See [Celerity versions](/docs/framework/versions).
+The target language for code generation. C# follows its language runtime in v1. See [Celerity versions](/docs/framework/versions).
 
 | Language | Output | Status |
 |---|---|---|
@@ -1568,7 +1568,6 @@ The target language for code generation. C# follows its language runtime in v1. 
 | `python` | Pydantic model classes | ✅ Available in v0 |
 | `go` | Structs with `db` tags (SQL) or `json` tags (NoSQL), column/table or field/index constants, and scan or validation helpers | ✅ Available in v0 |
 | `csharp` | Record types | 🚀 Planned for v1 |
-| `java` | Record classes | 💬 Under consideration |
 
 #### `--out`
 

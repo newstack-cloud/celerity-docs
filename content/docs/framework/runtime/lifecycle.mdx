@@ -70,7 +70,7 @@ The `os-only.debian13` runtime contains no language interpreter, so the "Upstrea
 
 An OS-only runtime ships the Celerity core runtime on a bare operating system image with no language interpreter or language-specific SDK bindings. Your handler is a pre-compiled binary that the core runtime starts as a separate process and communicates with over the **Celerity IPC protocol**.
 
-This is how Celerity supports compiled languages. Rather than publishing a runtime per compiled language, the language-specific part lives in the Celerity SDK for that language. The Go SDK, for example, produces a handler executable that speaks the IPC protocol, and that executable runs on any OS-only runtime. One OS-only runtime therefore serves every compiled language Celerity has an SDK for.
+This is how Celerity supports languages that compile to a native executable. Rather than publishing a runtime per such language, the language-specific part lives in the Celerity SDK for that language. The Go SDK, for example, produces a handler executable that speaks the IPC protocol, and that executable runs on any OS-only runtime. One OS-only runtime therefore serves every natively compiled language Celerity has an SDK for.
 
 Because there is no language version involved, two independent support clocks apply to an OS-only runtime:
 
@@ -137,7 +137,7 @@ v1 (target: February 2028) adds C#. It enters the Active phase upon its initial 
 
 Languages beyond it are considered case by case on demonstrated demand rather than committed in advance. A language runtime is a standing commitment rather than a one-off piece of work: everything on this page applies to it from the day it ships, including a published runtime image, security patching, adoption of new upstream versions within 3 months, and the Security-Only, Deprecated and End of Life windows.
 
-This applies only to languages that need an interpreter or virtual machine in the runtime image. A compiled language such as Go is supported through its Celerity SDK, which produces a handler executable that runs on an existing OS-only runtime; adding a compiled-language SDK does not add a runtime to this page, and the OS-only lifecycle and IPC protocol guarantees are what apply to those handlers.
+This applies only to languages that need an interpreter or virtual machine in the runtime image. C# is one: its runtime image contains the .NET runtime, and the core runtime runs the C# handler as a separate process over the Celerity IPC protocol, so the [IPC protocol guarantees](#ipc-protocol-compatibility) apply to it as well as this lifecycle policy. A language that compiles to a native executable, such as Go, is supported through its Celerity SDK, which produces a handler executable that runs on an existing OS-only runtime; adding such an SDK does not add a runtime to this page, and the OS-only lifecycle and IPC protocol guarantees are what apply to those handlers.
 
 ### New OS-only runtime variations
 
@@ -191,7 +191,7 @@ The Celerity deploy engine maps each Celerity runtime identifier to a [supported
 The Celerity deploy engine maps each Celerity runtime identifier to a [supported Google Cloud Functions runtime](https://cloud.google.com/functions/docs/concepts/execution-environment#runtimes). When Google deprecates a Cloud Functions runtime that a mapping targets, Celerity will update the mapping and emit CLI warnings for affected applications.
 
 <Callout title="Warning" type="warning">
-Google Cloud Functions does not offer a custom-runtime mechanism, so OS-only runtimes, where a pre-compiled handler binary is uploaded and executed directly, can not be deployed there. Languages that compile ahead of time are supported (Go to a native binary, Java and .NET to bytecode on a virtual machine), but the platform builds your handler from source rather than running a binary you provide.
+Google Cloud Functions does not offer a custom-runtime mechanism, so OS-only runtimes, where a pre-compiled handler binary is uploaded and executed directly, can not be deployed there. Languages that compile ahead of time are supported (Go to a native binary, .NET to bytecode on a virtual machine), but the platform builds your handler from source rather than running a binary you provide.
 </Callout>
 
 ### Azure Functions
@@ -217,6 +217,6 @@ _Lifecycle dates for planned runtimes will be published when the runtimes are re
 Debian 14 (forky) is expected in the middle of 2027. The `os-only.debian14` runtime will be added within 3 months of that release under the [adoption policy for new OS-only variations](#new-os-only-runtime-variations), which puts it around the v1 release rather than tied to it. When it is added, `os-only.debian13` transitions to Security-Only; existing handlers pinned to `os-only.debian13` are unaffected.
 </Callout>
 
-<Callout title="Compiled languages are not listed here" type="info">
-Compiled languages such as Go do not appear in this roadmap because they do not get a language-specific runtime. Language support for a compiled language lives entirely in its Celerity SDK, which produces a handler executable that runs on an OS-only runtime. See [OS-only Runtimes](#os-only-runtimes).
+<Callout title="Natively compiled languages are not listed here" type="info">
+Languages that compile to a native executable, such as Go, do not appear in this roadmap because they do not get a language-specific runtime. Language support for a compiled language lives entirely in its Celerity SDK, which produces a handler executable that runs on an OS-only runtime. See [OS-only Runtimes](#os-only-runtimes).
 </Callout>
