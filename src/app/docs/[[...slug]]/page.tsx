@@ -31,7 +31,7 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
         <LLMCopyButton markdownUrl={markdownUrl} />
         <ViewOptions
           markdownUrl={markdownUrl}
-          githubUrl={`https://github.com/newstack-cloud/celerity-docs/blob/dev/apps/docs/content/docs/${page.path}`}
+          githubUrl={`https://github.com/newstack-cloud/celerity-docs/blob/main/content/docs/${page.path}`}
         />
       </div>
       <DocsBody>
