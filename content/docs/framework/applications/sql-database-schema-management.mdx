@@ -813,7 +813,7 @@ ordersDb (postgres: orders):
   Warnings:
     - Column 'users.name' removed and 'users.first_name' + 'users.last_name' added.
       This looks like a column split — use a two-phase deploy to migrate data.
-      See: https://celerityframework.io/docs/framework/applications/sql-database-schema-management#data-migrations
+      See: https://celerity.dev/docs/framework/applications/sql-database-schema-management#data-migrations
       No DROP statement was generated for 'users.name' (ambiguous split vs drop). Once the
       data is migrated, remove the column from the schema and apply the generated drop —
       it will be classified `breaking` and needs `celerity schema apply --allow-breaking`.
