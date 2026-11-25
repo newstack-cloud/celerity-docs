@@ -1,6 +1,6 @@
 # Celerity Docs
 
-The Celerity documentation site at celerityframework.io: a Next.js and Fumadocs site, exported
+The Celerity documentation site at celerity.dev: a Next.js and Fumadocs site, exported
 statically and deployed to GitHub Pages. It documents the Celerity framework and its resource
 types, the CLI, the runtimes and the SDKs, and publishes the handler manifest schema.
 
@@ -80,7 +80,7 @@ dates and the sitemap come from git history, so a shallow clone gives wrong date
 ## Safety
 
 - **A push to `main` deploys.** `deploy.yml` builds the site, syncs the Algolia index and
-  publishes to GitHub Pages at celerityframework.io, and nothing builds a pull request first,
+  publishes to GitHub Pages at celerity.dev, and nothing builds a pull request first,
   so run the checks above before a change reaches `main`.
 - Don't run `yarn build` or `yarn sync-content` unless asked while Algolia credentials are
   available, whether from `.env`, the shell environment or CI: they overwrite the production

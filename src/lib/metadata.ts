@@ -6,7 +6,7 @@ export function createMetadata(override: Metadata): Metadata {
         openGraph: {
             title: override.title ?? undefined,
             description: override.description ?? undefined,
-            url: 'https://celerityframework.io',
+            url: 'https://celerity.dev',
             images: '/banner.png',
             siteName: 'Celerity',
             ...override.openGraph,
@@ -24,7 +24,7 @@ export function createMetadata(override: Metadata): Metadata {
                 'application/rss+xml': [
                     {
                         title: 'Celerity Blog',
-                        url: 'https://celerityframework.io/blog/rss.xml',
+                        url: 'https://celerity.dev/blog/rss.xml',
                     },
                 ],
             },
@@ -33,8 +33,8 @@ export function createMetadata(override: Metadata): Metadata {
     };
 }
 
-// The site is a static export served from GitHub Pages at celerityframework.io.
+// The site is a static export served from GitHub Pages at celerity.dev.
 export const baseUrl =
     process.env.NODE_ENV === 'development'
         ? new URL('http://localhost:3000')
-        : new URL('https://celerityframework.io');
+        : new URL('https://celerity.dev');
