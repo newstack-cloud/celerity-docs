@@ -57,7 +57,7 @@ dates and the sitemap come from git history, so a shallow clone gives wrong date
   Celerity CLI. The docs are often written design-first, ahead of the code.
 - **Handler manifest schema:** copied unchanged from celerity-node-sdk's
   `packages/cli/schemas/`, never edited here; `schema-sync.yml` checks it. Its `$id` is
-  `https://celerityframework.io/schemas/handler-manifest.v1.schema.json`, so that path never
+  `https://celerity.dev/schemas/handler-manifest.v1.schema.json`, so that path never
   moves.
 - **URLs:** pages are linked from the transformer's resource definitions (which reach the
   registry and language server docs), its contract docs, and Celerity's and the SDKs' source,
